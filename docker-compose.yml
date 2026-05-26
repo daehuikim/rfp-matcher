@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports: ["8000:8000"]
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config:ro
+    depends_on: [chroma]
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports: ["8001:8000"]
+    volumes:
+      - ./data/vectorstore:/chroma/chroma
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports: ["3000:3000"]
+    environment:
+      NEXT_PUBLIC_API_BASE: http://backend:8000
+    depends_on: [backend]

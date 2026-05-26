@@ -1,0 +1,34 @@
+name: backend-ci
+
+on:
+  push:
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Format check (black)
+        run: black --check .
+      - name: Type check (mypy)
+        run: mypy app
+      - name: Unit tests
+        env:
+          LLM_PROVIDER: fake
+        run: pytest -m "not integration and not evaluator" --cov=app --cov-fail-under=60

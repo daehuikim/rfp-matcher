@@ -1,0 +1,14 @@
+{
+  "name": "하나은행 RFP — 조견표 탐지 + atomic 분해 (heuristic only)",
+  "input_path": "data/raw/하나.pdf",
+  "converter": "pdfplumber",
+  "extraction": {
+    "verify_with_llm": false,
+    "llm_fallback": false
+  },
+  "expected": {
+    "tables_located_min": 4,
+    "atomic_rows_min": 30,
+    "bullet_markers_present_any_of": ["①", "②", "③", "•", "-"]
+  }
+}

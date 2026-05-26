@@ -1,0 +1,11 @@
+{
+  "name": "KT 카탈로그 시드 — K intelligence Suite 6대 솔루션 30건 이상",
+  "catalog_path": "data/catalog/kt_solutions.json",
+  "expected": {
+    "entries_min": 30,
+    "unique_ids": true,
+    "embedding_text_non_empty": true,
+    "self_search_top1_same_id": true,
+    "required_major_categories": ["K Model", "K RAG", "K Agent", "K Studio", "K RAI", "K SPC"]
+  }
+}

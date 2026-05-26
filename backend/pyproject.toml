@@ -1,0 +1,89 @@
+[project]
+name = "rfp-matcher-backend"
+version = "0.1.0"
+description = "RFP/RFI 조견표 추출 + AI 자동 추천 백엔드"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.4.0",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27.0",
+    "openai>=1.40.0",
+    "anthropic>=0.34.0",
+    "openpyxl>=3.1.5",
+    "beautifulsoup4>=4.12.3",
+    "lxml>=5.2.0",
+    "pdfplumber>=0.11.0",
+    "pymupdf>=1.24.0",
+    "docling>=1.0.0",
+    "chromadb>=0.5.0",
+    "bm25s[core]>=0.3.0",
+    "playwright>=1.46.0",
+    "aiosqlite>=0.20.0",
+    "sse-starlette>=2.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.6.0",
+    "black>=24.8.0",
+    "mypy>=1.11.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "A", "C4", "RET", "SIM"]
+ignore = [
+    "S101",
+    # MVP의 파일 I/O는 작아 동기 path 사용 허용 — 고동시성 단계에서 asyncio.to_thread로 전환
+    "ASYNC240",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S106"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["openai", "openai.*", "anthropic", "anthropic.*", "pdfplumber", "pdfplumber.*", "fitz", "pymupdf", "pymupdf.*", "docling.*", "chromadb.*", "bm25s", "bm25s.*", "playwright.*", "openpyxl", "openpyxl.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "evaluator: 단계별 정합성 평가 (rule + LLM judge)",
+    "integration: API 통합 테스트",
+]
+addopts = "--strict-markers -ra"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/main.py"]
+
+[tool.coverage.report]
+# 75%로 시작 — crawler/Chroma 어댑터/실 LLM SDK 경로는 외부 의존이라 격리해두고
+# 도메인·서비스·추천 로직(이미 90%+)만 점진적으로 임계 상향.
+fail_under = 75

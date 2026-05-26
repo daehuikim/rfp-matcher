@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+ENV_FILE = PROJECT_ROOT / "config" / ".env"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE if ENV_FILE.exists() else None,
+        env_file_encoding="utf-8",
+        extra="ignore",
+        env_prefix="",
+    )
+
+    app_name: str = "rfp-matcher"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+
+    llm_provider: Literal["openai", "anthropic", "fake"] = "openai"
+    llm_model_openai: str = "gpt-4o"
+    llm_model_anthropic: str = "claude-opus-4-7"
+    llm_concurrency: int = 8
+    recommend_batch_size: int = 10
+
+    # deprecated — OpenAI embedding 미사용 (BM25로 대체)
+    embedding_provider: Literal["openai", "local", "bm25"] = "bm25"
+    embedding_model_openai: str = "text-embedding-3-large"
+    embedding_model_local: str = "jhgan/ko-sroberta-multitask"
+
+    vectorstore_path: Path = PROJECT_ROOT / "data" / "vectorstore"
+    catalog_path: Path = PROJECT_ROOT / "data" / "catalog" / "kt_solutions.json"
+    catalog_bm25_path: Path = PROJECT_ROOT / "data" / "catalog" / "bm25_index"
+
+    storage_root: Path = PROJECT_ROOT / "data" / "storage"
+    db_path: Path = PROJECT_ROOT / "data" / "app.sqlite"
+    raw_data_dir: Path = PROJECT_ROOT / "data" / "raw"
+
+    # PDF 변환 백엔드. **기본 pymupdf** — C 네이티브, 대용량 PDF도 수 초.
+    # pdfplumber: 순수 Python, 느림. docling: ML OCR, MPS/mac에서 자주 실패·매우 느림.
+    # pdf2html: Node+Java(Tika) 필요 — brew install openjdk 후 PDF_CONVERTER=pdf2html
+    pdf_converter: Literal["pymupdf", "pdfplumber", "pdf2html", "docling"] = "pymupdf"
+    # HF 모델 영구 캐시 위치 (재시작에도 재다운로드 X).
+    # 기본은 HF SDK 표준인 ~/.cache/huggingface — 이미 받아둔 글로벌 캐시를 재사용한다.
+    # 프로젝트별로 격리하고 싶으면 .env에 HF_HOME=… 또는 HF_CACHE_DIR=… 명시.
+    hf_cache_dir: Path = Path.home() / ".cache" / "huggingface"
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()

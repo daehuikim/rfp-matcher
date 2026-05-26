@@ -1,0 +1,11 @@
+{
+  "name": "하나은행 RFP PDF — pdfplumber 변환",
+  "input_path": "data/raw/하나.pdf",
+  "converter": "pdfplumber",
+  "expected": {
+    "table_count": 26,
+    "table_count_tolerance": 2,
+    "paragraph_count_min": 800,
+    "must_contain": ["상세 요구사항", "데이터 수집", "저장 구조"]
+  }
+}

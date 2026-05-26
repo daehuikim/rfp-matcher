@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.env.*
+!config/.env.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data — 원본 RFP는 민감할 수 있음
+data/raw/
+data/storage/
+data/vectorstore/
+data/app.sqlite*
+data/processed/~$*
+evaluator/reports/
+
+# IDE
+.idea/
+.vscode/

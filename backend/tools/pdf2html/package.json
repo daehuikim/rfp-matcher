@@ -1,0 +1,8 @@
+{
+  "name": "rfp-matcher-pdf2html",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "pdf2html": "^4.4.0"
+  }
+}
