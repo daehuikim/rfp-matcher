@@ -1,0 +1,14 @@
+{
+  "name": "신한라이프 AX HUB RFP — 조견표 탐지 + atomic smoke",
+  "input_path": "data/raw/(신한라이프) AX HUB 구축_제안요청서.pdf.pdf",
+  "converter": "pymupdf",
+  "extraction": {
+    "verify_with_llm": false,
+    "llm_fallback": false
+  },
+  "expected": {
+    "tables_located_min": 2,
+    "atomic_rows_min": 10,
+    "bullet_markers_present_any_of": ["①", "②", "③", "•", "-", "1.", "가.", "1)"]
+  }
+}

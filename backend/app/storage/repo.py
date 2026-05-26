@@ -71,3 +71,12 @@ class InMemoryRepo:
             recs = {i: self.recommendations[i] for i in ids if i in self.recommendations}
             jdg = {i: self.judgements[i] for i in ids if i in self.judgements}
             return reqs, recs, jdg
+
+    async def clear_extraction_data(self, doc_id: str) -> None:
+        """디스크 캐시 삭제·재추출 시 in-memory 요건·AI·판정 제거."""
+        async with self._lock:
+            ids = self.requirements_by_doc.pop(doc_id, [])
+            for req_id in ids:
+                self.requirements.pop(req_id, None)
+                self.recommendations.pop(req_id, None)
+                self.judgements.pop(req_id, None)

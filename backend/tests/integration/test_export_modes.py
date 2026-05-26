@@ -10,7 +10,6 @@ from openpyxl import load_workbook
 from app.domain.enums import DocumentMime, Judgement
 from app.domain.models import Document, HumanJudgement, Recommendation, Requirement
 from app.main import create_app
-from app.phase1.writers.sheet_writer import COL_HEADERS
 
 
 @pytest.fixture
@@ -75,29 +74,33 @@ def _open_first_data_sheet(content: bytes):
     return wb[cat_sheets[0]]
 
 
+def _sheet_headers(ws) -> list[str]:
+    return [str(h) for h in next(ws.iter_rows(values_only=True)) if h is not None]
+
+
+def _row_dict(headers: list[str], row) -> dict[str, object]:
+    return dict(zip(headers, row, strict=True))
+
+
 def test_export_mode_ai_only_blanks_human(seeded_client: TestClient) -> None:
     r = seeded_client.get("/documents/doc-1/export?mode=ai")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("application/vnd")
     ws = _open_first_data_sheet(r.content)
-    # 헤더 확인
-    headers = next(ws.iter_rows(values_only=True))
-    assert list(headers) == COL_HEADERS
-    # 모든 데이터 행에서 사람 컬럼 비어 있어야 함
-    for row in list(ws.iter_rows(values_only=True))[1:]:
-        d = dict(zip(COL_HEADERS, row, strict=True))
-        assert d["사람 판정"] in (None, "")
-        assert d["사람 메모"] in (None, "")
+    headers = _sheet_headers(ws)
+    assert "사람 판정" not in headers
+    assert "사람 메모" not in headers
+    assert "AI 리스크" in headers
 
 
 def test_export_mode_human_only_blanks_ai(seeded_client: TestClient) -> None:
     r = seeded_client.get("/documents/doc-1/export?mode=human")
     assert r.status_code == 200
     ws = _open_first_data_sheet(r.content)
-    for row in list(ws.iter_rows(values_only=True))[1:]:
-        d = dict(zip(COL_HEADERS, row, strict=True))
-        assert d["AI 리스크"] in (None, "")
-        assert d["AI 이유"] in (None, "")
+    headers = _sheet_headers(ws)
+    assert "AI 리스크" not in headers
+    assert "AI 이유" not in headers
+    assert "사람 판정" in headers
 
 
 def test_export_mode_both_fills_both(seeded_client: TestClient) -> None:
@@ -112,11 +115,12 @@ def test_export_mode_both_fills_both(seeded_client: TestClient) -> None:
         if name == "총괄표":
             continue
         ws = wb[name]
+        headers = _sheet_headers(ws)
         for row in list(ws.iter_rows(values_only=True))[1:]:
-            d = dict(zip(COL_HEADERS, row, strict=True))
-            if d["AI 리스크"]:
+            d = _row_dict(headers, row)
+            if d.get("AI 리스크"):
                 saw_ai = True
-            if d["사람 판정"]:
+            if d.get("사람 판정"):
                 saw_human = True
     assert saw_ai and saw_human
 

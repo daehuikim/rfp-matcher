@@ -7,9 +7,14 @@ from pathlib import Path
 from openpyxl import Workbook
 
 from app.domain.enums import ExportMode, Judgement
-from app.domain.models import HumanJudgement, Recommendation, Requirement
+from app.domain.models import ExtractionMetadata, HumanJudgement, Recommendation, Requirement
+from app.phase1.extraction.category_provenance import (
+    category_source_label,
+    document_category_spec,
+    summarize_category_sources,
+)
 
-from .export_columns import EXPORT_COLUMNS, resolve_export_columns
+from .export_columns import EXPORT_COLUMNS, column_headers, resolve_export_columns
 
 _INVALID_SHEET_CHARS = re.compile(r"[\\/?*\[\]:]")
 
@@ -34,22 +39,47 @@ class RequirementSheetWriter:
         judgements: dict[str, HumanJudgement] | None = None,
         mode: ExportMode = ExportMode.BOTH,
         columns: list[str] | None = None,
+        adaptive: bool = True,
+        extraction_meta: ExtractionMetadata | None = None,
     ) -> Path:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        col_keys = resolve_export_columns(columns)
-        headers = [EXPORT_COLUMNS[k][0] for k in col_keys]
+        recs = recommendations or {}
+        judges = judgements or {}
+        col_keys = resolve_export_columns(
+            requirements,
+            recs,
+            judges,
+            mode,
+            columns,
+            adaptive=adaptive,
+        )
+        headers = column_headers(col_keys)
 
         wb = Workbook()
         wb.remove(wb.active)
 
         by_cat: dict[str, list[Requirement]] = defaultdict(list)
+        cat_sources: dict[str, str] = {}
         for r in requirements:
-            by_cat[r.category or "기타"].append(r)
+            cat = r.category or "기타"
+            by_cat[cat].append(r)
+            if cat not in cat_sources:
+                cat_sources[cat] = category_source_label(r.category_source)
 
         summary = wb.create_sheet(title="총괄표")
-        summary.append(["요청사항 구분", "요구사항수"])
+        summary.append(["내보내기 명세"])
+        summary.append(["분류 기준", document_category_spec(extraction_meta, requirements)])
+        source_counts = summarize_category_sources(requirements)
+        if source_counts:
+            summary.append(["분류 출처 집계", ", ".join(f"{k} {v}건" for k, v in source_counts.items())])
+        summary.append([])
+        show_source_col = "category_source" in col_keys
+        summary.append(["분류", "요구사항수"] + (["출처"] if show_source_col else []))
         for cat, items in sorted(by_cat.items()):
-            summary.append([cat, len(items)])
+            row = [cat, len(items)]
+            if show_source_col:
+                row.append(cat_sources.get(cat, ""))
+            summary.append(row)
 
         recs = recommendations or {}
         judges = judgements or {}
@@ -89,6 +119,5 @@ class RequirementSheetWriter:
             if key in human_keys and mode == ExportMode.AI:
                 out.append("" if key != "human_mark" else Judgement.UNSET.value)
                 continue
-            _, getter = EXPORT_COLUMNS[key]
-            out.append(getter(req, rec, jud))
+            out.append(EXPORT_COLUMNS[key].cell_value(req, rec, jud))
         return out

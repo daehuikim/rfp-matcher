@@ -14,6 +14,7 @@ from app.phase1.loaders.base import select_loader
         (".pdf", DocumentMime.PDF),
         (".doc", DocumentMime.DOC),
         (".docx", DocumentMime.DOCX),
+        (".hwp", DocumentMime.HWP),
         (".hwpx", DocumentMime.HWPX),
     ],
 )

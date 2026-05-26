@@ -20,6 +20,7 @@ dependencies = [
     "docling>=1.0.0",
     "chromadb>=0.5.0",
     "bm25s[core]>=0.3.0",
+    "mammoth>=1.8.0",
     "playwright>=1.46.0",
     "aiosqlite>=0.20.0",
     "sse-starlette>=2.1.0",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Judgement, RequirementView, patchJudgement } from "@/lib/api";
+import { Judgement, RequirementView, categorySourceLabel, patchJudgement } from "@/lib/api";
 import { formatRequirementDetail } from "@/lib/formatDetail";
 import { CatalogAuditPanel } from "./CatalogAuditPanel";
 import { JudgementToggle } from "./JudgementToggle";
@@ -58,13 +58,48 @@ export function RequirementRow({
 
   const risk = rec ? riskColor(rec.ai_risk) : riskColor("");
   const body = formatRequirementDetail(r.detail || r.name);
+  const categorySource = r.category_source ?? "document_table";
+  const showCategorySource = categorySource !== "document_table";
 
   return (
     <article className="glass-card flex flex-col gap-3 p-3.5 md:p-4">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="pill border-indigo-200 bg-indigo-50 text-indigo-700">{r.category}</span>
+          <span className="pill border-indigo-300 bg-indigo-100 font-semibold text-indigo-900">
+            {r.category}
+          </span>
+          {showCategorySource && (
+            <span
+              className="pill border-amber-200 bg-amber-50 text-amber-800"
+              title="원문 「요건 구분」 조견표가 아닌 자동 부여 분류"
+            >
+              {categorySourceLabel(categorySource)}
+            </span>
+          )}
+          {r.subcategory && (
+            <span
+              className="pill border-violet-200 bg-violet-50 text-violet-700"
+              title={
+                r.subcategory_source && r.subcategory_source !== "document_table"
+                  ? `소분류 · ${categorySourceLabel(r.subcategory_source)}`
+                  : undefined
+              }
+            >
+              {r.subcategory}
+              {r.subcategory_source && r.subcategory_source !== "document_table" ? " · 추론" : ""}
+            </span>
+          )}
           <span className="font-mono text-neutral-400">{r.code}</span>
+          {(r.source_page || r.source_section) && (
+            <span
+              className="pill border-slate-200 bg-slate-50 text-slate-600"
+              title={r.source_section ?? undefined}
+            >
+              {r.source_page ? `p.${r.source_page}` : ""}
+              {r.source_page && r.source_section ? " · " : ""}
+              {r.source_section ? r.source_section.slice(0, 28) : ""}
+            </span>
+          )}
           <span className={`pill ${risk.pill}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${risk.dot}`} />
             {aiPending ? <>AI 분석 중…</> : <>AI · {rec ? rec.ai_risk || "?" : "—"} {risk.label}</>}
@@ -103,24 +138,36 @@ export function RequirementRow({
               <p className="mt-1 text-[12px] leading-relaxed text-neutral-700">
                 {rec.ai_reason || "이유 미산출"}
               </p>
-              {rec.matched_solutions && rec.matched_solutions.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">
-                  <span className="text-neutral-500">연관:</span>
-                  {rec.matched_solutions.map((t) => (
-                    <span key={t} className="pill border-indigo-200 bg-indigo-50 text-indigo-700">
-                      {t}
-                    </span>
-                  ))}
-                </div>
+              {((rec.matched_solution_skus?.length ?? 0) > 0 ||
+                (rec.catalog_audit?.length ?? 0) > 0) && (
+                <CatalogAuditPanel
+                  audit={rec.catalog_audit ?? []}
+                  matchedSolutions={rec.matched_solution_skus}
+                />
               )}
-              {rec.catalog_audit && rec.catalog_audit.length > 0 && (
-                <CatalogAuditPanel audit={rec.catalog_audit} />
-              )}
+              {(rec.matched_solution_skus?.length ?? 0) === 0 &&
+                rec.matched_solutions &&
+                rec.matched_solutions.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">
+                    <span className="text-neutral-500">매칭 솔루션</span>
+                    {rec.matched_solutions.map((t, i) => (
+                      <span
+                        key={`match-${i}-${t}`}
+                        className="pill border-indigo-200 bg-indigo-50 text-indigo-700"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
               {rec.missing_tech.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px]">
                   <span className="text-neutral-500">부족:</span>
-                  {rec.missing_tech.map((t) => (
-                    <span key={t} className="pill border-rose-200 bg-rose-50 text-rose-700">
+                  {rec.missing_tech.map((t, i) => (
+                    <span
+                      key={`miss-${i}-${t}`}
+                      className="pill border-rose-200 bg-rose-50 text-rose-700"
+                    >
                       {t}
                     </span>
                   ))}

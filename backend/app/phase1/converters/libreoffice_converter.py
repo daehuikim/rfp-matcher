@@ -2,24 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import shutil
 from pathlib import Path
 
 from app.domain.models import Document, HtmlDoc
 
 from .base import HtmlConverter, count_html_features
+from .libreoffice_paths import resolve_soffice_bin
 
 logger = logging.getLogger(__name__)
 
 
 class LibreOfficeConverter(HtmlConverter):
     """
-    LibreOffice headless 변환 — `.doc`/`.hwpx` 모두 같은 명령으로 처리.
+    LibreOffice headless 변환 — `.doc`/`.docx`/`.hwp` 등 (soffice 필요).
     `soffice --headless --convert-to html:HTML --outdir <out> <src>`
     """
 
     def __init__(self, soffice_bin: str | None = None) -> None:
-        self._bin = soffice_bin or shutil.which("soffice") or "soffice"
+        self._bin = resolve_soffice_bin(soffice_bin)
 
     async def convert(self, document: Document, out_dir: Path) -> HtmlDoc:
         out_dir.mkdir(parents=True, exist_ok=True)

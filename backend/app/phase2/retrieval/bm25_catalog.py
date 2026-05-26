@@ -31,6 +31,15 @@ class Bm25CatalogRetriever:
         self._retriever: bm25s.BM25 | None = None
         self._entries: list[CatalogEntry] = []
         self._tokenizer = Tokenizer(stemmer=None, stopwords=[], splitter=_korean_split)
+        self._alias_map: dict[str, str] = {}
+
+    def set_alias_map(self, alias_map: dict[str, str]) -> None:
+        self._alias_map = dict(alias_map)
+
+    def resolve_catalog_id(self, catalog_id: str) -> str:
+        from app.phase2.catalog.canonicalizer import resolve_catalog_id
+
+        return resolve_catalog_id(catalog_id, self._alias_map)
 
     @property
     def indexed(self) -> bool:
@@ -88,6 +97,8 @@ class Bm25CatalogRetriever:
                         "중분류": e.중분류,
                         "소분류": e.소분류,
                         "솔루션명": e.솔루션명,
+                        "설명": e.설명,
+                        "catalog_id": e.id,
                     },
                 )
             )

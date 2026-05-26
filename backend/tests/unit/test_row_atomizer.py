@@ -31,7 +31,7 @@ async def test_atomize_splits_circled_markers_in_detail_cell(tmp_path: Path) -> 
     </body></html>
     """
     path = _write(tmp_path, html)
-    atomizer = RowAtomizer(FakeLlmClient(), llm_fallback=False)
+    atomizer = RowAtomizer(FakeLlmClient(), use_llm=False)
     refs = TableRef(
         doc_id="d",
         table_index=0,
@@ -39,7 +39,7 @@ async def test_atomize_splits_circled_markers_in_detail_cell(tmp_path: Path) -> 
         confidence=1.0,
         located_via="heuristic",
     )
-    atoms = await atomizer.atomize("d", path, refs)
+    atoms, _ = await atomizer.atomize("d", path, refs)
     markers = [a.bullet_marker for a in atoms]
     texts = [a.text for a in atoms]
     assert markers == ["①", "②", "③"]

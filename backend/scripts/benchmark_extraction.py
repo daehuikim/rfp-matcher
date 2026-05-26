@@ -30,6 +30,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.core.container import build_container  # noqa: E402
 from app.domain.enums import DocumentMime, PipelineStage  # noqa: E402
 from app.phase1.converters.registry import build_pdf_converter, select_converter  # noqa: E402
+from app.phase1.extraction.category_canonicalizer import build_category_canonicalizer
 from app.phase1.extraction.classifier import select_classifier  # noqa: E402
 from app.phase1.extraction.row_atomizer import ParagraphAtomizer, RowAtomizer  # noqa: E402
 from app.phase1.extraction.table_locator import TableLocator  # noqa: E402
@@ -113,11 +114,10 @@ async def benchmark(path: Path, llm_provider: str) -> None:
     atoms = []
     if refs:
         atomizer = RowAtomizer(container.llm)
-        parts = await asyncio.gather(
-            *[atomizer.atomize(document.id, html_doc.html_path, ref) for ref in refs]
-        )
-        for p in parts:
-            atoms.extend(p)
+        carry: str | None = None
+        for ref in refs:
+            part, carry = await atomizer.atomize(document.id, html_doc.html_path, ref, carry_category=carry)
+            atoms.extend(part)
     else:
         atoms = await ParagraphAtomizer().atomize(document.id, html_doc.html_path)
     atom_ms = int((time.perf_counter() - t0) * 1000)
@@ -128,13 +128,25 @@ async def benchmark(path: Path, llm_provider: str) -> None:
     await pipeline.emit(document.id, PipelineStage.CLASSIFYING)
     t0 = time.perf_counter()
     classifier = select_classifier(atoms, container.llm)
-    categories = await classifier.classify(atoms)
+    raw_categories = await classifier.classify(atoms)
     class_ms = int((time.perf_counter() - t0) * 1000)
     print(
         f"{'분류 ({})'.format(type(classifier).__name__):20} {_fmt(class_ms)}  "
-        f"(categories={len(set(categories))})"
+        f"(raw={len({c or '기타' for c in raw_categories})})"
     )
     await pipeline.emit(document.id, PipelineStage.CLASSIFIED)
+
+    # 5) canonicalization
+    await pipeline.emit(document.id, PipelineStage.CANONICALIZING)
+    t0 = time.perf_counter()
+    canon = build_category_canonicalizer(settings.category_taxonomy_path)
+    canon_result = canon.canonicalize(raw_categories)
+    canon_ms = int((time.perf_counter() - t0) * 1000)
+    print(
+        f"{'분류 정규화':20} {_fmt(canon_ms)}  "
+        f"({canon_result.raw_distinct}→{canon_result.canonical_distinct})"
+    )
+    await pipeline.emit(document.id, PipelineStage.CANONICALIZED)
     await pipeline.emit(
         document.id,
         PipelineStage.READY_FOR_REVIEW,
@@ -143,13 +155,14 @@ async def benchmark(path: Path, llm_provider: str) -> None:
 
     total_ms = sum(x[1] for x in timings) + load_ms
     print(f"\n{'─' * 60}")
-    print(f"추출 합계(측정):     {_fmt(convert_ms + locate_ms + atom_ms + class_ms)}")
+    print(f"추출 합계(측정):     {_fmt(convert_ms + locate_ms + atom_ms + class_ms + canon_ms)}")
     print(f"병목:               ", end="")
     stages = [
         ("HTML 변환", convert_ms),
         ("조견표 탐지", locate_ms),
         ("atomic 분해", atom_ms),
         ("분류", class_ms),
+        ("분류 정규화", canon_ms),
     ]
     bottleneck = max(stages, key=lambda x: x[1])
     print(f"{bottleneck[0]} ({_fmt(bottleneck[1])})")

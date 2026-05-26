@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -7,6 +8,7 @@ from typing import TYPE_CHECKING
 from app.core.config import Settings, get_settings
 from app.llm.base import AsyncLlmClient
 from app.llm.fake_client import FakeLlmClient
+from app.llm.usage import LlmUsageTracker
 from app.phase1.converters.base import HtmlConverter
 from app.phase1.converters.pymupdf_converter import PymupdfConverter
 from app.phase1.converters.registry import build_pdf_converter
@@ -33,6 +35,30 @@ class Container:
     repo: InMemoryRepo
     catalog_retriever: Bm25CatalogRetriever
     pdf_converter: HtmlConverter = field(default_factory=PymupdfConverter)
+    llm_usage_by_doc: dict[str, LlmUsageTracker] = field(default_factory=dict)
+    pipeline_tasks: dict[str, asyncio.Task[None]] = field(default_factory=dict)
+
+    def llm_tracker(self, doc_id: str) -> LlmUsageTracker:
+        if doc_id not in self.llm_usage_by_doc:
+            model = (
+                self.settings.llm_model_openai
+                if self.settings.llm_provider == "openai"
+                else self.settings.llm_model_anthropic
+                if self.settings.llm_provider == "anthropic"
+                else "fake"
+            )
+            self.llm_usage_by_doc[doc_id] = LlmUsageTracker(
+                provider=self.settings.llm_provider,
+                model=model,
+            )
+        return self.llm_usage_by_doc[doc_id]
+
+    def active_llm_model(self) -> str:
+        if self.settings.llm_provider == "openai":
+            return self.settings.llm_model_openai
+        if self.settings.llm_provider == "anthropic":
+            return self.settings.llm_model_anthropic
+        return "fake"
 
 
 def build_llm(settings: Settings) -> AsyncLlmClient:
@@ -95,6 +121,27 @@ async def build_container() -> Container:
         else:
             cat_store = CatalogStore(settings.catalog_path)
             cat_store.replace(synthesize_seed_catalog())
+        from app.phase2.catalog.canonicalizer import (
+            canonicalize_catalog_entries,
+            save_catalog_aliases,
+        )
+
+        raw_entries = cat_store.entries
+        canon = canonicalize_catalog_entries(
+            raw_entries,
+            near_threshold=settings.catalog_near_duplicate_threshold,
+        )
+        if canon.removed_count:
+            save_catalog_aliases(settings.catalog_aliases_path, canon)
+            logger.info(
+                "카탈로그 dedup: %d → %d entries (%d merged)",
+                len(raw_entries),
+                len(canon.entries),
+                canon.removed_count,
+            )
+        catalog_retriever.set_alias_map(canon.alias_map)
+        cat_store.replace(canon.entries)
+
         if cat_store.entries:
             await CatalogIndexer(catalog_retriever).index(cat_store)
         else:

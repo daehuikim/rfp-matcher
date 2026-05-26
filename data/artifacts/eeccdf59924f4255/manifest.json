@@ -1,0 +1,3448 @@
+{
+  "cache_version": "14",
+  "content_hash": "eeccdf59924f4255b26cd63c1d16d00833670cec3a732c0cdf2fd9ac863159d6",
+  "source_name": "하나.pdf",
+  "mime": "application/pdf",
+  "requirements_count": 58,
+  "has_recommendations": true,
+  "extraction_meta": {
+    "atomization_strategy": "table",
+    "has_requirement_category_column": true,
+    "category_column_header": "요건 구분"
+  },
+  "pipeline_snapshot": {
+    "history": [
+      {
+        "stage": "CLASSIFYING",
+        "payload": {
+          "snippet": "요건구분·카테고리 라벨 추출 중…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40068
+        },
+        "ts": "2026-05-26T07:41:17.112721+00:00"
+      },
+      {
+        "stage": "CLASSIFIED",
+        "payload": {
+          "classifier": "PassThroughClassifier",
+          "distinct_categories": 19,
+          "llm_usage": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "total_calls": 25,
+            "total_input_tokens": 25988,
+            "total_output_tokens": 2910,
+            "total_cost_usd": 0.0941,
+            "total_cost_krw": 127.0,
+            "recent_calls": [
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 916,
+                "output_tokens": 191,
+                "cost_usd": 0.0042,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 949,
+                "output_tokens": 207,
+                "cost_usd": 0.00444,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 753,
+                "output_tokens": 112,
+                "cost_usd": 0.003,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_schema:table15",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 1464,
+                "output_tokens": 93,
+                "cost_usd": 0.00459,
+                "prompt_preview": "RFP 조견표(table_index=15)에서 PM 검토용 'atomic 요구사항 1건' 경계 규칙을 추론하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 스키마 추론]\n입력 샘플:\n  ① 원천 시스템 연계\n  "
+              },
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 635,
+                "output_tokens": 62,
+                "cost_usd": 0.00221,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_schema:table16",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 1416,
+                "output_tokens": 81,
+                "cost_usd": 0.00435,
+                "prompt_preview": "RFP 조견표(table_index=16)에서 PM 검토용 'atomic 요구사항 1건' 경계 규칙을 추론하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 스키마 추론]\n입력 샘플:\n  ① 원천 시스템 연계\n  "
+              },
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 757,
+                "output_tokens": 130,
+                "cost_usd": 0.00319,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_schema:table17",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 730,
+                "output_tokens": 85,
+                "cost_usd": 0.00267,
+                "prompt_preview": "RFP 조견표(table_index=17)에서 PM 검토용 'atomic 요구사항 1건' 경계 규칙을 추론하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 스키마 추론]\n입력 샘플:\n  ① 원천 시스템 연계\n  "
+              }
+            ]
+          },
+          "llm_provider": "openai",
+          "llm_model": "gpt-4o",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40069
+        },
+        "ts": "2026-05-26T07:41:17.113284+00:00"
+      },
+      {
+        "stage": "CANONICALIZING",
+        "payload": {
+          "snippet": "별칭·절단·taxonomy로 분류 정규화 중…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40070
+        },
+        "ts": "2026-05-26T07:41:17.114010+00:00"
+      },
+      {
+        "stage": "CANONICALIZED",
+        "payload": {
+          "raw_distinct": 19,
+          "canonical_distinct": 16,
+          "steps": [
+            "normalize",
+            "alias",
+            "truncation",
+            "singleton_absorb"
+          ],
+          "merge_count": 8,
+          "elapsed_ms": 1,
+          "elapsed_total_ms": 40072
+        },
+        "ts": "2026-05-26T07:41:17.115988+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 1,
+          "total": 58,
+          "requirement_id": "aceea95679c54b1eae065122e48e3ec9",
+          "snippet": "조견표 1/58 · 원천 시스템 연계\n• 연계 방식은 각 시스템의 요구사항을 반영하되, 향후 수집 시스템 …",
+          "elapsed_ms": 1,
+          "elapsed_total_ms": 40073
+        },
+        "ts": "2026-05-26T07:41:17.117744+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 2,
+          "total": 58,
+          "requirement_id": "01274397b3024a789a3368ee8c3e3ed4",
+          "snippet": "조견표 2/58 · 지원 파일 형식\n• Pdf, docx, pptx, xlsx, hwp, html, xml…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.117835+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 3,
+          "total": 58,
+          "requirement_id": "b1af9623ba114ebcae5a2d03a8d618a3",
+          "snippet": "조견표 3/58 · 수기 업로드\n• 사용자가 직접 데이터를 입력하거나 파일을 업로드할 수 있는 UI 환경을…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.117900+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 4,
+          "total": 58,
+          "requirement_id": "52758002628942e0b38c021a68ea3361",
+          "snippet": "조견표 4/58 · 저장 구조 설계\n• 원본 데이터는 전처리 단계에서 개인정보 비식별화 처리하여 Objec…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.117960+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 5,
+          "total": 58,
+          "requirement_id": "069256b5c5da4a1ba20eeb91d1155e72",
+          "snippet": "조견표 5/58 · • 당행 환경에 적합한 Object Storage 구성 전략을 제안해야 합니다.\n• O…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.118014+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 6,
+          "total": 58,
+          "requirement_id": "7188d398b5e94a9fb9f28fec88b91d40",
+          "snippet": "조견표 6/58 · • 비정형 데이터의 구조화 산출물(파싱/청킹/임베딩 결과, 메타데이터,\n권한 정보, 처…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.118267+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 7,
+          "total": 58,
+          "requirement_id": "8641fa3cac7a49508a57b97706abf8b0",
+          "snippet": "조견표 7/58 · • 산출물 유형별 특성을 고려하여 성능, 확장성 및 운영 효율성을 확보할 수 있는 저장…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.118393+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 8,
+          "total": 58,
+          "requirement_id": "9f41448986f04f9fbb250d405cb67682",
+          "snippet": "조견표 8/58 · 중간 산출물 관리\n• 데이터 수집, 데이터 변환(파싱/청킹/임베딩) 등 각 처리 단계의…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.118474+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 9,
+          "total": 58,
+          "requirement_id": "8ae6de581e0645b3b2822f8feb6f5ddd",
+          "snippet": "조견표 9/58 · 데이터 수명주기 및 보관 정책\n• 데이터 계층 구조 정의와 함께 권한 관리, 데이터 수…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.118533+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 10,
+          "total": 58,
+          "requirement_id": "024e2efd86c244e792ada32f9e48f93c",
+          "snippet": "조견표 10/58 · • 워크플로우 오케스트레이션 엔진은 Low-code/No-code 및 GUI 기반으로 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.118588+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 11,
+          "total": 58,
+          "requirement_id": "a040a0b698ac438b8e4fb154571216b1",
+          "snippet": "조견표 11/58 · 전처리 및 후처리\n• 원천 파일의 확장자 및 포맷을 후속 처리 가능한 형태로 변환할 수…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40074
+        },
+        "ts": "2026-05-26T07:41:17.118828+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 12,
+          "total": 58,
+          "requirement_id": "d001f561ba8e4e809d111aea3a796cf0",
+          "snippet": "조견표 12/58 · 구조화 변환\n• 최종 변환 결과는 구조화된 표준 문서 형식을 기본으로 제공해야 합니…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.118947+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 13,
+          "total": 58,
+          "requirement_id": "a1e6a4aa319c4fc897d04ae05f7e8742",
+          "snippet": "조견표 13/58 · • 추출된 텍스트는 문장, 문단, 표, 제목 등 문서 구조 단위로 관리할 수 있어야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119026+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 14,
+          "total": 58,
+          "requirement_id": "948b87548f9342b482a53d3567919414",
+          "snippet": "조견표 14/58 · 검증 및 수정\n• 변환 결과와 원본, 버전별 비교 검증할 수 있는 UI 환경을 제공해야…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119091+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 15,
+          "total": 58,
+          "requirement_id": "3228540cd4a54a8d9c738aed8e6994e6",
+          "snippet": "조견표 15/58 · • 다양한 비정형 문서 포맷에 대해 전문화된 Parser 솔루션을 도입하거나, 동등 이…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119151+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 16,
+          "total": 58,
+          "requirement_id": "2093a3159e244d43a03539e3b4c6371e",
+          "snippet": "조견표 16/58 · 측정 ·관리할 수 있는 기준과 지표를 제시할 수 있어야 합니다.\n• 문서 유형별로 상이…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119210+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 17,
+          "total": 58,
+          "requirement_id": "45688663aaa0448ca0604e15c21bda48",
+          "snippet": "조견표 17/58 · 청킹 기능 요건\n• 청킹 알고리즘은 모듈화된 형태로 관리할 수 있어야 하며, 알고리즘별…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119275+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 18,
+          "total": 58,
+          "requirement_id": "2847f04264234d0aa5c795dbe53eb77d",
+          "snippet": "조견표 18/58 · 청킹 관리 요건\n• 문서 단위로 청킹 처리 여부, 처리 상태, 적용 알고리즘, 처리 시…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119343+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 19,
+          "total": 58,
+          "requirement_id": "5ae3c80ecd1b40c188fc8109b8d9bb00",
+          "snippet": "조견표 19/58 · • 비정형 데이터 검색 및 생성형 AI(RAG) 서비스에 공통 활용 가능한 벡터DB를 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119397+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 20,
+          "total": 58,
+          "requirement_id": "645d84d32bed4ad6891c2e832a87cf14",
+          "snippet": "조견표 20/58 · 드-벡터(유사도) 하이브리드 검색 기능을 지원하는 솔루션을 적용할 수있어야 하며, 동등…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119454+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 21,
+          "total": 58,
+          "requirement_id": "29afa012e6af44e8959cd92fef235137",
+          "snippet": "조견표 21/58 · • 검색엔진의 벡터 기능 지원 버전, 인덱스 구조, 노드 증설 방식 등을 고려한 구성 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119506+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 22,
+          "total": 58,
+          "requirement_id": "956779a8e6d045fca4cfe4f2d45ab247",
+          "snippet": "조견표 22/58 · 메타데이터\n• 검색 및 관리 목적을 고려한 메타데이터 구조와 인덱싱 체계를 설계할수 있…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40075
+        },
+        "ts": "2026-05-26T07:41:17.119563+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 23,
+          "total": 58,
+          "requirement_id": "94055fd2c6874a4885d181106bcb68b5",
+          "snippet": "조견표 23/58 · 리니지(Lineage)\n• 문서 및 데이터셋의 생성·변환·활용 관계를 추적할 수 있어야…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.119840+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 24,
+          "total": 58,
+          "requirement_id": "011f8d0e05514effa06567b5ed63803e",
+          "snippet": "조견표 24/58 · 버전관리\n• 원본, 변환 데이터셋 및 파일 단위의 버전관리를 제공해야 합니다.\n• 동일…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.119893+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 25,
+          "total": 58,
+          "requirement_id": "20ce4cb35f5d4256abaaeb6b1cf85de1",
+          "snippet": "조견표 25/58 · 특정 시점 기준 상태 조회 및 복원이 가능해야 합니다.\n• 변경 이력, 작업자, 작업일…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.119944+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 26,
+          "total": 58,
+          "requirement_id": "c170266eb3e040d28b86c2dfc2c6d53b",
+          "snippet": "조견표 26/58 · • 데이터셋 및 파일의 버전별 카탈로그 등록, 반영, 삭제 상태를 관리할 수 있어야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120009+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 27,
+          "total": 58,
+          "requirement_id": "14b0c457042a4f46ab27591b4cc79f99",
+          "snippet": "조견표 27/58 · • 비정형 데이터의 수집, 변환, 적재 결과에 대한 품질 검증 및 검수 기능을 제공해야…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120058+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 28,
+          "total": 58,
+          "requirement_id": "1f308231055549e4af873d7ee402e775",
+          "snippet": "조견표 28/58 · 검색 기능\n• 당행에 기존 구축되어 있는 데이터 포털 내에 비정형 데이터 검색 기능을 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120286+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 29,
+          "total": 58,
+          "requirement_id": "aee356c5533f4de79639fbd42eb0bfd4",
+          "snippet": "조견표 29/58 · • 데이터 샘플 조회 기능을 제공해야 합니다.\n• 관리자 화면에서 검색 성능 평가 및 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120365+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 30,
+          "total": 58,
+          "requirement_id": "93e1348f227841658aab60dff67a938c",
+          "snippet": "조견표 30/58 · • 사용자 질의 정규화 및 검색 품질 향상을 위한 쿼리 재작성 적용 방안을 고려할 수 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120430+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 31,
+          "total": 58,
+          "requirement_id": "fd053997524147af947fd695d4a1d3b0",
+          "snippet": "조견표 31/58 · • 문서 간 유사도 기반 연관 문서 추천 기능을 제공해야 합니다.…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120519+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 32,
+          "total": 58,
+          "requirement_id": "57eb0ecc8903415c9ed405e77b06b240",
+          "snippet": "조견표 32/58 · 포털/카탈로그\n• 전체 데이터 현황 / 데이터 카테고리별 현황 / 변환 단계별 데이터 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120578+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 33,
+          "total": 58,
+          "requirement_id": "0d749056d28444b2b0aa2b0c671abfb5",
+          "snippet": "조견표 33/58 · 당행 기구축 데이터 포털 활용 및 구현\n• 사용자 포털 영역은 기존 당행 데이터 포털 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120636+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 34,
+          "total": 58,
+          "requirement_id": "a296bb0092064f589ce54ab352a8e3b3",
+          "snippet": "조견표 34/58 · API 제공 요건\n• 파싱, 청킹, 임베딩 등 주요 데이터 처리 기능을 당행 내부 연계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120691+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 35,
+          "total": 58,
+          "requirement_id": "2c391a32f3564da7822e8ad447031bac",
+          "snippet": "조견표 35/58 · • 승인된 요청에 대해 API Key 를 발급하고 상태를 관리할 수 있어야한다.\n• A…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120743+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 36,
+          "total": 58,
+          "requirement_id": "c8eed11bdf794274b11e04e37dbfe07c",
+          "snippet": "조견표 36/58 · SDK 제공 요건\n• 기존 데이터 제공 SDK는 모듈화된 형태로 관리할 수 있어야 합니…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40076
+        },
+        "ts": "2026-05-26T07:41:17.120799+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 37,
+          "total": 58,
+          "requirement_id": "608eaf19e7a640739666715a9c53a551",
+          "snippet": "조견표 37/58 · • 데이터 연계 및 내부 시스템 API를 통합 관리할 수 있도록 API Gateway를…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40077
+        },
+        "ts": "2026-05-26T07:41:17.120853+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 38,
+          "total": 58,
+          "requirement_id": "7e73c05811fc4d0e96e3f98200f13d43",
+          "snippet": "조견표 38/58 · • 플랫폼 간 요청/응답 시스템 로그를 저장해야 합니다.\n• API 호출량, 데이터 처…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40077
+        },
+        "ts": "2026-05-26T07:41:17.120957+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 39,
+          "total": 58,
+          "requirement_id": "cf6c06d978ab4df890d21898f645c2c6",
+          "snippet": "조견표 39/58 · • 당행 환경에 적합한 API Gateway S/W 제안이 가능해야 합니다.\n• API…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40077
+        },
+        "ts": "2026-05-26T07:41:17.121089+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 40,
+          "total": 58,
+          "requirement_id": "ee9373ac50434466852bd892d1ba8bdd",
+          "snippet": "조견표 40/58 · • 본 플랫폼은 생성형 AI 활용을 전제로 설계하며, 파싱·청킹·임베딩 각 단계를 생성…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40077
+        },
+        "ts": "2026-05-26T07:41:17.121149+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 41,
+          "total": 58,
+          "requirement_id": "0fee7fa2fb8a4939a53ccf118085461e",
+          "snippet": "조견표 41/58 · • 데이터 변경 시 AI 서비스에 반영 가능한 구조로 제안해야 합니다.\n• AI 서비스…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40077
+        },
+        "ts": "2026-05-26T07:41:17.121402+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 42,
+          "total": 58,
+          "requirement_id": "d71e891a42c543aab4dab3847cfa128c",
+          "snippet": "조견표 42/58 · • 생성형 AI 플랫폼 및 AI Agent 서비스가 본 플랫폼의 검색, 메타데이터 조회…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40077
+        },
+        "ts": "2026-05-26T07:41:17.121504+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 43,
+          "total": 58,
+          "requirement_id": "95640a382b924ee0a90f241472d9d0a1",
+          "snippet": "조견표 43/58 · • MCP Server 는 초기 구축 단계에서는 검색, 카탈로그 조회, 문서/청크 조회…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40077
+        },
+        "ts": "2026-05-26T07:41:17.121707+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 44,
+          "total": 58,
+          "requirement_id": "43cfc685375843f6954f23e237ba02ab",
+          "snippet": "조견표 44/58 · • MCP Server 구축 시 기존 API Gateway 및 권한관리 체계와 연계하여…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.121910+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 45,
+          "total": 58,
+          "requirement_id": "621a1264dbe2411cb7197421b713a047",
+          "snippet": "조견표 45/58 · • 최초 원본 수집 후 파싱 단계가 끝나면 비식별화 처리 후 저장해야 합니다.\n• 플랫…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122002+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 46,
+          "total": 58,
+          "requirement_id": "9cc1fb6bd4a04c87ade98dc2bb40eb26",
+          "snippet": "조견표 46/58 · • 플랫폼은 다중 사용자 환경을 고려하여 웹 기반 개발/분석 환경(예 : code-se…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122068+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 47,
+          "total": 58,
+          "requirement_id": "8302fb91c14847d6b82f721c64debbd5",
+          "snippet": "조견표 47/58 · • 작업 스케줄링 및 운영관리 기능은 당행 전사 워크플로우 자동화 솔루션(Control…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122125+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 48,
+          "total": 58,
+          "requirement_id": "e8845eef03b3401d98de0470de73d952",
+          "snippet": "조견표 48/58 · 운영 모니터링 및 관리 기능\n• 실시간 데이터 수집 현황 확인 기능을 제공해야 합니다.…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122179+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 49,
+          "total": 58,
+          "requirement_id": "46c1b28226584dfe95dd0ccaa1abf5fc",
+          "snippet": "조견표 49/58 · 운영 정책\n• 인덱싱 노드, 파이프라인, 저장소, API, 포털까지 단계별 로그를 남길…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122229+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 50,
+          "total": 58,
+          "requirement_id": "fad669680b0c4d56a750d37f80270e49",
+          "snippet": "조견표 50/58 · • 개발망 반입 대상 데이터의 범위, 승인 기준 및 반입 가능 산출물 유형에 따라 제어…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122280+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 51,
+          "total": 58,
+          "requirement_id": "bde51703257842a7a8036bd53b7aeebe",
+          "snippet": "조견표 51/58 · • 데이터 이관 요청, 승인/반려, 이력 관리가 가능한 통제 프로세스를 제공해야 합니다…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122325+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 52,
+          "total": 58,
+          "requirement_id": "ba5d3f4a8b254dee88a8cd9c85b425e7",
+          "snippet": "조견표 52/58 · • 신규 도입 장비를 활용한 플랫폼 구축 방안을 제시해야 합니다.\n• 전자금융감독규정 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122370+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 53,
+          "total": 58,
+          "requirement_id": "692dcfbe9f5e4234b5f6a02587d7dafc",
+          "snippet": "조견표 53/58 · • 예상 데이터 규모, 처리량, 검색 부하, API 호출량을 기준으로 용량 및성능 산정…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122446+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 54,
+          "total": 58,
+          "requirement_id": "55bb6060f9264a6384fc120a55d96137",
+          "snippet": "조견표 54/58 · 시스템 기능이 요구사항에 적합하게 구현되었는지를 검증하기 위한 테스트 계획 및 일정을 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122498+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "requirement_id": "10737179a12f429d9cd9aef2f8ba774d",
+          "snippet": "조견표 55/58 · 단위 테스트\n• 기능 요구사항에 대한 테스트 시나리오 및 검증 방안을 제시하여야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40078
+        },
+        "ts": "2026-05-26T07:41:17.122546+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 56,
+          "total": 58,
+          "requirement_id": "e810c20a862f4c6fbc307f88bd1b7fa1",
+          "snippet": "조견표 56/58 · 니다.\n• 비정형 데이터 가공(파싱/청킹/임베딩) 산출물에 대해서는 품질 검증방안을 포…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40079
+        },
+        "ts": "2026-05-26T07:41:17.122970+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 57,
+          "total": 58,
+          "requirement_id": "c93aea98bec44bf595c071bfb2c41315",
+          "snippet": "조견표 57/58 · 연동 및 성능 테스트\n• 데이터 포털 등 연계 시스템과의 인터페이스 및 데이터 처리/검…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40079
+        },
+        "ts": "2026-05-26T07:41:17.123137+00:00"
+      },
+      {
+        "stage": "ATOMIZING",
+        "payload": {
+          "done": 58,
+          "total": 58,
+          "requirement_id": "2dcd637e389c49cf87f6bce5dfd00a6a",
+          "snippet": "조견표 58/58 · 통합 테스트\n• 수집à가공à저장à검색àAPIà포털 전 구간에 대한 End-to-End\n…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40079
+        },
+        "ts": "2026-05-26T07:41:17.123258+00:00"
+      },
+      {
+        "stage": "READY_FOR_REVIEW",
+        "payload": {
+          "requirements": 58,
+          "snippet": "조견표 58줄 추출 완료 — Excel·검토 가능",
+          "llm_usage": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "total_calls": 25,
+            "total_input_tokens": 25988,
+            "total_output_tokens": 2910,
+            "total_cost_usd": 0.0941,
+            "total_cost_krw": 127.0,
+            "recent_calls": [
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 916,
+                "output_tokens": 191,
+                "cost_usd": 0.0042,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 949,
+                "output_tokens": 207,
+                "cost_usd": 0.00444,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 753,
+                "output_tokens": 112,
+                "cost_usd": 0.003,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_schema:table15",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 1464,
+                "output_tokens": 93,
+                "cost_usd": 0.00459,
+                "prompt_preview": "RFP 조견표(table_index=15)에서 PM 검토용 'atomic 요구사항 1건' 경계 규칙을 추론하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 스키마 추론]\n입력 샘플:\n  ① 원천 시스템 연계\n  "
+              },
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 635,
+                "output_tokens": 62,
+                "cost_usd": 0.00221,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_schema:table16",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 1416,
+                "output_tokens": 81,
+                "cost_usd": 0.00435,
+                "prompt_preview": "RFP 조견표(table_index=16)에서 PM 검토용 'atomic 요구사항 1건' 경계 규칙을 추론하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 스키마 추론]\n입력 샘플:\n  ① 원천 시스템 연계\n  "
+              },
+              {
+                "purpose": "split_cell",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 757,
+                "output_tokens": 130,
+                "cost_usd": 0.00319,
+                "prompt_preview": "RFP 조견표 상세 셀을 PM 검토용 '요구사항 1건' 단위로 분해하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 셀 분해]\n입력 셀:\n  ① 원천 시스템 연계\n  • 연계 방식은 각 시스템의 요구사항을 반영하"
+              },
+              {
+                "purpose": "split_schema:table17",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 730,
+                "output_tokens": 85,
+                "cost_usd": 0.00267,
+                "prompt_preview": "RFP 조견표(table_index=17)에서 PM 검토용 'atomic 요구사항 1건' 경계 규칙을 추론하라.\n\n\n[atomic 1건의 정의 — PM 검토 단위]\n- 분해 경계는 **상위 번호(①②③, 1., 가. 등)** 를 기준으로 한다.\n- 상위 번호 **아래** •·- 하위 불릿은 **같은 atom 본문**에 포함한다. 불릿마다 쪼개지 않는다.\n- 유사한 하위 항목(같은 ① 주제)은 context window처럼 **한 덩어리**로 묶어도 된다.\n- **과분할 금지**: 불릿 1개 = atom 1개 (X). ① + 그 아래 모든 • = atom 1개 (O).\n- **과병합 금지**: 서로 다른 ①②③은 합치지 않는다.\n\n\n[few-shot — 스키마 추론]\n입력 샘플:\n  ① 원천 시스템 연계\n  "
+              }
+            ]
+          },
+          "llm_provider": "openai",
+          "llm_model": "gpt-4o",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 40079
+        },
+        "ts": "2026-05-26T07:41:17.123355+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 0,
+          "total": 58,
+          "snippet": "KT AI 솔루션 카탈로그와 Rubric 매칭 중…",
+          "elapsed_ms": 11,
+          "elapsed_total_ms": 40091
+        },
+        "ts": "2026-05-26T07:41:17.135180+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 1,
+          "total": 58,
+          "snippet": "AI 검토 1/58 · 원천 시스템 연계\n• 연계 방식은 각 시스템의 요구사항을 반영하되, 향후…",
+          "elapsed_ms": 30818,
+          "elapsed_total_ms": 70910
+        },
+        "ts": "2026-05-26T07:41:47.954039+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 2,
+          "total": 58,
+          "snippet": "AI 검토 2/58 · 지원 파일 형식\n• Pdf, docx, pptx, xlsx, hwp, h…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 70910
+        },
+        "ts": "2026-05-26T07:41:47.954142+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 3,
+          "total": 58,
+          "snippet": "AI 검토 3/58 · 수기 업로드\n• 사용자가 직접 데이터를 입력하거나 파일을 업로드할 수 있…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 70910
+        },
+        "ts": "2026-05-26T07:41:47.954201+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 4,
+          "total": 58,
+          "snippet": "AI 검토 4/58 · 저장 구조 설계\n• 원본 데이터는 전처리 단계에서 개인정보 비식별화 처리…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 70910
+        },
+        "ts": "2026-05-26T07:41:47.954246+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 5,
+          "total": 58,
+          "snippet": "AI 검토 5/58 · • 당행 환경에 적합한 Object Storage 구성 전략을 제안해야 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 70910
+        },
+        "ts": "2026-05-26T07:41:47.954288+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 6,
+          "total": 58,
+          "snippet": "AI 검토 6/58 · • 비정형 데이터의 구조화 산출물(파싱/청킹/임베딩 결과, 메타데이터,\n…",
+          "elapsed_ms": 27998,
+          "elapsed_total_ms": 98909
+        },
+        "ts": "2026-05-26T07:42:15.953268+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 7,
+          "total": 58,
+          "snippet": "AI 검토 7/58 · • 산출물 유형별 특성을 고려하여 성능, 확장성 및 운영 효율성을 확보할…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 98909
+        },
+        "ts": "2026-05-26T07:42:15.953399+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 8,
+          "total": 58,
+          "snippet": "AI 검토 8/58 · 중간 산출물 관리\n• 데이터 수집, 데이터 변환(파싱/청킹/임베딩) 등 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 98909
+        },
+        "ts": "2026-05-26T07:42:15.953478+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 9,
+          "total": 58,
+          "snippet": "AI 검토 9/58 · 데이터 수명주기 및 보관 정책\n• 데이터 계층 구조 정의와 함께 권한 관…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 98909
+        },
+        "ts": "2026-05-26T07:42:15.953535+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 10,
+          "total": 58,
+          "snippet": "AI 검토 10/58 · • 워크플로우 오케스트레이션 엔진은 Low-code/No-code 및 G…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 98909
+        },
+        "ts": "2026-05-26T07:42:15.953586+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 11,
+          "total": 58,
+          "snippet": "AI 검토 11/58 · 전처리 및 후처리\n• 원천 파일의 확장자 및 포맷을 후속 처리 가능한 형…",
+          "elapsed_ms": 28006,
+          "elapsed_total_ms": 126916
+        },
+        "ts": "2026-05-26T07:42:43.960007+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 12,
+          "total": 58,
+          "snippet": "AI 검토 12/58 · 구조화 변환\n• 최종 변환 결과는 구조화된 표준 문서 형식을 기본으로 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 126916
+        },
+        "ts": "2026-05-26T07:42:43.960521+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 13,
+          "total": 58,
+          "snippet": "AI 검토 13/58 · • 추출된 텍스트는 문장, 문단, 표, 제목 등 문서 구조 단위로 관리할…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 126916
+        },
+        "ts": "2026-05-26T07:42:43.960740+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 14,
+          "total": 58,
+          "snippet": "AI 검토 14/58 · 검증 및 수정\n• 변환 결과와 원본, 버전별 비교 검증할 수 있는 UI …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 126917
+        },
+        "ts": "2026-05-26T07:42:43.960890+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 15,
+          "total": 58,
+          "snippet": "AI 검토 15/58 · • 다양한 비정형 문서 포맷에 대해 전문화된 Parser 솔루션을 도입하…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 126917
+        },
+        "ts": "2026-05-26T07:42:43.961049+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 16,
+          "total": 58,
+          "snippet": "AI 검토 16/58 · 측정 ·관리할 수 있는 기준과 지표를 제시할 수 있어야 합니다.\n• 문서…",
+          "elapsed_ms": 30833,
+          "elapsed_total_ms": 157751
+        },
+        "ts": "2026-05-26T07:43:14.794903+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 17,
+          "total": 58,
+          "snippet": "AI 검토 17/58 · 청킹 기능 요건\n• 청킹 알고리즘은 모듈화된 형태로 관리할 수 있어야 하…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 157751
+        },
+        "ts": "2026-05-26T07:43:14.795149+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 18,
+          "total": 58,
+          "snippet": "AI 검토 18/58 · 청킹 관리 요건\n• 문서 단위로 청킹 처리 여부, 처리 상태, 적용 알고…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 157751
+        },
+        "ts": "2026-05-26T07:43:14.795234+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 19,
+          "total": 58,
+          "snippet": "AI 검토 19/58 · • 비정형 데이터 검색 및 생성형 AI(RAG) 서비스에 공통 활용 가능…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 157751
+        },
+        "ts": "2026-05-26T07:43:14.795308+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 20,
+          "total": 58,
+          "snippet": "AI 검토 20/58 · 드-벡터(유사도) 하이브리드 검색 기능을 지원하는 솔루션을 적용할 수있어…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 157751
+        },
+        "ts": "2026-05-26T07:43:14.795376+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 20,
+          "total": 58,
+          "snippet": "(캐시) AI 검토 20/58",
+          "cached": true,
+          "elapsed_ms": 1,
+          "elapsed_total_ms": 157752
+        },
+        "ts": "2026-05-26T07:45:58.339432+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 20,
+          "total": 58,
+          "snippet": "(캐시) AI 검토 20/58",
+          "cached": true,
+          "elapsed_ms": 3,
+          "elapsed_total_ms": 157756
+        },
+        "ts": "2026-05-26T07:45:58.342888+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 20,
+          "total": 58,
+          "snippet": "KT AI 솔루션 카탈로그와 Rubric 매칭 중…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 157756
+        },
+        "ts": "2026-05-26T07:45:58.343064+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 21,
+          "total": 58,
+          "snippet": "AI 검토 21/58 · • 검색엔진의 벡터 기능 지원 버전, 인덱스 구조, 노드 증설 방식 등을…",
+          "elapsed_ms": 15331,
+          "elapsed_total_ms": 173087
+        },
+        "ts": "2026-05-26T07:46:13.674265+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 22,
+          "total": 58,
+          "snippet": "AI 검토 22/58 · 메타데이터\n• 검색 및 관리 목적을 고려한 메타데이터 구조와 인덱싱 체계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 173087
+        },
+        "ts": "2026-05-26T07:46:13.674379+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 23,
+          "total": 58,
+          "snippet": "AI 검토 23/58 · 리니지(Lineage)\n• 문서 및 데이터셋의 생성·변환·활용 관계를 추…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 173087
+        },
+        "ts": "2026-05-26T07:46:13.674449+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 24,
+          "total": 58,
+          "snippet": "AI 검토 24/58 · 버전관리\n• 원본, 변환 데이터셋 및 파일 단위의 버전관리를 제공해야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 173087
+        },
+        "ts": "2026-05-26T07:46:13.674503+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 25,
+          "total": 58,
+          "snippet": "AI 검토 25/58 · 특정 시점 기준 상태 조회 및 복원이 가능해야 합니다.\n• 변경 이력, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 173087
+        },
+        "ts": "2026-05-26T07:46:13.674548+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 21,
+          "total": 58,
+          "snippet": "AI 검토 21/58 · • 검색엔진의 벡터 기능 지원 버전, 인덱스 구조, 노드 증설 방식 등을…",
+          "elapsed_ms": 6852,
+          "elapsed_total_ms": 179940
+        },
+        "ts": "2026-05-26T07:46:20.527028+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 22,
+          "total": 58,
+          "snippet": "AI 검토 22/58 · 메타데이터\n• 검색 및 관리 목적을 고려한 메타데이터 구조와 인덱싱 체계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 179940
+        },
+        "ts": "2026-05-26T07:46:20.527155+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 23,
+          "total": 58,
+          "snippet": "AI 검토 23/58 · 리니지(Lineage)\n• 문서 및 데이터셋의 생성·변환·활용 관계를 추…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 179940
+        },
+        "ts": "2026-05-26T07:46:20.527206+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 24,
+          "total": 58,
+          "snippet": "AI 검토 24/58 · 버전관리\n• 원본, 변환 데이터셋 및 파일 단위의 버전관리를 제공해야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 179940
+        },
+        "ts": "2026-05-26T07:46:20.527243+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 25,
+          "total": 58,
+          "snippet": "AI 검토 25/58 · 특정 시점 기준 상태 조회 및 복원이 가능해야 합니다.\n• 변경 이력, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 179940
+        },
+        "ts": "2026-05-26T07:46:20.527278+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 26,
+          "total": 58,
+          "snippet": "AI 검토 26/58 · • 데이터셋 및 파일의 버전별 카탈로그 등록, 반영, 삭제 상태를 관리할…",
+          "elapsed_ms": 15368,
+          "elapsed_total_ms": 195309
+        },
+        "ts": "2026-05-26T07:46:35.895997+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 27,
+          "total": 58,
+          "snippet": "AI 검토 27/58 · • 비정형 데이터의 수집, 변환, 적재 결과에 대한 품질 검증 및 검수 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 195309
+        },
+        "ts": "2026-05-26T07:46:35.896079+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 28,
+          "total": 58,
+          "snippet": "AI 검토 28/58 · 검색 기능\n• 당행에 기존 구축되어 있는 데이터 포털 내에 비정형 데이터…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 195309
+        },
+        "ts": "2026-05-26T07:46:35.896128+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 29,
+          "total": 58,
+          "snippet": "AI 검토 29/58 · • 데이터 샘플 조회 기능을 제공해야 합니다.\n• 관리자 화면에서 검색 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 195309
+        },
+        "ts": "2026-05-26T07:46:35.896166+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 30,
+          "total": 58,
+          "snippet": "AI 검토 30/58 · • 사용자 질의 정규화 및 검색 품질 향상을 위한 쿼리 재작성 적용 방안…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 195309
+        },
+        "ts": "2026-05-26T07:46:35.896201+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 26,
+          "total": 58,
+          "snippet": "AI 검토 26/58 · • 데이터셋 및 파일의 버전별 카탈로그 등록, 반영, 삭제 상태를 관리할…",
+          "elapsed_ms": 9628,
+          "elapsed_total_ms": 204938
+        },
+        "ts": "2026-05-26T07:46:45.524763+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 27,
+          "total": 58,
+          "snippet": "AI 검토 27/58 · • 비정형 데이터의 수집, 변환, 적재 결과에 대한 품질 검증 및 검수 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 204938
+        },
+        "ts": "2026-05-26T07:46:45.524865+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 28,
+          "total": 58,
+          "snippet": "AI 검토 28/58 · 검색 기능\n• 당행에 기존 구축되어 있는 데이터 포털 내에 비정형 데이터…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 204938
+        },
+        "ts": "2026-05-26T07:46:45.524924+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 29,
+          "total": 58,
+          "snippet": "AI 검토 29/58 · • 데이터 샘플 조회 기능을 제공해야 합니다.\n• 관리자 화면에서 검색 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 204938
+        },
+        "ts": "2026-05-26T07:46:45.524970+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 30,
+          "total": 58,
+          "snippet": "AI 검토 30/58 · • 사용자 질의 정규화 및 검색 품질 향상을 위한 쿼리 재작성 적용 방안…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 204938
+        },
+        "ts": "2026-05-26T07:46:45.525013+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 30,
+          "total": 58,
+          "snippet": "(캐시) AI 검토 30/58",
+          "cached": true,
+          "elapsed_ms": 2,
+          "elapsed_total_ms": 204940
+        },
+        "ts": "2026-05-26T07:46:48.822100+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 30,
+          "total": 58,
+          "snippet": "(캐시) AI 검토 30/58",
+          "cached": true,
+          "elapsed_ms": 3,
+          "elapsed_total_ms": 204944
+        },
+        "ts": "2026-05-26T07:46:48.825807+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 30,
+          "total": 58,
+          "snippet": "KT AI 솔루션 카탈로그와 Rubric 매칭 중…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 204944
+        },
+        "ts": "2026-05-26T07:46:48.826032+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 31,
+          "total": 58,
+          "snippet": "AI 검토 31/58 · • 문서 간 유사도 기반 연관 문서 추천 기능을 제공해야 합니다.…",
+          "elapsed_ms": 16299,
+          "elapsed_total_ms": 221244
+        },
+        "ts": "2026-05-26T07:47:05.125775+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 32,
+          "total": 58,
+          "snippet": "AI 검토 32/58 · 포털/카탈로그\n• 전체 데이터 현황 / 데이터 카테고리별 현황 / 변환 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 221244
+        },
+        "ts": "2026-05-26T07:47:05.125895+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 33,
+          "total": 58,
+          "snippet": "AI 검토 33/58 · 당행 기구축 데이터 포털 활용 및 구현\n• 사용자 포털 영역은 기존 당행…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 221244
+        },
+        "ts": "2026-05-26T07:47:05.125967+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 34,
+          "total": 58,
+          "snippet": "AI 검토 34/58 · API 제공 요건\n• 파싱, 청킹, 임베딩 등 주요 데이터 처리 기능을 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 221244
+        },
+        "ts": "2026-05-26T07:47:05.126019+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 35,
+          "total": 58,
+          "snippet": "AI 검토 35/58 · • 승인된 요청에 대해 API Key 를 발급하고 상태를 관리할 수 있어…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 221244
+        },
+        "ts": "2026-05-26T07:47:05.126065+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 31,
+          "total": 58,
+          "snippet": "AI 검토 31/58 · • 문서 간 유사도 기반 연관 문서 추천 기능을 제공해야 합니다.…",
+          "elapsed_ms": 8830,
+          "elapsed_total_ms": 230075
+        },
+        "ts": "2026-05-26T07:47:13.956332+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 32,
+          "total": 58,
+          "snippet": "AI 검토 32/58 · 포털/카탈로그\n• 전체 데이터 현황 / 데이터 카테고리별 현황 / 변환 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 230075
+        },
+        "ts": "2026-05-26T07:47:13.956678+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 33,
+          "total": 58,
+          "snippet": "AI 검토 33/58 · 당행 기구축 데이터 포털 활용 및 구현\n• 사용자 포털 영역은 기존 당행…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 230075
+        },
+        "ts": "2026-05-26T07:47:13.956846+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 34,
+          "total": 58,
+          "snippet": "AI 검토 34/58 · API 제공 요건\n• 파싱, 청킹, 임베딩 등 주요 데이터 처리 기능을 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 230075
+        },
+        "ts": "2026-05-26T07:47:13.956972+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 35,
+          "total": 58,
+          "snippet": "AI 검토 35/58 · • 승인된 요청에 대해 API Key 를 발급하고 상태를 관리할 수 있어…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 230075
+        },
+        "ts": "2026-05-26T07:47:13.957074+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 31,
+          "total": 58,
+          "snippet": "AI 검토 31/58 · • 문서 간 유사도 기반 연관 문서 추천 기능을 제공해야 합니다.…",
+          "elapsed_ms": 4391,
+          "elapsed_total_ms": 234467
+        },
+        "ts": "2026-05-26T07:47:18.348535+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 32,
+          "total": 58,
+          "snippet": "AI 검토 32/58 · 포털/카탈로그\n• 전체 데이터 현황 / 데이터 카테고리별 현황 / 변환 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 234467
+        },
+        "ts": "2026-05-26T07:47:18.348831+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 33,
+          "total": 58,
+          "snippet": "AI 검토 33/58 · 당행 기구축 데이터 포털 활용 및 구현\n• 사용자 포털 영역은 기존 당행…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 234467
+        },
+        "ts": "2026-05-26T07:47:18.348907+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 34,
+          "total": 58,
+          "snippet": "AI 검토 34/58 · API 제공 요건\n• 파싱, 청킹, 임베딩 등 주요 데이터 처리 기능을 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 234467
+        },
+        "ts": "2026-05-26T07:47:18.348965+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 35,
+          "total": 58,
+          "snippet": "AI 검토 35/58 · • 승인된 요청에 대해 API Key 를 발급하고 상태를 관리할 수 있어…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 234467
+        },
+        "ts": "2026-05-26T07:47:18.349018+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 36,
+          "total": 58,
+          "snippet": "AI 검토 36/58 · SDK 제공 요건\n• 기존 데이터 제공 SDK는 모듈화된 형태로 관리할 …",
+          "elapsed_ms": 13524,
+          "elapsed_total_ms": 247992
+        },
+        "ts": "2026-05-26T07:47:31.873974+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 37,
+          "total": 58,
+          "snippet": "AI 검토 37/58 · • 데이터 연계 및 내부 시스템 API를 통합 관리할 수 있도록 API …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 247993
+        },
+        "ts": "2026-05-26T07:47:31.874348+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 38,
+          "total": 58,
+          "snippet": "AI 검토 38/58 · • 플랫폼 간 요청/응답 시스템 로그를 저장해야 합니다.\n• API 호출…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 247993
+        },
+        "ts": "2026-05-26T07:47:31.874546+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 39,
+          "total": 58,
+          "snippet": "AI 검토 39/58 · • 당행 환경에 적합한 API Gateway S/W 제안이 가능해야 합니…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 247993
+        },
+        "ts": "2026-05-26T07:47:31.874703+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 40,
+          "total": 58,
+          "snippet": "AI 검토 40/58 · • 본 플랫폼은 생성형 AI 활용을 전제로 설계하며, 파싱·청킹·임베딩 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 247993
+        },
+        "ts": "2026-05-26T07:47:31.874800+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 36,
+          "total": 58,
+          "snippet": "AI 검토 36/58 · SDK 제공 요건\n• 기존 데이터 제공 SDK는 모듈화된 형태로 관리할 …",
+          "elapsed_ms": 3479,
+          "elapsed_total_ms": 251473
+        },
+        "ts": "2026-05-26T07:47:35.354314+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 37,
+          "total": 58,
+          "snippet": "AI 검토 37/58 · • 데이터 연계 및 내부 시스템 API를 통합 관리할 수 있도록 API …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 251473
+        },
+        "ts": "2026-05-26T07:47:35.354617+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 38,
+          "total": 58,
+          "snippet": "AI 검토 38/58 · • 플랫폼 간 요청/응답 시스템 로그를 저장해야 합니다.\n• API 호출…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 251473
+        },
+        "ts": "2026-05-26T07:47:35.354685+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 39,
+          "total": 58,
+          "snippet": "AI 검토 39/58 · • 당행 환경에 적합한 API Gateway S/W 제안이 가능해야 합니…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 251473
+        },
+        "ts": "2026-05-26T07:47:35.354741+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 40,
+          "total": 58,
+          "snippet": "AI 검토 40/58 · • 본 플랫폼은 생성형 AI 활용을 전제로 설계하며, 파싱·청킹·임베딩 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 251473
+        },
+        "ts": "2026-05-26T07:47:35.354792+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 36,
+          "total": 58,
+          "snippet": "AI 검토 36/58 · SDK 제공 요건\n• 기존 데이터 제공 SDK는 모듈화된 형태로 관리할 …",
+          "elapsed_ms": 3522,
+          "elapsed_total_ms": 254995
+        },
+        "ts": "2026-05-26T07:47:38.876816+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 37,
+          "total": 58,
+          "snippet": "AI 검토 37/58 · • 데이터 연계 및 내부 시스템 API를 통합 관리할 수 있도록 API …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 254995
+        },
+        "ts": "2026-05-26T07:47:38.876995+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 38,
+          "total": 58,
+          "snippet": "AI 검토 38/58 · • 플랫폼 간 요청/응답 시스템 로그를 저장해야 합니다.\n• API 호출…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 254995
+        },
+        "ts": "2026-05-26T07:47:38.877063+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 39,
+          "total": 58,
+          "snippet": "AI 검토 39/58 · • 당행 환경에 적합한 API Gateway S/W 제안이 가능해야 합니…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 254995
+        },
+        "ts": "2026-05-26T07:47:38.877112+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 40,
+          "total": 58,
+          "snippet": "AI 검토 40/58 · • 본 플랫폼은 생성형 AI 활용을 전제로 설계하며, 파싱·청킹·임베딩 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 254995
+        },
+        "ts": "2026-05-26T07:47:38.877157+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 41,
+          "total": 58,
+          "snippet": "AI 검토 41/58 · • 데이터 변경 시 AI 서비스에 반영 가능한 구조로 제안해야 합니다.\n…",
+          "elapsed_ms": 23760,
+          "elapsed_total_ms": 278756
+        },
+        "ts": "2026-05-26T07:48:02.638129+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 42,
+          "total": 58,
+          "snippet": "AI 검토 42/58 · • 생성형 AI 플랫폼 및 AI Agent 서비스가 본 플랫폼의 검색, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 278757
+        },
+        "ts": "2026-05-26T07:48:02.638481+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 43,
+          "total": 58,
+          "snippet": "AI 검토 43/58 · • MCP Server 는 초기 구축 단계에서는 검색, 카탈로그 조회, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 278757
+        },
+        "ts": "2026-05-26T07:48:02.638552+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 44,
+          "total": 58,
+          "snippet": "AI 검토 44/58 · • MCP Server 구축 시 기존 API Gateway 및 권한관리 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 278757
+        },
+        "ts": "2026-05-26T07:48:02.638606+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 45,
+          "total": 58,
+          "snippet": "AI 검토 45/58 · • 최초 원본 수집 후 파싱 단계가 끝나면 비식별화 처리 후 저장해야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 278757
+        },
+        "ts": "2026-05-26T07:48:02.638654+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 41,
+          "total": 58,
+          "snippet": "AI 검토 41/58 · • 데이터 변경 시 AI 서비스에 반영 가능한 구조로 제안해야 합니다.\n…",
+          "elapsed_ms": 2039,
+          "elapsed_total_ms": 280796
+        },
+        "ts": "2026-05-26T07:48:04.678010+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 42,
+          "total": 58,
+          "snippet": "AI 검토 42/58 · • 생성형 AI 플랫폼 및 AI Agent 서비스가 본 플랫폼의 검색, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 280796
+        },
+        "ts": "2026-05-26T07:48:04.678180+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 43,
+          "total": 58,
+          "snippet": "AI 검토 43/58 · • MCP Server 는 초기 구축 단계에서는 검색, 카탈로그 조회, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 280797
+        },
+        "ts": "2026-05-26T07:48:04.678268+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 44,
+          "total": 58,
+          "snippet": "AI 검토 44/58 · • MCP Server 구축 시 기존 API Gateway 및 권한관리 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 280797
+        },
+        "ts": "2026-05-26T07:48:04.678339+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 45,
+          "total": 58,
+          "snippet": "AI 검토 45/58 · • 최초 원본 수집 후 파싱 단계가 끝나면 비식별화 처리 후 저장해야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 280797
+        },
+        "ts": "2026-05-26T07:48:04.678403+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 41,
+          "total": 58,
+          "snippet": "AI 검토 41/58 · • 데이터 변경 시 AI 서비스에 반영 가능한 구조로 제안해야 합니다.\n…",
+          "elapsed_ms": 3172,
+          "elapsed_total_ms": 283969
+        },
+        "ts": "2026-05-26T07:48:07.851174+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 42,
+          "total": 58,
+          "snippet": "AI 검토 42/58 · • 생성형 AI 플랫폼 및 AI Agent 서비스가 본 플랫폼의 검색, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 283970
+        },
+        "ts": "2026-05-26T07:48:07.851514+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 43,
+          "total": 58,
+          "snippet": "AI 검토 43/58 · • MCP Server 는 초기 구축 단계에서는 검색, 카탈로그 조회, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 283970
+        },
+        "ts": "2026-05-26T07:48:07.851580+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 44,
+          "total": 58,
+          "snippet": "AI 검토 44/58 · • MCP Server 구축 시 기존 API Gateway 및 권한관리 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 283970
+        },
+        "ts": "2026-05-26T07:48:07.851633+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 45,
+          "total": 58,
+          "snippet": "AI 검토 45/58 · • 최초 원본 수집 후 파싱 단계가 끝나면 비식별화 처리 후 저장해야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 283970
+        },
+        "ts": "2026-05-26T07:48:07.851684+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 45,
+          "total": 58,
+          "snippet": "(캐시) AI 검토 45/58",
+          "cached": true,
+          "elapsed_ms": 5,
+          "elapsed_total_ms": 283975
+        },
+        "ts": "2026-05-26T07:48:23.471067+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 45,
+          "total": 58,
+          "snippet": "(캐시) AI 검토 45/58",
+          "cached": true,
+          "elapsed_ms": 4,
+          "elapsed_total_ms": 283979
+        },
+        "ts": "2026-05-26T07:48:23.475121+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 45,
+          "total": 58,
+          "snippet": "KT AI 솔루션 카탈로그와 Rubric 매칭 중…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 283979
+        },
+        "ts": "2026-05-26T07:48:23.475372+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 46,
+          "total": 58,
+          "snippet": "AI 검토 46/58 · • 플랫폼은 다중 사용자 환경을 고려하여 웹 기반 개발/분석 환경(예 :…",
+          "elapsed_ms": 1334,
+          "elapsed_total_ms": 285314
+        },
+        "ts": "2026-05-26T07:48:24.810048+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 47,
+          "total": 58,
+          "snippet": "AI 검토 47/58 · • 작업 스케줄링 및 운영관리 기능은 당행 전사 워크플로우 자동화 솔루션…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 285314
+        },
+        "ts": "2026-05-26T07:48:24.810360+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 48,
+          "total": 58,
+          "snippet": "AI 검토 48/58 · 운영 모니터링 및 관리 기능\n• 실시간 데이터 수집 현황 확인 기능을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 285314
+        },
+        "ts": "2026-05-26T07:48:24.810797+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 49,
+          "total": 58,
+          "snippet": "AI 검토 49/58 · 운영 정책\n• 인덱싱 노드, 파이프라인, 저장소, API, 포털까지 단계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 285315
+        },
+        "ts": "2026-05-26T07:48:24.811578+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 50,
+          "total": 58,
+          "snippet": "AI 검토 50/58 · • 개발망 반입 대상 데이터의 범위, 승인 기준 및 반입 가능 산출물 유…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 285315
+        },
+        "ts": "2026-05-26T07:48:24.811751+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 46,
+          "total": 58,
+          "snippet": "AI 검토 46/58 · • 플랫폼은 다중 사용자 환경을 고려하여 웹 기반 개발/분석 환경(예 :…",
+          "elapsed_ms": 54,
+          "elapsed_total_ms": 285370
+        },
+        "ts": "2026-05-26T07:48:24.865962+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 47,
+          "total": 58,
+          "snippet": "AI 검토 47/58 · • 작업 스케줄링 및 운영관리 기능은 당행 전사 워크플로우 자동화 솔루션…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 285370
+        },
+        "ts": "2026-05-26T07:48:24.866098+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 48,
+          "total": 58,
+          "snippet": "AI 검토 48/58 · 운영 모니터링 및 관리 기능\n• 실시간 데이터 수집 현황 확인 기능을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 285370
+        },
+        "ts": "2026-05-26T07:48:24.866161+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 49,
+          "total": 58,
+          "snippet": "AI 검토 49/58 · 운영 정책\n• 인덱싱 노드, 파이프라인, 저장소, API, 포털까지 단계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 285370
+        },
+        "ts": "2026-05-26T07:48:24.866211+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 50,
+          "total": 58,
+          "snippet": "AI 검토 50/58 · • 개발망 반입 대상 데이터의 범위, 승인 기준 및 반입 가능 산출물 유…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 285370
+        },
+        "ts": "2026-05-26T07:48:24.866267+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 46,
+          "total": 58,
+          "snippet": "AI 검토 46/58 · • 플랫폼은 다중 사용자 환경을 고려하여 웹 기반 개발/분석 환경(예 :…",
+          "elapsed_ms": 5340,
+          "elapsed_total_ms": 290711
+        },
+        "ts": "2026-05-26T07:48:30.207056+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 47,
+          "total": 58,
+          "snippet": "AI 검토 47/58 · • 작업 스케줄링 및 운영관리 기능은 당행 전사 워크플로우 자동화 솔루션…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 290711
+        },
+        "ts": "2026-05-26T07:48:30.207378+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 48,
+          "total": 58,
+          "snippet": "AI 검토 48/58 · 운영 모니터링 및 관리 기능\n• 실시간 데이터 수집 현황 확인 기능을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 290711
+        },
+        "ts": "2026-05-26T07:48:30.207487+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 49,
+          "total": 58,
+          "snippet": "AI 검토 49/58 · 운영 정책\n• 인덱싱 노드, 파이프라인, 저장소, API, 포털까지 단계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 290711
+        },
+        "ts": "2026-05-26T07:48:30.207632+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 50,
+          "total": 58,
+          "snippet": "AI 검토 50/58 · • 개발망 반입 대상 데이터의 범위, 승인 기준 및 반입 가능 산출물 유…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 290711
+        },
+        "ts": "2026-05-26T07:48:30.207712+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 46,
+          "total": 58,
+          "snippet": "AI 검토 46/58 · • 플랫폼은 다중 사용자 환경을 고려하여 웹 기반 개발/분석 환경(예 :…",
+          "elapsed_ms": 12904,
+          "elapsed_total_ms": 303616
+        },
+        "ts": "2026-05-26T07:48:43.112383+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 47,
+          "total": 58,
+          "snippet": "AI 검토 47/58 · • 작업 스케줄링 및 운영관리 기능은 당행 전사 워크플로우 자동화 솔루션…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 303616
+        },
+        "ts": "2026-05-26T07:48:43.112858+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 48,
+          "total": 58,
+          "snippet": "AI 검토 48/58 · 운영 모니터링 및 관리 기능\n• 실시간 데이터 수집 현황 확인 기능을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 303617
+        },
+        "ts": "2026-05-26T07:48:43.113033+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 49,
+          "total": 58,
+          "snippet": "AI 검토 49/58 · 운영 정책\n• 인덱싱 노드, 파이프라인, 저장소, API, 포털까지 단계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 303617
+        },
+        "ts": "2026-05-26T07:48:43.113104+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 50,
+          "total": 58,
+          "snippet": "AI 검토 50/58 · • 개발망 반입 대상 데이터의 범위, 승인 기준 및 반입 가능 산출물 유…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 303617
+        },
+        "ts": "2026-05-26T07:48:43.113169+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 46,
+          "total": 58,
+          "snippet": "AI 검토 46/58 · • 플랫폼은 다중 사용자 환경을 고려하여 웹 기반 개발/분석 환경(예 :…",
+          "elapsed_ms": 11963,
+          "elapsed_total_ms": 315580
+        },
+        "ts": "2026-05-26T07:48:55.076296+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 47,
+          "total": 58,
+          "snippet": "AI 검토 47/58 · • 작업 스케줄링 및 운영관리 기능은 당행 전사 워크플로우 자동화 솔루션…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 315580
+        },
+        "ts": "2026-05-26T07:48:55.076429+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 48,
+          "total": 58,
+          "snippet": "AI 검토 48/58 · 운영 모니터링 및 관리 기능\n• 실시간 데이터 수집 현황 확인 기능을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 315580
+        },
+        "ts": "2026-05-26T07:48:55.076484+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 49,
+          "total": 58,
+          "snippet": "AI 검토 49/58 · 운영 정책\n• 인덱싱 노드, 파이프라인, 저장소, API, 포털까지 단계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 315580
+        },
+        "ts": "2026-05-26T07:48:55.076525+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 50,
+          "total": 58,
+          "snippet": "AI 검토 50/58 · • 개발망 반입 대상 데이터의 범위, 승인 기준 및 반입 가능 산출물 유…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 315580
+        },
+        "ts": "2026-05-26T07:48:55.076563+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 51,
+          "total": 58,
+          "snippet": "AI 검토 51/58 · • 데이터 이관 요청, 승인/반려, 이력 관리가 가능한 통제 프로세스를 …",
+          "elapsed_ms": 2867,
+          "elapsed_total_ms": 318447
+        },
+        "ts": "2026-05-26T07:48:57.943816+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 52,
+          "total": 58,
+          "snippet": "AI 검토 52/58 · • 신규 도입 장비를 활용한 플랫폼 구축 방안을 제시해야 합니다.\n• 전…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 318448
+        },
+        "ts": "2026-05-26T07:48:57.944248+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 53,
+          "total": 58,
+          "snippet": "AI 검토 53/58 · • 예상 데이터 규모, 처리량, 검색 부하, API 호출량을 기준으로 용…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 318448
+        },
+        "ts": "2026-05-26T07:48:57.944547+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 54,
+          "total": 58,
+          "snippet": "AI 검토 54/58 · 시스템 기능이 요구사항에 적합하게 구현되었는지를 검증하기 위한 테스트 계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 318449
+        },
+        "ts": "2026-05-26T07:48:57.945458+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "snippet": "AI 검토 55/58 · 단위 테스트\n• 기능 요구사항에 대한 테스트 시나리오 및 검증 방안을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 318449
+        },
+        "ts": "2026-05-26T07:48:57.945577+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 51,
+          "total": 58,
+          "snippet": "AI 검토 51/58 · • 데이터 이관 요청, 승인/반려, 이력 관리가 가능한 통제 프로세스를 …",
+          "elapsed_ms": 4089,
+          "elapsed_total_ms": 322539
+        },
+        "ts": "2026-05-26T07:49:02.035144+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 52,
+          "total": 58,
+          "snippet": "AI 검토 52/58 · • 신규 도입 장비를 활용한 플랫폼 구축 방안을 제시해야 합니다.\n• 전…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 322539
+        },
+        "ts": "2026-05-26T07:49:02.035521+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 53,
+          "total": 58,
+          "snippet": "AI 검토 53/58 · • 예상 데이터 규모, 처리량, 검색 부하, API 호출량을 기준으로 용…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 322539
+        },
+        "ts": "2026-05-26T07:49:02.035685+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 54,
+          "total": 58,
+          "snippet": "AI 검토 54/58 · 시스템 기능이 요구사항에 적합하게 구현되었는지를 검증하기 위한 테스트 계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 322539
+        },
+        "ts": "2026-05-26T07:49:02.035808+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "snippet": "AI 검토 55/58 · 단위 테스트\n• 기능 요구사항에 대한 테스트 시나리오 및 검증 방안을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 322539
+        },
+        "ts": "2026-05-26T07:49:02.035901+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 51,
+          "total": 58,
+          "snippet": "AI 검토 51/58 · • 데이터 이관 요청, 승인/반려, 이력 관리가 가능한 통제 프로세스를 …",
+          "elapsed_ms": 1077,
+          "elapsed_total_ms": 323617
+        },
+        "ts": "2026-05-26T07:49:03.113723+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 52,
+          "total": 58,
+          "snippet": "AI 검토 52/58 · • 신규 도입 장비를 활용한 플랫폼 구축 방안을 제시해야 합니다.\n• 전…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 323617
+        },
+        "ts": "2026-05-26T07:49:03.113857+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 53,
+          "total": 58,
+          "snippet": "AI 검토 53/58 · • 예상 데이터 규모, 처리량, 검색 부하, API 호출량을 기준으로 용…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 323617
+        },
+        "ts": "2026-05-26T07:49:03.113935+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 54,
+          "total": 58,
+          "snippet": "AI 검토 54/58 · 시스템 기능이 요구사항에 적합하게 구현되었는지를 검증하기 위한 테스트 계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 323618
+        },
+        "ts": "2026-05-26T07:49:03.113997+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "snippet": "AI 검토 55/58 · 단위 테스트\n• 기능 요구사항에 대한 테스트 시나리오 및 검증 방안을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 323618
+        },
+        "ts": "2026-05-26T07:49:03.114056+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "snippet": "(캐시) AI 검토 55/58",
+          "cached": true,
+          "elapsed_ms": 2,
+          "elapsed_total_ms": 323620
+        },
+        "ts": "2026-05-26T07:49:08.645399+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "snippet": "(캐시) AI 검토 55/58",
+          "cached": true,
+          "elapsed_ms": 3,
+          "elapsed_total_ms": 323623
+        },
+        "ts": "2026-05-26T07:49:08.648949+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "snippet": "KT AI 솔루션 카탈로그와 Rubric 매칭 중…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 323624
+        },
+        "ts": "2026-05-26T07:49:08.649228+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 56,
+          "total": 58,
+          "snippet": "AI 검토 56/58 · 니다.\n• 비정형 데이터 가공(파싱/청킹/임베딩) 산출물에 대해서는 품질…",
+          "elapsed_ms": 3066,
+          "elapsed_total_ms": 326690
+        },
+        "ts": "2026-05-26T07:49:11.716118+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 57,
+          "total": 58,
+          "snippet": "AI 검토 57/58 · 연동 및 성능 테스트\n• 데이터 포털 등 연계 시스템과의 인터페이스 및 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 326691
+        },
+        "ts": "2026-05-26T07:49:11.716522+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 58,
+          "total": 58,
+          "snippet": "AI 검토 58/58 · 통합 테스트\n• 수집à가공à저장à검색àAPIà포털 전 구간에 대한 End…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 326691
+        },
+        "ts": "2026-05-26T07:49:11.716618+00:00"
+      },
+      {
+        "stage": "RECOMMENDED",
+        "payload": {
+          "recommendations": 58,
+          "llm_usage": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "total_calls": 55,
+            "total_input_tokens": 187995,
+            "total_output_tokens": 72663,
+            "total_cost_usd": 1.1966,
+            "total_cost_krw": 1615.0,
+            "recent_calls": [
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6090,
+                "output_tokens": 2642,
+                "cost_usd": 0.04165,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6090,
+                "output_tokens": 2706,
+                "cost_usd": 0.04229,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6090,
+                "output_tokens": 2702,
+                "cost_usd": 0.04224,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6090,
+                "output_tokens": 2685,
+                "cost_usd": 0.04208,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2896,
+                "cost_usd": 0.04363,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 3156,
+                "cost_usd": 0.04623,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2824,
+                "cost_usd": 0.04291,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1688,
+                "cost_usd": 0.02681,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              }
+            ]
+          },
+          "llm_model": "gpt-4o",
+          "llm_provider": "openai",
+          "snippet": "모든 요건에 AI 리스크·근거가 채워졌습니다.",
+          "elapsed_ms": 42,
+          "elapsed_total_ms": 326733
+        },
+        "ts": "2026-05-26T07:49:11.758984+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 51,
+          "total": 58,
+          "snippet": "AI 검토 51/58 · • 데이터 이관 요청, 승인/반려, 이력 관리가 가능한 통제 프로세스를 …",
+          "elapsed_ms": 4085,
+          "elapsed_total_ms": 330819
+        },
+        "ts": "2026-05-26T07:49:15.844294+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 52,
+          "total": 58,
+          "snippet": "AI 검토 52/58 · • 신규 도입 장비를 활용한 플랫폼 구축 방안을 제시해야 합니다.\n• 전…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 330819
+        },
+        "ts": "2026-05-26T07:49:15.844655+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 53,
+          "total": 58,
+          "snippet": "AI 검토 53/58 · • 예상 데이터 규모, 처리량, 검색 부하, API 호출량을 기준으로 용…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 330819
+        },
+        "ts": "2026-05-26T07:49:15.844817+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 54,
+          "total": 58,
+          "snippet": "AI 검토 54/58 · 시스템 기능이 요구사항에 적합하게 구현되었는지를 검증하기 위한 테스트 계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 330819
+        },
+        "ts": "2026-05-26T07:49:15.844901+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "snippet": "AI 검토 55/58 · 단위 테스트\n• 기능 요구사항에 대한 테스트 시나리오 및 검증 방안을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 330819
+        },
+        "ts": "2026-05-26T07:49:15.844967+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 56,
+          "total": 58,
+          "snippet": "AI 검토 56/58 · 니다.\n• 비정형 데이터 가공(파싱/청킹/임베딩) 산출물에 대해서는 품질…",
+          "elapsed_ms": 1241,
+          "elapsed_total_ms": 332061
+        },
+        "ts": "2026-05-26T07:49:17.086777+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 57,
+          "total": 58,
+          "snippet": "AI 검토 57/58 · 연동 및 성능 테스트\n• 데이터 포털 등 연계 시스템과의 인터페이스 및 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 332062
+        },
+        "ts": "2026-05-26T07:49:17.087241+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 58,
+          "total": 58,
+          "snippet": "AI 검토 58/58 · 통합 테스트\n• 수집à가공à저장à검색àAPIà포털 전 구간에 대한 End…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 332062
+        },
+        "ts": "2026-05-26T07:49:17.087344+00:00"
+      },
+      {
+        "stage": "RECOMMENDED",
+        "payload": {
+          "recommendations": 58,
+          "llm_usage": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "total_calls": 57,
+            "total_input_tokens": 197834,
+            "total_output_tokens": 77313,
+            "total_cost_usd": 1.2677,
+            "total_cost_krw": 1711.0,
+            "recent_calls": [
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6090,
+                "output_tokens": 2702,
+                "cost_usd": 0.04224,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6090,
+                "output_tokens": 2685,
+                "cost_usd": 0.04208,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2896,
+                "cost_usd": 0.04363,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 3156,
+                "cost_usd": 0.04623,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2824,
+                "cost_usd": 0.04291,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1688,
+                "cost_usd": 0.02681,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2961,
+                "cost_usd": 0.04428,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1689,
+                "cost_usd": 0.02682,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              }
+            ]
+          },
+          "llm_model": "gpt-4o",
+          "llm_provider": "openai",
+          "snippet": "모든 요건에 AI 리스크·근거가 채워졌습니다.",
+          "elapsed_ms": 57,
+          "elapsed_total_ms": 332119
+        },
+        "ts": "2026-05-26T07:49:17.144520+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 56,
+          "total": 58,
+          "snippet": "AI 검토 56/58 · 니다.\n• 비정형 데이터 가공(파싱/청킹/임베딩) 산출물에 대해서는 품질…",
+          "elapsed_ms": 2860,
+          "elapsed_total_ms": 334979
+        },
+        "ts": "2026-05-26T07:49:20.004739+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 57,
+          "total": 58,
+          "snippet": "AI 검토 57/58 · 연동 및 성능 테스트\n• 데이터 포털 등 연계 시스템과의 인터페이스 및 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 334979
+        },
+        "ts": "2026-05-26T07:49:20.004991+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 58,
+          "total": 58,
+          "snippet": "AI 검토 58/58 · 통합 테스트\n• 수집à가공à저장à검색àAPIà포털 전 구간에 대한 End…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 334979
+        },
+        "ts": "2026-05-26T07:49:20.005087+00:00"
+      },
+      {
+        "stage": "RECOMMENDED",
+        "payload": {
+          "recommendations": 58,
+          "llm_usage": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "total_calls": 58,
+            "total_input_tokens": 201805,
+            "total_output_tokens": 79008,
+            "total_cost_usd": 1.2946,
+            "total_cost_krw": 1748.0,
+            "recent_calls": [
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6090,
+                "output_tokens": 2685,
+                "cost_usd": 0.04208,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2896,
+                "cost_usd": 0.04363,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 3156,
+                "cost_usd": 0.04623,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2824,
+                "cost_usd": 0.04291,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1688,
+                "cost_usd": 0.02681,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2961,
+                "cost_usd": 0.04428,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1689,
+                "cost_usd": 0.02682,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1695,
+                "cost_usd": 0.02688,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              }
+            ]
+          },
+          "llm_model": "gpt-4o",
+          "llm_provider": "openai",
+          "snippet": "모든 요건에 AI 리스크·근거가 채워졌습니다.",
+          "elapsed_ms": 33,
+          "elapsed_total_ms": 335012
+        },
+        "ts": "2026-05-26T07:49:20.038111+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 56,
+          "total": 58,
+          "snippet": "AI 검토 56/58 · 니다.\n• 비정형 데이터 가공(파싱/청킹/임베딩) 산출물에 대해서는 품질…",
+          "elapsed_ms": 4168,
+          "elapsed_total_ms": 339181
+        },
+        "ts": "2026-05-26T07:49:24.206253+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 57,
+          "total": 58,
+          "snippet": "AI 검토 57/58 · 연동 및 성능 테스트\n• 데이터 포털 등 연계 시스템과의 인터페이스 및 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 339181
+        },
+        "ts": "2026-05-26T07:49:24.206484+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 58,
+          "total": 58,
+          "snippet": "AI 검토 58/58 · 통합 테스트\n• 수집à가공à저장à검색àAPIà포털 전 구간에 대한 End…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 339181
+        },
+        "ts": "2026-05-26T07:49:24.206666+00:00"
+      },
+      {
+        "stage": "RECOMMENDED",
+        "payload": {
+          "recommendations": 58,
+          "llm_usage": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "total_calls": 59,
+            "total_input_tokens": 205776,
+            "total_output_tokens": 80704,
+            "total_cost_usd": 1.3215,
+            "total_cost_krw": 1784.0,
+            "recent_calls": [
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2896,
+                "cost_usd": 0.04363,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 3156,
+                "cost_usd": 0.04623,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2824,
+                "cost_usd": 0.04291,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1688,
+                "cost_usd": 0.02681,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2961,
+                "cost_usd": 0.04428,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1689,
+                "cost_usd": 0.02682,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1695,
+                "cost_usd": 0.02688,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1696,
+                "cost_usd": 0.02689,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              }
+            ]
+          },
+          "llm_model": "gpt-4o",
+          "llm_provider": "openai",
+          "snippet": "모든 요건에 AI 리스크·근거가 채워졌습니다.",
+          "elapsed_ms": 39,
+          "elapsed_total_ms": 339221
+        },
+        "ts": "2026-05-26T07:49:24.246275+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 21,
+          "total": 58,
+          "snippet": "AI 검토 21/58 · • 검색엔진의 벡터 기능 지원 버전, 인덱스 구조, 노드 증설 방식 등을…",
+          "elapsed_ms": 2416,
+          "elapsed_total_ms": 341637
+        },
+        "ts": "2026-05-26T07:49:26.662541+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 22,
+          "total": 58,
+          "snippet": "AI 검토 22/58 · 메타데이터\n• 검색 및 관리 목적을 고려한 메타데이터 구조와 인덱싱 체계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 341637
+        },
+        "ts": "2026-05-26T07:49:26.662811+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 23,
+          "total": 58,
+          "snippet": "AI 검토 23/58 · 리니지(Lineage)\n• 문서 및 데이터셋의 생성·변환·활용 관계를 추…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 341637
+        },
+        "ts": "2026-05-26T07:49:26.662904+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 24,
+          "total": 58,
+          "snippet": "AI 검토 24/58 · 버전관리\n• 원본, 변환 데이터셋 및 파일 단위의 버전관리를 제공해야 합…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 341637
+        },
+        "ts": "2026-05-26T07:49:26.662985+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 25,
+          "total": 58,
+          "snippet": "AI 검토 25/58 · 특정 시점 기준 상태 조회 및 복원이 가능해야 합니다.\n• 변경 이력, …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 341637
+        },
+        "ts": "2026-05-26T07:49:26.663063+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 51,
+          "total": 58,
+          "snippet": "AI 검토 51/58 · • 데이터 이관 요청, 승인/반려, 이력 관리가 가능한 통제 프로세스를 …",
+          "elapsed_ms": 806,
+          "elapsed_total_ms": 342444
+        },
+        "ts": "2026-05-26T07:49:27.469893+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 52,
+          "total": 58,
+          "snippet": "AI 검토 52/58 · • 신규 도입 장비를 활용한 플랫폼 구축 방안을 제시해야 합니다.\n• 전…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 342445
+        },
+        "ts": "2026-05-26T07:49:27.470241+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 53,
+          "total": 58,
+          "snippet": "AI 검토 53/58 · • 예상 데이터 규모, 처리량, 검색 부하, API 호출량을 기준으로 용…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 342445
+        },
+        "ts": "2026-05-26T07:49:27.470331+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 54,
+          "total": 58,
+          "snippet": "AI 검토 54/58 · 시스템 기능이 요구사항에 적합하게 구현되었는지를 검증하기 위한 테스트 계…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 342445
+        },
+        "ts": "2026-05-26T07:49:27.470393+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 55,
+          "total": 58,
+          "snippet": "AI 검토 55/58 · 단위 테스트\n• 기능 요구사항에 대한 테스트 시나리오 및 검증 방안을 제…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 342445
+        },
+        "ts": "2026-05-26T07:49:27.470454+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 56,
+          "total": 58,
+          "snippet": "AI 검토 56/58 · 니다.\n• 비정형 데이터 가공(파싱/청킹/임베딩) 산출물에 대해서는 품질…",
+          "elapsed_ms": 1551,
+          "elapsed_total_ms": 343996
+        },
+        "ts": "2026-05-26T07:49:29.021680+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 57,
+          "total": 58,
+          "snippet": "AI 검토 57/58 · 연동 및 성능 테스트\n• 데이터 포털 등 연계 시스템과의 인터페이스 및 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 343997
+        },
+        "ts": "2026-05-26T07:49:29.022172+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 58,
+          "total": 58,
+          "snippet": "AI 검토 58/58 · 통합 테스트\n• 수집à가공à저장à검색àAPIà포털 전 구간에 대한 End…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 343997
+        },
+        "ts": "2026-05-26T07:49:29.022297+00:00"
+      },
+      {
+        "stage": "RECOMMENDED",
+        "payload": {
+          "recommendations": 58,
+          "llm_usage": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "total_calls": 62,
+            "total_input_tokens": 221650,
+            "total_output_tokens": 88104,
+            "total_cost_usd": 1.4352,
+            "total_cost_krw": 1937.0,
+            "recent_calls": [
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1688,
+                "cost_usd": 0.02681,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2961,
+                "cost_usd": 0.04428,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1689,
+                "cost_usd": 0.02682,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1695,
+                "cost_usd": 0.02688,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1696,
+                "cost_usd": 0.02689,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6035,
+                "output_tokens": 2789,
+                "cost_usd": 0.04298,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2921,
+                "cost_usd": 0.04388,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1690,
+                "cost_usd": 0.02683,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              }
+            ]
+          },
+          "llm_model": "gpt-4o",
+          "llm_provider": "openai",
+          "snippet": "모든 요건에 AI 리스크·근거가 채워졌습니다.",
+          "elapsed_ms": 57,
+          "elapsed_total_ms": 344054
+        },
+        "ts": "2026-05-26T07:49:29.079308+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 56,
+          "total": 58,
+          "snippet": "AI 검토 56/58 · 니다.\n• 비정형 데이터 가공(파싱/청킹/임베딩) 산출물에 대해서는 품질…",
+          "elapsed_ms": 10400,
+          "elapsed_total_ms": 354454
+        },
+        "ts": "2026-05-26T07:49:39.480003+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 57,
+          "total": 58,
+          "snippet": "AI 검토 57/58 · 연동 및 성능 테스트\n• 데이터 포털 등 연계 시스템과의 인터페이스 및 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 354455
+        },
+        "ts": "2026-05-26T07:49:39.480356+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 58,
+          "total": 58,
+          "snippet": "AI 검토 58/58 · 통합 테스트\n• 수집à가공à저장à검색àAPIà포털 전 구간에 대한 End…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 354455
+        },
+        "ts": "2026-05-26T07:49:39.480449+00:00"
+      },
+      {
+        "stage": "RECOMMENDED",
+        "payload": {
+          "recommendations": 58,
+          "llm_usage": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "total_calls": 63,
+            "total_input_tokens": 225621,
+            "total_output_tokens": 89829,
+            "total_cost_usd": 1.4623,
+            "total_cost_krw": 1974.0,
+            "recent_calls": [
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2961,
+                "cost_usd": 0.04428,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1689,
+                "cost_usd": 0.02682,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1695,
+                "cost_usd": 0.02688,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1696,
+                "cost_usd": 0.02689,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 6035,
+                "output_tokens": 2789,
+                "cost_usd": 0.04298,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:5",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 5868,
+                "output_tokens": 2921,
+                "cost_usd": 0.04388,
+                "prompt_preview": "RFP 요구사항 5건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 5개. batch_index=0..4, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1690,
+                "cost_usd": 0.02683,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              },
+              {
+                "purpose": "recommend:batch:3",
+                "model": "gpt-4o-2024-08-06",
+                "input_tokens": 3971,
+                "output_tokens": 1725,
+                "cost_usd": 0.02718,
+                "prompt_preview": "RFP 요구사항 3건에 대해 KT AI 솔루션 카탈로그 매칭을 **보수적으로** 평가하라.\n\n**필수**: results 배열 길이는 정확히 3개. batch_index=0..2, requirement_id는 입력값을 **한 글자도 바꾸지 말고** 복사.\n\n규칙:\n1) verified_ids에는 **catalog_id(SKU) 단위**로 넣는다. 솔루션명(브랜드)만 같다고 동일 제품이 아니다.\n2) 동일 솔루션명이라도 소분류·기능(설명)이 다르면 **별개 SKU** — 요구와 맞는 id만 선택.\n3) 키워드만 겹치고 SKU 기능이 다르면 넣지 않는다. 없으면 verified_ids=[] 허용.\n4) rubric 1~5 (낮을수록 리스크 작음), 애매하면 △/X 쪽.\n5) missing_tech는 verifi"
+              }
+            ]
+          },
+          "llm_model": "gpt-4o",
+          "llm_provider": "openai",
+          "snippet": "모든 요건에 AI 리스크·근거가 채워졌습니다.",
+          "elapsed_ms": 39,
+          "elapsed_total_ms": 354494
+        },
+        "ts": "2026-05-26T07:49:39.519718+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 26,
+          "total": 58,
+          "snippet": "AI 검토 26/58 · • 데이터셋 및 파일의 버전별 카탈로그 등록, 반영, 삭제 상태를 관리할…",
+          "elapsed_ms": 14663,
+          "elapsed_total_ms": 369158
+        },
+        "ts": "2026-05-26T07:49:54.183612+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 27,
+          "total": 58,
+          "snippet": "AI 검토 27/58 · • 비정형 데이터의 수집, 변환, 적재 결과에 대한 품질 검증 및 검수 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 369158
+        },
+        "ts": "2026-05-26T07:49:54.183715+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 28,
+          "total": 58,
+          "snippet": "AI 검토 28/58 · 검색 기능\n• 당행에 기존 구축되어 있는 데이터 포털 내에 비정형 데이터…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 369158
+        },
+        "ts": "2026-05-26T07:49:54.183791+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 29,
+          "total": 58,
+          "snippet": "AI 검토 29/58 · • 데이터 샘플 조회 기능을 제공해야 합니다.\n• 관리자 화면에서 검색 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 369158
+        },
+        "ts": "2026-05-26T07:49:54.183845+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 30,
+          "total": 58,
+          "snippet": "AI 검토 30/58 · • 사용자 질의 정규화 및 검색 품질 향상을 위한 쿼리 재작성 적용 방안…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 369158
+        },
+        "ts": "2026-05-26T07:49:54.183902+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 31,
+          "total": 58,
+          "snippet": "AI 검토 31/58 · • 문서 간 유사도 기반 연관 문서 추천 기능을 제공해야 합니다.…",
+          "elapsed_ms": 23391,
+          "elapsed_total_ms": 392549
+        },
+        "ts": "2026-05-26T07:50:17.574960+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 32,
+          "total": 58,
+          "snippet": "AI 검토 32/58 · 포털/카탈로그\n• 전체 데이터 현황 / 데이터 카테고리별 현황 / 변환 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 392550
+        },
+        "ts": "2026-05-26T07:50:17.575229+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 33,
+          "total": 58,
+          "snippet": "AI 검토 33/58 · 당행 기구축 데이터 포털 활용 및 구현\n• 사용자 포털 영역은 기존 당행…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 392550
+        },
+        "ts": "2026-05-26T07:50:17.575387+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 34,
+          "total": 58,
+          "snippet": "AI 검토 34/58 · API 제공 요건\n• 파싱, 청킹, 임베딩 등 주요 데이터 처리 기능을 …",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 392550
+        },
+        "ts": "2026-05-26T07:50:17.575501+00:00"
+      },
+      {
+        "stage": "RECOMMENDING",
+        "payload": {
+          "done": 35,
+          "total": 58,
+          "snippet": "AI 검토 35/58 · • 승인된 요청에 대해 API Key 를 발급하고 상태를 관리할 수 있어…",
+          "elapsed_ms": 0,
+          "elapsed_total_ms": 392550
+        },
+        "ts": "2026-05-26T07:50:17.575620+00:00"
+      }
+    ],
+    "total_elapsed_ms": 392550,
+    "last_stage": "RECOMMENDING",
+    "recorded_at": "2026-05-26T07:50:17.635916+00:00"
+  },
+  "recommendation_cache_version": "2",
+  "recommendations_count": 58
+}

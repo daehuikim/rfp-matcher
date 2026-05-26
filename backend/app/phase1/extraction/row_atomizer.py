@@ -3,27 +3,30 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bs4 import BeautifulSoup, Tag
-from pydantic import BaseModel
 
 from app.domain.models import AtomicRow, TableRef
-from app.llm.base import AsyncLlmClient, Message
+from app.llm.base import AsyncLlmClient
 
 from .parsing import split_by_markers
 from .table_columns import (
     detect_column_indices,
     extract_category_and_detail,
     first_row_is_content,
+    infer_continuation_columns,
     is_short_header_row,
+    is_valid_category_label,
+    normalize_category_label,
     row_has_requirement_body,
 )
+from .table_split_profiler import SplittingSchema, TableSplitProfiler
+
+if TYPE_CHECKING:
+    from app.llm.usage import LlmUsageTracker
 
 logger = logging.getLogger(__name__)
-
-
-class _LlmAtoms(BaseModel):
-    atoms: list[str]
 
 
 class RowAtomizer:
@@ -31,34 +34,44 @@ class RowAtomizer:
     조견표 한 행(또는 셀)을 atomic 단위로 분해.
 
     절차:
-      1) 헤더에서 '요건 구분'·'상세내용' 열 위치 파악 (PyMuPDF 분할 표 대응)
-      2) 각 행의 상세내용 셀 추출 (마지막 열 고정 가정 제거)
-      3) 룰(`split_by_markers`)로 ①②③·볼렛 단위 분해
-      4) 필요 시 LLM 보완
+      1) 헤더에서 '요건 구분'·'상세내용' 열 위치 파악
+      2) 표 샘플로 LLM 분해 스키마 추론 (TableSplitProfiler)
+      3) 각 행 상세 셀 → LLM atomic 분해 (룰은 힌트)
     """
 
-    def __init__(self, llm: AsyncLlmClient, llm_fallback: bool = True, llm_concurrency: int = 8) -> None:
-        self._llm = llm
-        self._llm_fallback = llm_fallback
-        self._sem = asyncio.Semaphore(llm_concurrency)
+    def __init__(
+        self,
+        llm: AsyncLlmClient,
+        use_llm: bool = True,
+        llm_fallback: bool | None = None,
+        llm_concurrency: int = 8,
+        tracker: LlmUsageTracker | None = None,
+    ) -> None:
+        if llm_fallback is not None:
+            use_llm = llm_fallback
+        self._profiler = TableSplitProfiler(
+            llm, use_llm=use_llm, concurrency=llm_concurrency, tracker=tracker
+        )
 
     async def atomize(
         self,
         doc_id: str,
         html_path: Path,
         table_ref: TableRef,
-    ) -> list[AtomicRow]:
+        *,
+        carry_category: str | None = None,
+    ) -> tuple[list[AtomicRow], str | None]:
         soup = BeautifulSoup(html_path.read_text(encoding="utf-8"), "lxml")
         tables = soup.find_all("table")
         if table_ref.table_index >= len(tables):
             logger.warning("table_index 범위 초과: %d / %d", table_ref.table_index, len(tables))
-            return []
+            return [], carry_category
         tbl = tables[table_ref.table_index]
         if not isinstance(tbl, Tag):
-            return []
+            return [], carry_category
         rows = tbl.find_all("tr")
         if not rows:
-            return []
+            return [], carry_category
 
         first_cells = rows[0].find_all(["td", "th"]) if isinstance(rows[0], Tag) else []
         header_texts = [c.get_text(strip=True) for c in first_cells]
@@ -68,15 +81,18 @@ class RowAtomizer:
         elif header_texts and not first_row_is_content(header_texts):
             category_col, detail_col = detect_column_indices(header_texts)
         else:
-            # 페이지 분할 조각: 보통 col1=분류, col2=상세
-            category_col, detail_col = 1, 2
+            texts = [c.get_text(strip=True) for c in first_cells]
+            category_col, detail_col = infer_continuation_columns(texts)
 
         skip_first = bool(header_texts) and is_short_header_row(header_texts)
         start = 1 if skip_first else 0
 
-        out: list[AtomicRow] = []
+        row_payloads: list[tuple[str | None, str]] = []
         seen_detail: set[str] = set()
-        row_tasks: list[asyncio.Task[list[AtomicRow]]] = []
+        sample_details: list[str] = []
+        last_valid_category: str | None = (
+            carry_category if carry_category and is_valid_category_label(carry_category) else None
+        )
 
         for tr in rows[start:]:
             if not isinstance(tr, Tag):
@@ -89,27 +105,47 @@ class RowAtomizer:
                 category_col=category_col,
                 detail_col=detail_col,
             )
+            if category_raw and is_valid_category_label(category_raw):
+                last_valid_category = category_raw
+            elif last_valid_category:
+                category_raw = last_valid_category
+            else:
+                category_raw = normalize_category_label(category_raw) or "미분류"
             if len(detail.strip()) < 10:
                 continue
             norm = detail.strip()
             if norm in seen_detail:
                 continue
             seen_detail.add(norm)
-            row_tasks.append(
-                asyncio.create_task(
-                    self._atomize_row(
-                        doc_id=doc_id,
-                        table_index=table_ref.table_index,
-                        category_raw=category_raw,
-                        detail=detail,
-                    )
+            row_payloads.append((category_raw, detail))
+            if len(sample_details) < 5:
+                sample_details.append(detail)
+
+        schema = await self._profiler.infer_schema(
+            table_index=table_ref.table_index,
+            header=header_texts or table_ref.header_columns,
+            sample_details=sample_details,
+        )
+
+        out: list[AtomicRow] = []
+        row_tasks = [
+            asyncio.create_task(
+                self._atomize_row(
+                    doc_id=doc_id,
+                    table_index=table_ref.table_index,
+                    category_raw=category_raw,
+                    detail=detail,
+                    schema=schema,
+                    source_page=table_ref.source_page,
+                    source_section=table_ref.section_heading,
                 )
             )
-
+            for category_raw, detail in row_payloads
+        ]
         if row_tasks:
             for part in await asyncio.gather(*row_tasks):
                 out.extend(part)
-        return out
+        return out, last_valid_category
 
     async def _atomize_row(
         self,
@@ -118,8 +154,11 @@ class RowAtomizer:
         table_index: int,
         category_raw: str | None,
         detail: str,
+        schema: SplittingSchema,
+        source_page: int | None = None,
+        source_section: str | None = None,
     ) -> list[AtomicRow]:
-        atoms = await self._split(detail)
+        atoms = await self._profiler.split_cell(detail, schema, category_raw=category_raw)
         return [
             AtomicRow(
                 doc_id=doc_id,
@@ -129,53 +168,11 @@ class RowAtomizer:
                 text=atom.text,
                 row_seq=seq,
                 category_raw=category_raw,
+                source_page=source_page,
+                source_section=source_section,
             )
             for seq, atom in enumerate(atoms)
         ]
-
-    async def _split(self, cell: str) -> list[_AtomLike]:
-        rule_based = split_by_markers(cell)
-        if (
-            self._llm_fallback
-            and rule_based
-            and all(a.marker is None for a in rule_based)
-            and _has_likely_multi_item(cell)
-        ):
-            llm_result = await self._llm_split(cell)
-            if llm_result is not None:
-                return [_AtomLike(marker=None, text=t) for t in llm_result]
-        return [_AtomLike(marker=a.marker, text=a.text) for a in rule_based]
-
-    async def _llm_split(self, cell: str) -> list[str] | None:
-        prompt = (
-            "다음은 RFP 조견표 한 셀의 본문이다. 명시적 ①②③ 같은 마커는 없지만, "
-            "서로 다른 요구사항이 한 셀에 섞여 있을 수 있다. "
-            "의미 단위로 잘게 쪼개서 JSON으로만 반환하라.\n"
-            f"본문:\n{cell}\n"
-            '응답 형식: {"atoms": ["...", "..."]}'
-        )
-        try:
-            async with self._sem:
-                result = await self._llm.structured_output(
-                    [Message(role="user", content=prompt)],
-                    _LlmAtoms,
-                )
-            return [a for a in result.atoms if a.strip()]
-        except Exception as e:  # noqa: BLE001
-            logger.warning("LLM 분해 실패, 룰 결과 유지: %s", e)
-            return None
-
-
-class _AtomLike:
-    __slots__ = ("marker", "text")
-
-    def __init__(self, marker: str | None, text: str) -> None:
-        self.marker = marker
-        self.text = text
-
-
-def _has_likely_multi_item(text: str) -> bool:
-    return text.count("\n") >= 2 or text.count(".") >= 3
 
 
 class ParagraphAtomizer:

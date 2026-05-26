@@ -1,9 +1,16 @@
+import type { PipelineEventData } from "@/lib/pipeline";
+
 export type Judgement = "O" | "△" | "X" | "";
+
+export type CategorySource = "document_table" | "section_heading" | "system_inferred";
 
 export type Requirement = {
   id: string;
   doc_id: string;
   category: string;
+  subcategory?: string | null;
+  category_source?: CategorySource;
+  subcategory_source?: CategorySource | null;
   code: string;
   name: string;
   definition: string | null;
@@ -15,10 +22,24 @@ export type Requirement = {
 export type CatalogCandidateAudit = {
   catalog_id: string;
   solution_name: string;
+  sku_label?: string;
   category_major: string;
+  category_mid?: string;
+  category_sub?: string;
+  description?: string;
   similarity_score: number;
   selected: boolean;
   exclusion_reason: string | null;
+};
+
+export type MatchedSolutionSku = {
+  catalog_id: string;
+  solution_name: string;
+  sku_label: string;
+  category_major: string;
+  category_mid: string;
+  category_sub: string;
+  description: string;
 };
 
 export type Recommendation = {
@@ -28,6 +49,7 @@ export type Recommendation = {
   missing_tech: string[];
   consortium_need: string | null;
   matched_solutions?: string[];
+  matched_solution_skus?: MatchedSolutionSku[];
   catalog_audit?: CatalogCandidateAudit[];
 };
 
@@ -43,10 +65,42 @@ export type RequirementView = {
   judgement: HumanJudgement | null;
 };
 
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "/api";
+export type ExtractionProfile = {
+  spec: string;
+  has_requirement_category_column: boolean;
+  atomization_strategy: string;
+  category_column_header: string | null;
+  has_inferred_categories: boolean;
+  category_source_counts: Record<string, number>;
+};
+
+export function categorySourceLabel(source?: CategorySource | null): string {
+  switch (source) {
+    case "document_table":
+      return "원문 조견표";
+    case "section_heading":
+      return "섹션 구조";
+    case "system_inferred":
+      return "시스템 추론";
+    default:
+      return "원문 조견표";
+  }
+}
+
+/** 브라우저는 Next rewrite(/api)만 사용 — 직접 8000 호출 시 CORS·fetch 실패 방지 */
+function apiBase(): string {
+  if (typeof window !== "undefined") return "/api";
+  return process.env.NEXT_PUBLIC_API_BASE ?? "/api";
+}
+
+export async function fetchExtractionProfile(docId: string): Promise<ExtractionProfile | null> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/extraction-profile`, { cache: "no-store" });
+  if (!r.ok) return null;
+  return r.json();
+}
 
 export async function listRequirements(docId: string): Promise<RequirementView[]> {
-  const r = await fetch(`${API}/documents/${docId}/requirements`, { cache: "no-store" });
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements`, { cache: "no-store" });
   if (!r.ok) throw new Error(`list ${r.status}`);
   return r.json();
 }
@@ -57,7 +111,7 @@ export async function patchJudgement(
   note: string,
   editorId: string,
 ): Promise<HumanJudgement> {
-  const r = await fetch(`${API}/requirements/${reqId}/judgement`, {
+  const r = await fetch(`${apiBase()}/requirements/${reqId}/judgement`, {
     method: "PATCH",
     headers: { "content-type": "application/json", "x-editor-id": editorId },
     body: JSON.stringify({ mark, note }),
@@ -67,7 +121,7 @@ export async function patchJudgement(
 }
 
 export function eventStreamUrl(docId: string): string {
-  return `${API}/documents/${docId}/events`;
+  return `${apiBase()}/documents/${docId}/events`;
 }
 
 export type JudgementUpdatedPayload = {
@@ -81,7 +135,7 @@ export type JudgementUpdatedPayload = {
 export async function uploadDocument(file: File): Promise<{ doc_id: string; status: string }> {
   const fd = new FormData();
   fd.append("file", file);
-  const r = await fetch(`${API}/documents`, { method: "POST", body: fd });
+  const r = await fetch(`${apiBase()}/documents`, { method: "POST", body: fd });
   if (!r.ok) throw new Error(`upload ${r.status}`);
   return r.json();
 }
@@ -91,16 +145,17 @@ export type SampleFile = {
   size_bytes: number;
   ext: string;
   display: string;
+  featured?: boolean;
 };
 
 export async function listSamples(): Promise<SampleFile[]> {
-  const r = await fetch(`${API}/documents/samples`, { cache: "no-store" });
+  const r = await fetch(`${apiBase()}/documents/samples`, { cache: "no-store" });
   if (!r.ok) throw new Error(`samples ${r.status}`);
   return r.json();
 }
 
 export async function createFromSample(name: string): Promise<{ doc_id: string; status: string }> {
-  const r = await fetch(`${API}/documents/from-sample`, {
+  const r = await fetch(`${apiBase()}/documents/from-sample`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ name }),
@@ -116,19 +171,174 @@ export function exportUrl(
 ): string {
   const params = new URLSearchParams({ mode });
   if (cols?.length) params.set("cols", cols.join(","));
-  return `${API}/documents/${docId}/export?${params.toString()}`;
+  else params.set("adaptive", "true");
+  return `${apiBase()}/documents/${docId}/export?${params.toString()}`;
+}
+
+export type ExportColumnInfo = {
+  key: string;
+  header: string;
+  group: string;
+};
+
+export type ExportColumnsResponse = {
+  preset: string;
+  mode: string;
+  selected: string[];
+  applicable: ExportColumnInfo[];
+  presets: Record<string, string[]>;
+};
+
+export async function fetchExportColumns(
+  docId: string,
+  mode: "ai" | "human" | "both" = "both",
+  preset = "standard",
+): Promise<ExportColumnsResponse> {
+  const params = new URLSearchParams({ mode, preset });
+  const r = await fetch(`${apiBase()}/documents/${docId}/export/columns?${params.toString()}`, {
+    cache: "no-store",
+  });
+  if (!r.ok) throw new Error(`export-columns ${r.status}`);
+  return r.json();
 }
 
 export type PipelineStatusResponse = {
   doc_id: string;
   stage: string;
   payload: Record<string, unknown>;
+  history?: PipelineHistoryEntry[];
   error?: string | null;
   ts?: string;
+  llm_provider?: string;
+  llm_model?: string;
+  llm_usage?: LlmUsage;
+  timing_summary?: {
+    total_elapsed_ms: number;
+    from_cache?: boolean;
+    recorded_total_ms?: number | null;
+  };
+};
+
+export type WorkspaceSessionSummary = {
+  doc_id: string;
+  title: string;
+  source_filename: string | null;
+  display_name: string | null;
+  content_hash?: string | null;
+  stage: string;
+  requirements_count: number;
+  ai_done: number;
+  ai_total: number;
+  total_elapsed_ms: number;
+  is_complete: boolean;
+  updated_at: string | null;
+};
+
+export type CachedProjectSummary = {
+  content_hash: string;
+  bucket: string;
+  source_name: string | null;
+  title: string;
+  requirements_count: number;
+  recommendation_count: number;
+  has_recommendations: boolean;
+  total_elapsed_ms: number;
+  stage: string;
+  is_complete: boolean;
+  live_doc_id: string | null;
+  is_live: boolean;
+};
+
+export type DocumentMeta = {
+  doc_id: string;
+  title: string;
+  source_filename: string | null;
+  display_name: string | null;
+  content_hash?: string | null;
+};
+
+export async function fetchDocumentMeta(docId: string): Promise<DocumentMeta | null> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/meta`, { cache: "no-store" });
+  if (!r.ok) return null;
+  return r.json();
+}
+
+export async function patchDocumentMeta(docId: string, displayName: string): Promise<DocumentMeta> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/meta`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ display_name: displayName }),
+  });
+  if (!r.ok) throw new Error(`patch meta ${r.status}`);
+  return r.json();
+}
+
+export async function fetchWorkspaceSessions(): Promise<WorkspaceSessionSummary[]> {
+  const r = await fetch(`${apiBase()}/documents/sessions`, { cache: "no-store" });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+export async function fetchCachedProjects(): Promise<CachedProjectSummary[]> {
+  const r = await fetch(`${apiBase()}/documents/cached-projects`, { cache: "no-store" });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+export async function reopenFromCache(contentHash: string): Promise<{ doc_id: string; status: string }> {
+  const r = await fetch(`${apiBase()}/documents/reopen-cache`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ content_hash: contentHash }),
+  });
+  if (!r.ok) throw new Error(`reopen-cache ${r.status}`);
+  return r.json();
+}
+
+export type PipelineHistoryEntry = {
+  stage: string;
+  payload: PipelineEventData["payload"];
+  ts: string;
+};
+
+export async function fetchLlmUsage(docId: string): Promise<LlmUsage> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/llm-usage`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`llm-usage ${r.status}`);
+  return r.json();
+}
+
+export type LlmCallRecord = {
+  purpose: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  prompt_preview: string;
+};
+
+export type LlmUsage = {
+  provider: string;
+  model: string;
+  total_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cost_usd: number;
+  total_cost_krw: number;
+  recent_calls: LlmCallRecord[];
 };
 
 export async function fetchPipelineStatus(docId: string): Promise<PipelineStatusResponse> {
-  const r = await fetch(`${API}/documents/${docId}/pipeline`, { cache: "no-store" });
+  const r = await fetch(`${apiBase()}/documents/${docId}/pipeline`, { cache: "no-store" });
   if (!r.ok) throw new Error(`pipeline ${r.status}`);
+  return r.json();
+}
+
+export async function ensurePipeline(
+  docId: string,
+): Promise<{ status: string; reason?: string | null }> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/ensure-pipeline`, {
+    method: "POST",
+  });
+  if (!r.ok) throw new Error(`ensure-pipeline ${r.status}`);
   return r.json();
 }

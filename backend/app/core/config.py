@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     llm_model_openai: str = "gpt-4o"
     llm_model_anthropic: str = "claude-opus-4-7"
     llm_concurrency: int = 8
-    recommend_batch_size: int = 10
+    recommend_batch_size: int = 5
 
     # deprecated — OpenAI embedding 미사용 (BM25로 대체)
     embedding_provider: Literal["openai", "local", "bm25"] = "bm25"
@@ -41,13 +41,22 @@ class Settings(BaseSettings):
     catalog_bm25_path: Path = PROJECT_ROOT / "data" / "catalog" / "bm25_index"
 
     storage_root: Path = PROJECT_ROOT / "data" / "storage"
+    # 파이프라인 중간·최종 산출물 (동일 원본 재업로드 시 LLM/변환 스킵)
+    artifact_cache_dir: Path = PROJECT_ROOT / "data" / "artifacts"
+    category_taxonomy_path: Path = PROJECT_ROOT / "data" / "taxonomy" / "categories.json"
+    catalog_aliases_path: Path = PROJECT_ROOT / "data" / "catalog" / "catalog_aliases.json"
+    catalog_near_duplicate_threshold: float = 0.92
     db_path: Path = PROJECT_ROOT / "data" / "app.sqlite"
     raw_data_dir: Path = PROJECT_ROOT / "data" / "raw"
+    samples_manifest_path: Path = PROJECT_ROOT / "data" / "samples.manifest.json"
 
     # PDF 변환 백엔드. **기본 pymupdf** — C 네이티브, 대용량 PDF도 수 초.
     # pdfplumber: 순수 Python, 느림. docling: ML OCR, MPS/mac에서 자주 실패·매우 느림.
     # pdf2html: Node+Java(Tika) 필요 — brew install openjdk 후 PDF_CONVERTER=pdf2html
     pdf_converter: Literal["pymupdf", "pdfplumber", "pdf2html", "docling"] = "pymupdf"
+    # Word: mammoth(.docx 순수 Python) | libreoffice | auto(mammoth→LO 폴백)
+    # 구형 .doc 은 mammoth 모드에서 LO로 docx 거친 뒤 mammoth
+    word_converter: Literal["mammoth", "libreoffice", "auto"] = "auto"
     # HF 모델 영구 캐시 위치 (재시작에도 재다운로드 X).
     # 기본은 HF SDK 표준인 ~/.cache/huggingface — 이미 받아둔 글로벌 캐시를 재사용한다.
     # 프로젝트별로 격리하고 싶으면 .env에 HF_HOME=… 또는 HF_CACHE_DIR=… 명시.

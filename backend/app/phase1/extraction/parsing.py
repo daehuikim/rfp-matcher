@@ -36,7 +36,7 @@ class Atom:
     text: str
 
 
-def split_by_markers(cell_text: str) -> list[Atom]:
+def split_by_markers(cell_text: str, extra_markers: list[str] | None = None) -> list[Atom]:
     """
     셀(또는 단락) 텍스트를 조견표 '한 줄' 단위로 분해.
 
@@ -44,18 +44,23 @@ def split_by_markers(cell_text: str) -> list[Atom]:
       - ①②③·(1)·1.·가. → 새 항목 시작 (조견표 1행)
       - •·- 등 하위 불릿 → 직전 ① 항목 본문에 이어 붙임 (별도 행으로 쪼개지 않음)
       - 셀 전체에 상위 마커가 없을 때만 •·- 로 분해 (불릿만 있는 목록)
+      - extra_markers: LLM이 표별로 추론한 추가 기호 (줄 시작 매칭)
     """
     lines = [ln.strip() for ln in cell_text.splitlines() if ln.strip()]
     if not lines:
         return []
 
-    has_primary = any(_PRIMARY_MARKER_RE.match(ln) for ln in lines)
+    extra = [m.strip() for m in (extra_markers or []) if m and m.strip()]
+    has_primary = any(_PRIMARY_MARKER_RE.match(ln) for ln in lines) or any(
+        any(ln.startswith(m) for m in extra) for ln in lines
+    )
 
     atoms: list[Atom] = []
     current: Atom | None = None
     for ln in lines:
         m_pri = _PRIMARY_MARKER_RE.match(ln)
         m_sec = _SECONDARY_MARKER_RE.match(ln)
+        extra_hit = next((m for m in extra if ln.startswith(m)), None)
 
         if m_pri:
             if current is not None:
@@ -63,6 +68,11 @@ def split_by_markers(cell_text: str) -> list[Atom]:
             marker = m_pri.group(1).strip()
             body = ln[m_pri.end() :].strip()
             current = Atom(marker=marker, text=body)
+        elif extra_hit:
+            if current is not None:
+                atoms.append(current)
+            body = ln[len(extra_hit) :].strip()
+            current = Atom(marker=extra_hit, text=body)
         elif m_sec and not has_primary:
             if current is not None:
                 atoms.append(current)
@@ -126,6 +136,18 @@ def _should_merge_lines(prev: str, nxt: str) -> bool:
     if prev and prev[-1].isalnum() and nxt and nxt[0].islower():
         return True
     return False
+
+
+def has_primary_marker_structure(atoms: list[Atom]) -> bool:
+    """①②③ 등 상위 마커로 이미 분해된 경우 — LLM 재분해로 과분할 방지."""
+    return any(
+        a.marker
+        and (
+            a.marker in CIRCLED_DIGITS
+            or bool(_PRIMARY_MARKER_RE.match(f"{a.marker} "))
+        )
+        for a in atoms
+    )
 
 
 def atom_title(text: str) -> str:

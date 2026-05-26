@@ -12,6 +12,7 @@ EXT_TO_MIME: dict[str, DocumentMime] = {
     ".pdf": DocumentMime.PDF,
     ".doc": DocumentMime.DOC,
     ".docx": DocumentMime.DOCX,
+    ".hwp": DocumentMime.HWP,
     ".hwpx": DocumentMime.HWPX,
 }
 

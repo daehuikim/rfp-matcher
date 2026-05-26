@@ -27,7 +27,7 @@ class AnthropicClient(AsyncLlmClient):
         resp = await self._client.messages.create(
             model=kwargs.get("model", self._model),
             max_tokens=kwargs.get("max_tokens", 4096),
-            temperature=kwargs.get("temperature", 0.0),
+            temperature=0.0,
             system=system,
             messages=rest,
         )

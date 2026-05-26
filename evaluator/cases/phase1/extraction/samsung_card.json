@@ -1,0 +1,14 @@
+{
+  "name": "삼성카드 RFP — 조견표 탐지 smoke (heuristic)",
+  "input_path": "data/raw/(삼성카드) 제안요청서.pdf",
+  "converter": "pymupdf",
+  "extraction": {
+    "verify_with_llm": false,
+    "llm_fallback": false
+  },
+  "expected": {
+    "tables_located_min": 3,
+    "atomic_rows_min": 0,
+    "html_tables_min": 10
+  }
+}

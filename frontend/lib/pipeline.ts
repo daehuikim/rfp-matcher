@@ -9,6 +9,8 @@ export const PIPELINE_STAGES = [
   "ATOMIZED",
   "CLASSIFYING",
   "CLASSIFIED",
+  "CANONICALIZING",
+  "CANONICALIZED",
   "READY_FOR_REVIEW",
   "RECOMMENDING",
   "RECOMMENDED",
@@ -45,14 +47,17 @@ export const STAGE_LABEL: Record<string, string> = {
   ATOMIZED: "분해 완료",
   CLASSIFYING: "요건 분류",
   CLASSIFIED: "분류 완료",
+  CANONICALIZING: "분류 정규화",
+  CANONICALIZED: "정규화 완료",
   READY_FOR_REVIEW: "조견표 준비",
   RECOMMENDING: "AI 매칭",
   RECOMMENDED: "AI 완료",
   FAILED: "오류",
 };
 
-/** e.g. 0m 2s */
+/** e.g. 0m 2s, or <1s for sub-second steps */
 export function formatDuration(ms: number): string {
+  if (ms > 0 && ms < 1000) return "<1s";
   const sec = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(sec / 60);
   const s = sec % 60;

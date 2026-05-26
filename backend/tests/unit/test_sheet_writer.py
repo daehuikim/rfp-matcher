@@ -6,16 +6,13 @@ from openpyxl import load_workbook
 
 from app.domain.enums import ExportMode, Judgement
 from app.domain.models import HumanJudgement, Recommendation, Requirement
-from app.phase1.writers.export_columns import DEFAULT_EXPORT_COLUMNS, EXPORT_COLUMNS, EXPORT_PRESETS
+from app.phase1.writers.export_columns import EXPORT_COLUMNS, EXPORT_PRESETS, resolve_export_columns
 from app.phase1.writers.sheet_writer import RequirementSheetWriter
 
 
-def _default_headers() -> list[str]:
-    return [EXPORT_COLUMNS[k][0] for k in DEFAULT_EXPORT_COLUMNS]
-
-
-def _full_headers() -> list[str]:
-    return [EXPORT_COLUMNS[k][0] for k in EXPORT_PRESETS["full"]]
+def _headers_for(reqs: list[Requirement], keys: list[str] | None = None) -> list[str]:
+    col_keys = resolve_export_columns(reqs, {}, {}, ExportMode.BOTH, keys)
+    return [EXPORT_COLUMNS[k].header for k in col_keys]
 
 
 def _req(rid: str, cat: str, code: str, detail: str) -> Requirement:
@@ -36,17 +33,15 @@ def test_writer_produces_summary_and_category_sheets(tmp_path: Path) -> None:
 
     summary = wb["총괄표"]
     rows = list(summary.iter_rows(values_only=True))
-    assert rows[0] == ("요청사항 구분", "요구사항수")
-    # 분류명 정렬 알파벳/한글 순
-    assert {r[0]: r[1] for r in rows[1:]} == {"데이터 수집": 2, "저장 구조": 1}
+    data_rows = [r for r in rows if r and r[0] in ("데이터 수집", "저장 구조")]
+    assert {r[0]: r[1] for r in data_rows} == {"데이터 수집": 2, "저장 구조": 1}
 
     detail = wb["데이터 수집"]
     headers = next(detail.iter_rows(values_only=True))
-    assert list(headers) == _default_headers()
+    assert list(headers) == _headers_for(reqs, EXPORT_PRESETS["standard"])
 
 
 def _blank(v: object) -> bool:
-    """openpyxl은 빈 문자열을 None으로 저장하기도 — 둘 다 빈 셀로 본다."""
     return v is None or v == ""
 
 
@@ -73,12 +68,13 @@ def test_mode_ai_only_blanks_human_cols(tmp_path: Path) -> None:
     )
     wb = load_workbook(out)
     ws = wb["분류A"]
+    headers = list(next(ws.iter_rows(values_only=True)))
     body = list(ws.iter_rows(values_only=True))[1]
-    row = dict(zip(_full_headers(), body, strict=True))
+    row = dict(zip(headers, body, strict=True))
     assert row["AI 리스크"] == "△"
     assert row["AI 이유"] == "부분 가능"
-    assert _blank(row["사람 판정"])
-    assert _blank(row["사람 메모"])
+    assert _blank(row.get("사람 판정"))
+    assert _blank(row.get("사람 메모"))
 
 
 def test_mode_human_only_blanks_ai_cols(tmp_path: Path) -> None:
@@ -94,9 +90,10 @@ def test_mode_human_only_blanks_ai_cols(tmp_path: Path) -> None:
     )
     wb = load_workbook(out)
     ws = wb["분류A"]
+    headers = list(next(ws.iter_rows(values_only=True)))
     body = list(ws.iter_rows(values_only=True))[1]
-    row = dict(zip(_full_headers(), body, strict=True))
-    assert _blank(row["AI 리스크"])
-    assert _blank(row["AI 이유"])
+    row = dict(zip(headers, body, strict=True))
+    assert _blank(row.get("AI 리스크"))
+    assert _blank(row.get("AI 이유"))
     assert row["사람 판정"] == "X"
     assert row["사람 메모"] == "제외"

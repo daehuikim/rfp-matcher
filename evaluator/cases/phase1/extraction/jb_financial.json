@@ -1,0 +1,16 @@
+{
+  "name": "JB금융 RFP — 섹션 폴백 (3. 프로젝트 범위)",
+  "input_path": "data/raw/(JB 금융그룹) 붙임2. 제안요청서(안).pdf",
+  "converter": "pymupdf",
+  "extraction": {
+    "verify_with_llm": false,
+    "llm_fallback": false,
+    "expect_strategy": "section"
+  },
+  "expected": {
+    "tables_located_min": 0,
+    "sections_located_min": 1,
+    "atomic_rows_min": 20,
+    "html_tables_min": 3
+  }
+}

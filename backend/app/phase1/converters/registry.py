@@ -1,28 +1,73 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from app.core.config import Settings, get_settings
 from app.domain.enums import DocumentMime
 
 from .base import HtmlConverter
+from .chain import FallbackConverter
+from .doc_via_docx import DocViaDocxConverter
+from .hwpx_converter import HwpxConverter
 from .libreoffice_converter import LibreOfficeConverter
+from .mammoth_converter import MammothConverter
 
 logger = logging.getLogger(__name__)
 
+ConverterFactory = Callable[[Settings], HtmlConverter]
 
-def select_converter(mime: DocumentMime, settings: Settings | None = None) -> HtmlConverter:
-    """
-    MIME → 컨버터 매핑.
 
-    PDF 컨버터는 lifespan에서 한 번만 만들어 Container에 보관한다.
+class ConverterRegistry:
     """
-    s = settings or get_settings()
-    if mime == DocumentMime.PDF:
-        return build_pdf_converter(s)
-    if mime in (DocumentMime.DOC, DocumentMime.DOCX, DocumentMime.HWPX):
-        return LibreOfficeConverter()
-    raise ValueError(f"지원하지 않는 MIME: {mime}")
+    MIME → HtmlConverter 팩토리 레지스트리.
+
+    새 비정형 포맷 추가 시 `register()` 한 줄로 확장.
+    """
+
+    def __init__(self) -> None:
+        self._factories: dict[DocumentMime, ConverterFactory] = {}
+
+    def register(self, mime: DocumentMime, factory: ConverterFactory) -> None:
+        self._factories[mime] = factory
+
+    def resolve(self, mime: DocumentMime, settings: Settings | None = None) -> HtmlConverter:
+        s = settings or get_settings()
+        factory = self._factories.get(mime)
+        if factory is None:
+            raise ValueError(f"지원하지 않는 MIME: {mime}")
+        return factory(s)
+
+    def supported_mimes(self) -> list[DocumentMime]:
+        return list(self._factories.keys())
+
+
+def _build_docx_converter(settings: Settings) -> HtmlConverter:
+    mode = settings.word_converter
+    mammoth_c = MammothConverter()
+    lo_c = LibreOfficeConverter()
+    if mode == "libreoffice":
+        return lo_c
+    if mode == "auto":
+        return FallbackConverter([mammoth_c, lo_c], names=["mammoth", "libreoffice"])
+    return mammoth_c
+
+
+def _build_doc_converter(settings: Settings) -> HtmlConverter:
+    mode = settings.word_converter
+    if mode == "mammoth":
+        return DocViaDocxConverter()
+    if mode == "auto":
+        return FallbackConverter(
+            [DocViaDocxConverter(), LibreOfficeConverter()],
+            names=["doc-via-docx+mammoth", "libreoffice"],
+        )
+    return LibreOfficeConverter()
+
+
+def _build_legacy_hwp_converter(settings: Settings) -> HtmlConverter:
+    # 구형 .hwp — LibreOffice 필터 의존 (환경별 상이)
+    return LibreOfficeConverter()
 
 
 def build_pdf_converter(settings: Settings) -> HtmlConverter:
@@ -57,3 +102,21 @@ def build_pdf_converter(settings: Settings) -> HtmlConverter:
         )
         return DoclingConverter()
     raise ValueError(f"unknown pdf_converter: {name}")
+
+
+def build_default_registry() -> ConverterRegistry:
+    reg = ConverterRegistry()
+    reg.register(DocumentMime.PDF, build_pdf_converter)
+    reg.register(DocumentMime.HWPX, lambda _s: HwpxConverter())
+    reg.register(DocumentMime.DOCX, _build_docx_converter)
+    reg.register(DocumentMime.DOC, _build_doc_converter)
+    reg.register(DocumentMime.HWP, _build_legacy_hwp_converter)
+    return reg
+
+
+_DEFAULT_REGISTRY = build_default_registry()
+
+
+def select_converter(mime: DocumentMime, settings: Settings | None = None) -> HtmlConverter:
+    """MIME → HtmlConverter (기본 레지스트리)."""
+    return _DEFAULT_REGISTRY.resolve(mime, settings)
