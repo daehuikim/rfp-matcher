@@ -14,7 +14,7 @@ function bytesHuman(n: number): string {
 
 function FileBadge({ ext }: { ext: string }) {
   const tone =
-    ext === "pdf" ? "bg-rose-500" : ext === "hwpx" || ext === "hwp" ? "bg-sky-500" : "bg-indigo-500";
+    ext === "pdf" ? "bg-ktred-500" : ext === "hwpx" || ext === "hwp" ? "bg-ktteal-400" : "bg-ink-900";
   return (
     <span
       className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${tone} text-[10px] font-bold uppercase text-white`}
@@ -28,17 +28,61 @@ function SampleCard({ sample }: { sample: SampleFile }) {
   return (
     <Link
       href={`/demo?sample=${encodeURIComponent(sample.name)}`}
-      className="flex h-full min-h-[88px] flex-col justify-between rounded-xl border border-slate-100 bg-white p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40"
+      className="flex h-full min-h-[88px] flex-col justify-between rounded-xl border border-neutral-100 bg-white p-4 text-left transition hover:border-ktred-200 hover:bg-ktred-50/40"
     >
       <div className="flex items-start gap-3">
         <FileBadge ext={sample.ext} />
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 text-sm font-medium leading-snug text-slate-900">{sample.display}</p>
-          <p className="mt-1 text-[11px] text-slate-400">{bytesHuman(sample.size_bytes)}</p>
+          <p className="line-clamp-2 text-sm font-medium leading-snug text-ink-900">{sample.display}</p>
+          <p className="mt-1 text-[11px] text-neutral-400">{bytesHuman(sample.size_bytes)}</p>
         </div>
       </div>
-      <span className="mt-3 text-xs font-medium text-indigo-600">클릭하여 시연 →</span>
+      <span className="mt-3 text-xs font-medium text-ktred-600">클릭하여 시연 →</span>
     </Link>
+  );
+}
+
+/** KT "Seamless Flow" 시그니처 — red→teal 흐름 곡선 */
+function FlowWave() {
+  return (
+    <svg
+      className="flow-wave animate-flow-drift"
+      viewBox="0 0 1200 320"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="flowA" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#e0282f" stopOpacity="0.0" />
+          <stop offset="45%" stopColor="#e0282f" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#00a39b" stopOpacity="0.0" />
+        </linearGradient>
+        <linearGradient id="flowB" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#e54d53" stopOpacity="0.0" />
+          <stop offset="55%" stopColor="#d6356b" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#007f7f" stopOpacity="0.0" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M-50,170 C250,60 450,260 700,160 C900,80 1050,210 1260,120"
+        fill="none"
+        stroke="url(#flowA)"
+        strokeWidth="2.5"
+      />
+      <path
+        d="M-50,210 C220,120 480,300 720,200 C950,120 1080,250 1260,170"
+        fill="none"
+        stroke="url(#flowB)"
+        strokeWidth="2"
+      />
+      <path
+        d="M-50,250 C280,180 460,330 740,240 C980,170 1100,290 1260,220"
+        fill="none"
+        stroke="url(#flowA)"
+        strokeWidth="1.25"
+        opacity="0.6"
+      />
+    </svg>
   );
 }
 
@@ -83,24 +127,27 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <section className="panel mb-8 p-8">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">
-          B2B · B2G 수주 영업
-        </p>
-        <h1 className="mt-2 text-3xl font-bold leading-tight tracking-tight md:text-4xl">
-          RFP를 올리면{" "}
-          <span className="text-indigo-600">조견표가 한 줄씩</span> 정리됩니다
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
-          PDF·DOC·HWPX에서 요구사항 표를 추출하고, KT AI 솔루션과 매칭해 O/△/X 리스크를
-          자동으로 채웁니다. 조견표가 나오면 바로 Excel로 받을 수 있습니다.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2">
-          {["HTML 변환", "조견표 탐지", "atomic 분해", "AI 매칭", "Excel 3종"].map((t) => (
-            <span key={t} className="pill border-slate-200 bg-slate-50 text-slate-600">
-              {t}
-            </span>
-          ))}
+      <section className="panel flow-hero mb-8 p-8 md:p-10">
+        <FlowWave />
+        <div className="relative">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-ktred-600">
+            B2B · B2G 수주 영업
+          </p>
+          <h1 className="mt-2 text-3xl font-bold leading-tight tracking-tight text-ink-900 md:text-4xl">
+            RFP를 올리면{" "}
+            <span className="text-ktred-600">조견표가 한 줄씩</span> 정리됩니다
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-600">
+            PDF·DOC·HWPX에서 요구사항 표를 추출하고, KT AI 솔루션과 매칭해 O/△/X 리스크를
+            자동으로 채웁니다. 조견표가 나오면 바로 Excel로 받을 수 있습니다.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {["HTML 변환", "조견표 탐지", "atomic 분해", "AI 매칭", "Excel 3종"].map((t) => (
+              <span key={t} className="pill border-neutral-200 bg-white/70 text-neutral-600">
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -111,9 +158,9 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={!!busy}
-          className="mt-4 grid w-full place-items-center rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/30 px-4 py-10 text-center transition hover:border-indigo-400 hover:bg-indigo-50/60 disabled:opacity-60"
+          className="mt-4 grid w-full place-items-center rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50/60 px-4 py-10 text-center transition hover:border-ktred-400 hover:bg-ktred-50/40 disabled:opacity-60"
         >
-          <span className="text-sm font-medium text-indigo-700">
+          <span className="text-sm font-medium text-ink-900">
             {busy === "upload" ? "업로드 중…" : "클릭하여 파일 선택"}
           </span>
         </button>

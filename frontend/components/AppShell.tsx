@@ -43,7 +43,7 @@ function ProjectNavButton({ item, active }: { item: WorkspaceNavItem; active: bo
       disabled={busy}
       className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-60 ${
         active
-          ? "bg-violet-50 text-violet-900 ring-1 ring-violet-200"
+          ? "bg-neutral-100 text-ink-900 ring-1 ring-neutral-200"
           : "text-slate-700 hover:bg-slate-50"
       }`}
     >

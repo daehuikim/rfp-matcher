@@ -21,6 +21,7 @@ import { removeWorkspaceSession } from "@/lib/workspace";
 import { ExportPanel } from "@/components/ExportPanel";
 import { ProjectTitleEditor } from "@/components/ProjectTitleEditor";
 import { RequirementRow } from "@/components/RequirementRow";
+import { RequirementTable } from "@/components/RequirementTable";
 import { PipelineStatus } from "@/components/PipelineStatus";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { usePipelineProgress } from "@/hooks/usePipelineProgress";
@@ -127,6 +128,7 @@ export default function ReviewPageClient({
 
   const [filter, setFilter] = useState<Filter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [view, setView] = useState<"table" | "card">("table");
   const [remoteByReqId, setRemoteByReqId] = useState<
     Record<string, { mark: Judgement; note: string; editor_id: string }>
   >({});
@@ -193,7 +195,7 @@ export default function ReviewPageClient({
     : "분류";
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className={`mx-auto ${view === "table" ? "max-w-[100rem]" : "max-w-5xl"}`}>
       <PipelineStatus
         projectTitle={projectTitle}
         sourceFilename={sourceFilename}
@@ -246,20 +248,16 @@ export default function ReviewPageClient({
           </div>
         )}
 
-        {hasRequirements && categoryStats.length > 0 && (
+        {hasRequirements && categoryStats.length > 0 && view === "card" && (
           <div className="mt-4">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
               {categoryFilterLabel} ({stats.total}건)
             </p>
             <div className="flex flex-wrap gap-1.5 text-xs">
               <button
                 type="button"
                 onClick={() => setCategoryFilter("all")}
-                className={`pill ${
-                  categoryFilter === "all"
-                    ? "border-violet-300 bg-violet-50 text-violet-800"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
+                className={`pill ${categoryFilter === "all" ? "pill-active" : "pill-idle"}`}
               >
                 전체 {stats.total}
               </button>
@@ -270,9 +268,7 @@ export default function ReviewPageClient({
                   title={name}
                   onClick={() => setCategoryFilter(name)}
                   className={`pill max-w-full truncate ${
-                    categoryFilter === name
-                      ? "border-violet-300 bg-violet-50 text-violet-800"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    categoryFilter === name ? "pill-active" : "pill-idle"
                   }`}
                 >
                   {name} {count}
@@ -283,17 +279,13 @@ export default function ReviewPageClient({
         )}
 
         {hasRequirements && (
-          <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
             {(["all", "pending", "O", "△", "X"] as Filter[]).map((f) => (
               <button
                 key={f}
                 type="button"
                 onClick={() => setFilter(f)}
-                className={`pill ${
-                  filter === f
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
+                className={`pill ${filter === f ? "pill-active" : "pill-idle"}`}
               >
                 {f === "all" ? "판정·전체" : f === "pending" ? "미판정" : f}
               </button>
@@ -301,10 +293,27 @@ export default function ReviewPageClient({
             <button
               type="button"
               onClick={() => void mutate()}
-              className="pill border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              className="pill pill-idle"
             >
               ↻
             </button>
+
+            <span className="ml-auto inline-flex overflow-hidden rounded-lg border border-neutral-200">
+              {(["table", "card"] as const).map((vmode) => (
+                <button
+                  key={vmode}
+                  type="button"
+                  onClick={() => setView(vmode)}
+                  className={`px-3 py-1 font-medium transition ${
+                    view === vmode
+                      ? "bg-ink-900 text-white"
+                      : "bg-white text-neutral-600 hover:bg-neutral-50"
+                  }`}
+                >
+                  {vmode === "table" ? "표" : "카드"}
+                </button>
+              ))}
+            </span>
           </div>
         )}
       </section>
@@ -330,9 +339,9 @@ export default function ReviewPageClient({
 
       {!hasRequirements && !isLoading && !pipeline.error && (
         <div className="panel p-8 text-center">
-          <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+          <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-ktred-100 border-t-ktred-500" />
           <p className="text-sm font-medium text-slate-800">HTML 변환 후 조견표를 한 줄씩 추출 중</p>
-          <p className="mt-1 font-mono text-lg font-semibold text-indigo-600">
+          <p className="mt-1 font-mono text-lg font-semibold text-ktred-600">
             {pipeline.displayTime}
           </p>
           {pipeline.extractedTotal > 0 && (
@@ -363,23 +372,32 @@ export default function ReviewPageClient({
           </div>
         )}
 
-      {hasRequirements && (
+      {hasRequirements && filtered.length === 0 && (
+        <div className="panel p-6 text-center text-sm text-neutral-500">
+          필터에 해당하는 항목이 없습니다.
+        </div>
+      )}
+
+      {hasRequirements && filtered.length > 0 && view === "table" && (
+        <RequirementTable
+          rows={filtered}
+          editorId={editorId}
+          remoteByReqId={remoteByReqId}
+          categoryFilterLabel={categoryFilterLabel}
+        />
+      )}
+
+      {hasRequirements && filtered.length > 0 && view === "card" && (
         <div className="grid gap-3">
-          {filtered.length === 0 ? (
-            <div className="panel p-6 text-center text-sm text-slate-500">
-              필터에 해당하는 항목이 없습니다.
-            </div>
-          ) : (
-            filtered.map((v) => (
-              <RequirementRow
-                key={v.requirement.id}
-                view={v}
-                editorId={editorId}
-                remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
-                aiPending={!v.recommendation && !pipeline.aiComplete}
-              />
-            ))
-          )}
+          {filtered.map((v) => (
+            <RequirementRow
+              key={v.requirement.id}
+              view={v}
+              editorId={editorId}
+              remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
+              aiPending={!v.recommendation && !pipeline.aiComplete}
+            />
+          ))}
         </div>
       )}
 

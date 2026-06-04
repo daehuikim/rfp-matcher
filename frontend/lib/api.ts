@@ -17,6 +17,10 @@ export type Requirement = {
   detail: string;
   deliverables: string | null;
   related: string[];
+  source_page?: number | string | null;
+  source_section?: string | null;
+  source_atomic_id?: string | null;
+  source_table_index?: number | null;
 };
 
 export type CatalogCandidateAudit = {

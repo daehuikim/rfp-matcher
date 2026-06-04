@@ -106,9 +106,9 @@ export function PipelineStatus({
           </div>
         )}
         {extractionReady && !aiComplete && aiTotal > 0 && (
-          <div className="rounded-lg bg-indigo-50 px-3 py-2 text-right">
-            <div className="text-[10px] font-medium uppercase text-indigo-500">AI 검토</div>
-            <div className="font-mono text-lg font-semibold text-indigo-700">
+          <div className="rounded-lg bg-ktteal-50 px-3 py-2 text-right">
+            <div className="text-[10px] font-medium uppercase text-ktteal-500">AI 검토</div>
+            <div className="font-mono text-lg font-semibold text-ktteal-600">
               {aiDone}/{aiTotal}
             </div>
           </div>
@@ -138,13 +138,13 @@ export function PipelineStatus({
             <span className="font-mono">{providerLabel}</span>
             <span className="mx-2 text-slate-300">|</span>
             <span className="font-medium text-slate-500">Model</span>{" "}
-            <span className="font-mono text-indigo-700">{modelLabel}</span>
+            <span className="font-mono text-ktteal-600">{modelLabel}</span>
           </div>
           {llmUsage && llmUsage.recent_calls.length > 0 && (
             <button
               type="button"
               onClick={() => setShowPrompts((v) => !v)}
-              className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800"
+              className="text-[11px] font-medium text-ktred-600 hover:text-ktred-700"
             >
               {showPrompts ? "프롬프트 숨기기" : "최근 프롬프트 보기"}
             </button>
