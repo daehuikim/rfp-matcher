@@ -24,11 +24,13 @@ export function RequirementRow({
   editorId,
   remoteUpdate,
   aiPending = false,
+  onOpenPage,
 }: {
   view: RequirementView;
   editorId: string;
   remoteUpdate: { mark: Judgement; note: string; editor_id: string } | null;
   aiPending?: boolean;
+  onOpenPage?: (page: number) => void;
 }) {
   const { requirement: r, recommendation: rec, judgement } = view;
   const [mark, setMark] = useState<Judgement>(judgement?.mark ?? "");
@@ -58,6 +60,14 @@ export function RequirementRow({
 
   const risk = rec ? riskColor(rec.ai_risk) : riskColor("");
   const body = formatRequirementDetail(r.detail || r.name);
+  const rawPage = r.source_page;
+  const pageNum =
+    rawPage == null
+      ? null
+      : (() => {
+          const n = typeof rawPage === "number" ? rawPage : parseInt(String(rawPage), 10);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        })();
   const categorySource = r.category_source ?? "document_table";
   const showCategorySource = categorySource !== "document_table";
 
@@ -90,13 +100,23 @@ export function RequirementRow({
             </span>
           )}
           <span className="font-mono text-neutral-400">{r.code}</span>
-          {(r.source_page || r.source_section) && (
+          {pageNum != null && onOpenPage && (
+            <button
+              type="button"
+              onClick={() => onOpenPage(pageNum)}
+              className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
+              title={`원본 ${pageNum}페이지로 이동`}
+            >
+              p.{pageNum} ↗
+            </button>
+          )}
+          {(((pageNum != null && !onOpenPage) || r.source_section)) && (
             <span
               className="pill border-slate-200 bg-slate-50 text-slate-600"
               title={r.source_section ?? undefined}
             >
-              {r.source_page ? `p.${r.source_page}` : ""}
-              {r.source_page && r.source_section ? " · " : ""}
+              {pageNum != null && !onOpenPage ? `p.${pageNum}` : ""}
+              {pageNum != null && !onOpenPage && r.source_section ? " · " : ""}
               {r.source_section ? r.source_section.slice(0, 28) : ""}
             </span>
           )}
