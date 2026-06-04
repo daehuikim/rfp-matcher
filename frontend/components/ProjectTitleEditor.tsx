@@ -66,7 +66,7 @@ export function ProjectTitleEditor({ docId, initialTitle }: Props) {
             if (e.key === "Enter") void save(draft);
             if (e.key === "Escape") setEditing(false);
           }}
-          className="mt-0.5 w-full max-w-md rounded-lg border border-violet-200 bg-white px-2 py-1 text-lg font-bold text-slate-900 outline-none ring-violet-200 focus:ring-2"
+          className="mt-0.5 w-full max-w-md rounded-lg border border-neutral-200 bg-white px-2 py-1 text-lg font-bold text-ink-900 outline-none ring-ktred-200 focus:ring-2"
           disabled={saving}
         />
       ) : (
@@ -76,7 +76,7 @@ export function ProjectTitleEditor({ docId, initialTitle }: Props) {
             setDraft(title);
             setEditing(true);
           }}
-          className="mt-0.5 block max-w-full truncate text-left text-xl font-bold tracking-tight text-slate-900 hover:text-violet-800"
+          className="mt-0.5 block max-w-full truncate text-left text-xl font-bold tracking-tight text-ink-900 hover:text-ktred-600"
           title="클릭하여 프로젝트명 변경"
         >
           {title || initialTitle || "프로젝트 불러오는 중…"}

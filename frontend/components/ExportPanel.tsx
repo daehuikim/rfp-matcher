@@ -73,7 +73,7 @@ export function ExportPanel({ docId, disabled }: { docId: string; disabled?: boo
                 onClick={() => setPreset(id)}
                 className={`pill ${
                   preset === id
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                    ? "border-ink-900 bg-ink-900 text-white"
                     : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                 }`}
               >
@@ -106,7 +106,7 @@ export function ExportPanel({ docId, disabled }: { docId: string; disabled?: boo
                 onClick={() => setMode(m)}
                 className={`pill ${
                   mode === m
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                    ? "border-ink-900 bg-ink-900 text-white"
                     : "border-slate-200 bg-white text-slate-600"
                 }`}
               >

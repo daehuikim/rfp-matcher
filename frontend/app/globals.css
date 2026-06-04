@@ -4,14 +4,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* KT UX Design System — Seamless Flow tokens */
 :root {
-  --brand: #4f46e5;
-  --brand-dark: #4338ca;
-  --surface: #f8fafc;
+  --ink: #1a1a1a; /* Primary (CTA) */
+  --kt-red: #e0282f; /* Accent Primary */
+  --kt-red-soft: #e54d53;
+  --kt-teal: #00a39b; /* Accent Secondary */
+  --kt-teal-deep: #007f7f;
+  --surface: #f7f8f9;
   --panel: #ffffff;
-  --border: #e2e8f0;
-  --text: #0f172a;
-  --muted: #64748b;
+  --border: #e6e8eb;
+  --text: #1a1a1a;
+  --muted: #6b7280;
 }
 
 html,
@@ -25,7 +29,7 @@ body {
     "Noto Sans KR",
     sans-serif;
   font-feature-settings: "ss03", "cv11";
-  letter-spacing: -0.01em;
+  letter-spacing: -0.011em;
   color: var(--text);
 }
 
@@ -35,64 +39,74 @@ body {
 
 @layer components {
   .app-shell {
-    @apply bg-slate-50;
+    @apply bg-[var(--surface)];
   }
 
+  /* Seamless Flow 브랜드 마크 — red→teal 그라데이션 */
   .brand-mark {
-    background: linear-gradient(135deg, var(--brand), #7c3aed);
-    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25);
+    background: linear-gradient(135deg, var(--kt-red) 0%, #d6356b 45%, var(--kt-teal) 100%);
+    box-shadow: 0 4px 14px rgba(224, 40, 47, 0.22);
   }
 
   .sidebar {
-    box-shadow: 1px 0 0 rgba(15, 23, 42, 0.04);
+    box-shadow: 1px 0 0 rgba(26, 26, 26, 0.05);
   }
 
   .nav-link-active {
-    @apply bg-indigo-50 font-medium text-indigo-700;
+    @apply bg-neutral-100 font-medium text-ink-900;
   }
 
   .topbar {
-    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+    box-shadow: 0 1px 0 rgba(26, 26, 26, 0.05);
   }
 
   .status-pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700;
+    @apply inline-flex items-center gap-1.5 rounded-full border border-ktteal-200 bg-ktteal-50 px-2.5 py-1 text-[11px] font-medium text-ktteal-600;
   }
 
   .status-dot {
-    @apply h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500;
+    @apply h-1.5 w-1.5 animate-pulse rounded-full bg-ktteal-400;
   }
 
   .panel {
-    @apply rounded-xl border border-slate-200/80 bg-white shadow-sm;
+    @apply rounded-2xl border border-[var(--border)] bg-white shadow-[0_1px_2px_rgba(26,26,26,0.04)];
   }
 
   .glass-card {
-    @apply rounded-xl border border-slate-200/80 bg-white shadow-sm;
+    @apply rounded-2xl border border-[var(--border)] bg-white shadow-[0_1px_2px_rgba(26,26,26,0.04)];
   }
 
   .step-chip {
-    @apply rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-400;
+    @apply rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-medium text-neutral-400;
   }
 
   .step-done {
-    @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+    @apply border-ktteal-200 bg-ktteal-50 text-ktteal-600;
   }
 
   .step-active {
-    @apply border-indigo-300 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200;
+    @apply border-ink-900 bg-ink-900 text-white ring-1 ring-ink-900;
   }
 
   .pill {
     @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium;
   }
 
+  /* 선택/비선택 칩 — grayscale 우선, 활성은 ink */
+  .pill-active {
+    @apply border-ink-900 bg-ink-900 text-white;
+  }
+
+  .pill-idle {
+    @apply border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50;
+  }
+
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-ink-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-ink-700 disabled:opacity-50;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-3.5 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50;
   }
 
   .btn-ghost {
@@ -112,11 +126,11 @@ body {
   }
 
   .judge-O {
-    @apply border-emerald-300 bg-emerald-50 text-emerald-700;
+    @apply border-ktteal-300 bg-ktteal-50 text-ktteal-600;
   }
 
   .judge-O-active {
-    @apply border-emerald-500 bg-emerald-500 text-white shadow shadow-emerald-500/30;
+    @apply border-ktteal-400 bg-ktteal-400 text-white shadow shadow-ktteal-400/30;
   }
 
   .judge-tri {
@@ -128,10 +142,85 @@ body {
   }
 
   .judge-X {
-    @apply border-rose-300 bg-rose-50 text-rose-700;
+    @apply border-ktred-300 bg-ktred-50 text-ktred-700;
   }
 
   .judge-X-active {
-    @apply border-rose-500 bg-rose-500 text-white shadow shadow-rose-500/30;
+    @apply border-ktred-500 bg-ktred-500 text-white shadow shadow-ktred-500/30;
   }
+
+  /* ── 엑셀형 조견표 ── */
+  .sheet-scroll {
+    @apply overflow-x-auto overflow-y-visible;
+    scrollbar-width: thin;
+  }
+
+  .sheet-table {
+    @apply w-full border-separate text-[12px];
+    border-spacing: 0;
+  }
+
+  .sheet-table th,
+  .sheet-table td {
+    @apply border-b border-r border-neutral-200 px-2.5 py-2 align-top;
+  }
+
+  .sheet-table th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-t bg-neutral-100 px-2.5 py-2 text-left text-[11px] font-semibold text-neutral-600;
+  }
+
+  .sheet-table th:first-child,
+  .sheet-table td:first-child {
+    @apply border-l;
+  }
+
+  /* 좌측 고정 코드 칼럼 */
+  .sheet-table .col-sticky {
+    @apply sticky left-0 z-20 bg-white;
+  }
+
+  .sheet-table thead .col-sticky {
+    @apply z-30 bg-neutral-100;
+  }
+
+  .sheet-row:nth-child(even) td {
+    @apply bg-neutral-50/60;
+  }
+
+  .sheet-row:nth-child(even) td.col-sticky {
+    @apply bg-neutral-50;
+  }
+
+  .sheet-row:hover td {
+    @apply bg-ktred-50/40;
+  }
+
+  .sheet-row:hover td.col-sticky {
+    @apply bg-ktred-50;
+  }
+
+  .tab {
+    @apply shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition;
+  }
+
+  .tab-idle {
+    @apply text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800;
+  }
+
+  .tab-active {
+    @apply bg-ink-900 text-white;
+  }
+}
+
+/* Seamless Flow 히어로 웨이브 */
+.flow-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.flow-wave {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.9;
 }

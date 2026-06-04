@@ -65,7 +65,7 @@ export function RequirementRow({
     <article className="glass-card flex flex-col gap-3 p-3.5 md:p-4">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="pill border-indigo-300 bg-indigo-100 font-semibold text-indigo-900">
+          <span className="pill border-neutral-300 bg-neutral-100 font-semibold text-ink-900">
             {r.category}
           </span>
           {showCategorySource && (
@@ -78,7 +78,7 @@ export function RequirementRow({
           )}
           {r.subcategory && (
             <span
-              className="pill border-violet-200 bg-violet-50 text-violet-700"
+              className="pill border-neutral-200 bg-neutral-50 text-neutral-600"
               title={
                 r.subcategory_source && r.subcategory_source !== "document_table"
                   ? `소분류 · ${categorySourceLabel(r.subcategory_source)}`
@@ -123,7 +123,7 @@ export function RequirementRow({
         <div
           className={`mt-2.5 rounded-lg border p-2.5 ${
             aiPending
-              ? "border-indigo-100 bg-indigo-50/40"
+              ? "border-ktteal-100 bg-ktteal-50/40"
               : rec
                 ? "border-slate-100 bg-slate-50/80"
                 : "border-dashed border-slate-200 bg-slate-50/50"
@@ -131,7 +131,7 @@ export function RequirementRow({
         >
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">AI 검토</p>
           {aiPending && (
-            <p className="mt-1 text-[12px] text-indigo-700">KT 솔루션 카탈로그 매칭·Rubric 점수 산출 중…</p>
+            <p className="mt-1 text-[12px] text-ktteal-600">KT 솔루션 카탈로그 매칭·Rubric 점수 산출 중…</p>
           )}
           {!aiPending && rec && (
             <>
@@ -153,7 +153,7 @@ export function RequirementRow({
                     {rec.matched_solutions.map((t, i) => (
                       <span
                         key={`match-${i}-${t}`}
-                        className="pill border-indigo-200 bg-indigo-50 text-indigo-700"
+                        className="pill border-ktteal-200 bg-ktteal-50 text-ktteal-600"
                       >
                         {t}
                       </span>
@@ -200,7 +200,7 @@ export function RequirementRow({
           }}
         />
         <input
-          className="min-w-[8rem] flex-1 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] placeholder:text-neutral-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+          className="min-w-[8rem] flex-1 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[11px] placeholder:text-neutral-400 focus:border-ktred-400 focus:outline-none focus:ring-1 focus:ring-ktred-100"
           value={note}
           placeholder="메모"
           onChange={(e) => setNote(e.target.value)}
@@ -209,7 +209,7 @@ export function RequirementRow({
         <span className="text-[10px] text-slate-400">
           {saving === "saving" && "저장…"}
           {saving === "saved" && <span className="text-emerald-600">✓</span>}
-          {saving === "remote" && <span className="text-indigo-600">↻</span>}
+          {saving === "remote" && <span className="text-ktred-600">↻</span>}
           {saving === "err" && <span className="text-rose-600">실패</span>}
         </span>
       </div>

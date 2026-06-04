@@ -47,7 +47,7 @@ export function CatalogAuditPanel({
                 key={s.catalog_id}
                 type="button"
                 onClick={() => setOpen(true)}
-                className="pill border-indigo-200 bg-indigo-50 text-indigo-800 transition hover:border-indigo-300 hover:bg-indigo-100"
+                className="pill border-ktteal-200 bg-ktteal-50 text-ktteal-600 transition hover:border-ktteal-300 hover:bg-ktteal-100"
                 title="클릭하여 상세 보기"
               >
                 {solutionLabel(s)}
@@ -59,7 +59,7 @@ export function CatalogAuditPanel({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="font-medium text-indigo-600 underline-offset-2 hover:underline"
+            className="font-medium text-ktred-600 underline-offset-2 hover:underline"
           >
             탐색 후보 {audit.length}건 · 채택 {selected.length} · 제외 {excluded.length} — 상세
             보기
@@ -69,7 +69,7 @@ export function CatalogAuditPanel({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="font-medium text-indigo-600 underline-offset-2 hover:underline"
+            className="font-medium text-ktred-600 underline-offset-2 hover:underline"
           >
             솔루션 상세 보기
           </button>
