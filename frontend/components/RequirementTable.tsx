@@ -49,6 +49,13 @@ function computeColumns(rows: RequirementView[]): ColumnFlags {
   return flags;
 }
 
+/** source_page(number|string|null) → 1-based 정수 페이지 또는 null */
+function toPageNumber(v: number | string | null | undefined): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : parseInt(String(v), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function riskBadge(r: Judgement): { cls: string; label: string } {
   switch (r) {
     case "O":
@@ -82,11 +89,13 @@ export function RequirementTable({
   editorId,
   remoteByReqId,
   categoryFilterLabel,
+  onOpenPage,
 }: {
   rows: RequirementView[];
   editorId: string;
   remoteByReqId: RemoteMap;
   categoryFilterLabel: string;
+  onOpenPage?: (page: number) => void;
 }) {
   const groups = useMemo(() => {
     const map = new Map<string, RequirementView[]>();
@@ -151,6 +160,7 @@ export function RequirementTable({
             rows={g.items}
             editorId={editorId}
             remoteByReqId={remoteByReqId}
+            onOpenPage={onOpenPage}
           />
         ))}
       </div>
@@ -164,12 +174,14 @@ function SheetBox({
   editorId,
   remoteByReqId,
   categoryFilterLabel,
+  onOpenPage,
 }: {
   title: string;
   rows: RequirementView[];
   editorId: string;
   remoteByReqId: RemoteMap;
   categoryFilterLabel: string;
+  onOpenPage?: (page: number) => void;
 }) {
   const flags = useMemo(() => computeColumns(rows), [rows]);
   const source = rows[0]?.requirement.category_source ?? "document_table";
@@ -222,6 +234,7 @@ function SheetBox({
                 editorId={editorId}
                 remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
                 totalCols={colCount(flags)}
+                onOpenPage={onOpenPage}
               />
             ))}
           </tbody>
@@ -237,12 +250,14 @@ function SheetRow({
   editorId,
   remoteUpdate,
   totalCols,
+  onOpenPage,
 }: {
   view: RequirementView;
   flags: ColumnFlags;
   editorId: string;
   remoteUpdate: { mark: Judgement; note: string; editor_id: string } | null;
   totalCols: number;
+  onOpenPage?: (page: number) => void;
 }) {
   const { requirement: r, recommendation: rec } = view;
   const [mark, setMark] = useState<Judgement>(view.judgement?.mark ?? "");
@@ -272,6 +287,7 @@ function SheetRow({
   }
 
   const body = formatRequirementDetail(r.detail || r.name);
+  const pageNum = toPageNumber(r.source_page);
   const badge = rec ? riskBadge(rec.ai_risk) : riskBadge("");
   const matchedSkus = rec?.matched_solution_skus ?? [];
   const matchedNames = rec?.matched_solutions ?? [];
@@ -320,14 +336,26 @@ function SheetRow({
 
         {flags.source && (
           <td className="text-[11px] text-neutral-500">
-            {r.source_page ? `p.${r.source_page}` : ""}
-            {r.source_page && r.source_section ? " · " : ""}
+            {pageNum != null &&
+              (onOpenPage ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenPage(pageNum)}
+                  className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
+                  title={`원본 ${pageNum}페이지로 이동`}
+                >
+                  p.{pageNum} ↗
+                </button>
+              ) : (
+                <span>p.{pageNum}</span>
+              ))}
+            {pageNum != null && r.source_section ? " " : ""}
             {r.source_section ? (
               <span title={r.source_section}>{r.source_section.slice(0, 24)}</span>
             ) : (
               ""
             )}
-            {!r.source_page && !r.source_section ? "—" : ""}
+            {pageNum == null && !r.source_section ? "—" : ""}
           </td>
         )}
 

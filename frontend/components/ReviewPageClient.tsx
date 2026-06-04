@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, startTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import {
@@ -22,6 +22,7 @@ import { ExportPanel } from "@/components/ExportPanel";
 import { ProjectTitleEditor } from "@/components/ProjectTitleEditor";
 import { RequirementRow } from "@/components/RequirementRow";
 import { RequirementTable } from "@/components/RequirementTable";
+import { PdfViewerPane } from "@/components/PdfViewerPane";
 import { PipelineStatus } from "@/components/PipelineStatus";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { usePipelineProgress } from "@/hooks/usePipelineProgress";
@@ -129,6 +130,31 @@ export default function ReviewPageClient({
   const [filter, setFilter] = useState<Filter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [view, setView] = useState<"table" | "card">("table");
+
+  // 우측 원본 뷰어 (PDF only)
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerPage, setViewerPage] = useState<number | null>(null);
+  const [jumpNonce, setJumpNonce] = useState(0);
+  const autoOpened = useRef(false);
+
+  const canViewSource =
+    docMeta?.mime === "application/pdf" && docMeta?.has_source_file === true;
+  const anyPage = useMemo(() => rows.some((v) => v.requirement.source_page != null), [rows]);
+
+  const openPage = useCallback((p: number) => {
+    setViewerPage(p);
+    setJumpNonce((n) => n + 1);
+    setViewerOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!autoOpened.current && canViewSource && anyPage) {
+      autoOpened.current = true;
+      setViewerOpen(true);
+    }
+  }, [canViewSource, anyPage]);
+
+  const showViewer = viewerOpen && canViewSource;
   const [remoteByReqId, setRemoteByReqId] = useState<
     Record<string, { mark: Judgement; note: string; editor_id: string }>
   >({});
@@ -195,7 +221,7 @@ export default function ReviewPageClient({
     : "분류";
 
   return (
-    <div className={`mx-auto ${view === "table" ? "max-w-[100rem]" : "max-w-5xl"}`}>
+    <div className={`mx-auto ${view === "table" || showViewer ? "max-w-[110rem]" : "max-w-5xl"}`}>
       <PipelineStatus
         projectTitle={projectTitle}
         sourceFilename={sourceFilename}
@@ -298,21 +324,33 @@ export default function ReviewPageClient({
               ↻
             </button>
 
-            <span className="ml-auto inline-flex overflow-hidden rounded-lg border border-neutral-200">
-              {(["table", "card"] as const).map((vmode) => (
+            <span className="ml-auto inline-flex items-center gap-1.5">
+              {canViewSource && (
                 <button
-                  key={vmode}
                   type="button"
-                  onClick={() => setView(vmode)}
-                  className={`px-3 py-1 font-medium transition ${
-                    view === vmode
-                      ? "bg-ink-900 text-white"
-                      : "bg-white text-neutral-600 hover:bg-neutral-50"
-                  }`}
+                  onClick={() => setViewerOpen((v) => !v)}
+                  className={`pill ${showViewer ? "pill-active" : "pill-idle"}`}
+                  title="우측에 원본 PDF 뷰어 표시 — 페이지 클릭 시 이동"
                 >
-                  {vmode === "table" ? "표" : "카드"}
+                  📄 원본
                 </button>
-              ))}
+              )}
+              <span className="inline-flex overflow-hidden rounded-lg border border-neutral-200">
+                {(["table", "card"] as const).map((vmode) => (
+                  <button
+                    key={vmode}
+                    type="button"
+                    onClick={() => setView(vmode)}
+                    className={`px-3 py-1 font-medium transition ${
+                      view === vmode
+                        ? "bg-ink-900 text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {vmode === "table" ? "표" : "카드"}
+                  </button>
+                ))}
+              </span>
             </span>
           </div>
         )}
@@ -378,26 +416,44 @@ export default function ReviewPageClient({
         </div>
       )}
 
-      {hasRequirements && filtered.length > 0 && view === "table" && (
-        <RequirementTable
-          rows={filtered}
-          editorId={editorId}
-          remoteByReqId={remoteByReqId}
-          categoryFilterLabel={categoryFilterLabel}
-        />
-      )}
+      {hasRequirements && filtered.length > 0 && (
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            {view === "table" ? (
+              <RequirementTable
+                rows={filtered}
+                editorId={editorId}
+                remoteByReqId={remoteByReqId}
+                categoryFilterLabel={categoryFilterLabel}
+                onOpenPage={canViewSource ? openPage : undefined}
+              />
+            ) : (
+              <div className="grid gap-3">
+                {filtered.map((v) => (
+                  <RequirementRow
+                    key={v.requirement.id}
+                    view={v}
+                    editorId={editorId}
+                    remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
+                    aiPending={!v.recommendation && !pipeline.aiComplete}
+                    onOpenPage={canViewSource ? openPage : undefined}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
-      {hasRequirements && filtered.length > 0 && view === "card" && (
-        <div className="grid gap-3">
-          {filtered.map((v) => (
-            <RequirementRow
-              key={v.requirement.id}
-              view={v}
-              editorId={editorId}
-              remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
-              aiPending={!v.recommendation && !pipeline.aiComplete}
-            />
-          ))}
+          {showViewer && (
+            <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[34rem] shrink-0 lg:block xl:w-[40rem]">
+              <PdfViewerPane
+                docId={docId}
+                page={viewerPage}
+                jumpNonce={jumpNonce}
+                sourceFilename={sourceFilename}
+                onClose={() => setViewerOpen(false)}
+              />
+            </aside>
+          )}
         </div>
       )}
 

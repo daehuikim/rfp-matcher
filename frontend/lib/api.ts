@@ -259,7 +259,14 @@ export type DocumentMeta = {
   source_filename: string | null;
   display_name: string | null;
   content_hash?: string | null;
+  mime?: string | null;
+  has_source_file?: boolean;
 };
+
+/** 원본 파일(브라우저 내장 뷰어용) URL. PDF면 #page=N 으로 페이지 이동 가능. */
+export function documentSourceUrl(docId: string): string {
+  return `${apiBase()}/documents/${docId}/source`;
+}
 
 export async function fetchDocumentMeta(docId: string): Promise<DocumentMeta | null> {
   const r = await fetch(`${apiBase()}/documents/${docId}/meta`, { cache: "no-store" });

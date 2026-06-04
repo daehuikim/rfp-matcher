@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.api.deps import ContainerDep
@@ -291,6 +292,17 @@ class DocumentMetaResponse(BaseModel):
     source_filename: str | None = None
     display_name: str | None = None
     content_hash: str | None = None
+    mime: str | None = None
+    has_source_file: bool = False  # 원본 파일을 /source 로 받을 수 있는지
+
+
+def _source_path(doc) -> Path | None:
+    """원본 파일이 디스크에 존재하면 경로 반환 (없으면 None)."""
+    try:
+        p = Path(doc.src_path)
+    except (TypeError, ValueError):
+        return None
+    return p if p.is_file() else None
 
 
 @router.get("/{doc_id}/meta", response_model=DocumentMetaResponse)
@@ -304,6 +316,33 @@ async def get_document_meta(doc_id: str, container: ContainerDep) -> DocumentMet
         source_filename=doc.source_filename,
         display_name=doc.display_name,
         content_hash=doc.content_hash,
+        mime=str(doc.mime) if doc.mime else None,
+        has_source_file=_source_path(doc) is not None,
+    )
+
+
+@router.get("/{doc_id}/source")
+async def get_document_source(doc_id: str, container: ContainerDep) -> FileResponse:
+    """원본 파일 바이트를 그대로 제공 — 우측 뷰어(페이지 확인)용. inline 표시.
+
+    조견표의 source_page(1-based PDF 페이지)와 PDFium(브라우저 내장 뷰어)의
+    `#page=N` 프래그먼트를 연동해 클릭 → 해당 페이지 이동을 지원한다.
+    """
+    if doc_id not in container.repo.documents:
+        raise HTTPException(404, f"document 없음: {doc_id}")
+    doc = container.repo.documents[doc_id]
+    path = _source_path(doc)
+    if path is None:
+        raise HTTPException(404, "원본 파일 없음 (서버에 보관되지 않음)")
+    media_type = str(doc.mime) if doc.mime else "application/octet-stream"
+    filename = doc.source_filename or path.name
+    return FileResponse(
+        path,
+        media_type=media_type,
+        # 다운로드가 아니라 브라우저 내장 뷰어로 열리도록 inline.
+        content_disposition_type="inline",
+        filename=filename,
+        headers={"Cache-Control": "private, max-age=3600"},
     )
 
 
