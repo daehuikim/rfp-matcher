@@ -5,7 +5,7 @@ import { WorkspaceProvider } from "@/context/WorkspaceProvider";
 import { fetchWorkspaceBootstrap } from "@/lib/workspace-server";
 
 export const metadata: Metadata = {
-  title: "RFP Matcher — 조견표 자동 추출 & AI 추천",
+  title: "KT Easy제안 — RFP 조견표 자동화",
   description: "RFP/RFI 비정형 문서에서 조견표를 한 줄씩 자동 추출하고 KT AI 솔루션과 매칭합니다.",
 };
 

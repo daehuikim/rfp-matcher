@@ -109,6 +109,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
   const gridSamples = pickGridSamples(initialSamples);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState(startError ? START_ERRORS[startError] ?? "시연 시작 실패" : "");
+  const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   async function onUpload(file: File) {
@@ -152,22 +153,49 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
       </section>
 
       <section className="panel mb-8 p-6">
-        <h2 className="text-sm font-semibold text-slate-900">파일 업로드</h2>
-        <p className="mt-1 text-xs text-slate-500">PDF / DOC / HWPX</p>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={!!busy}
-          className="mt-4 grid w-full place-items-center rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50/60 px-4 py-10 text-center transition hover:border-ktred-400 hover:bg-ktred-50/40 disabled:opacity-60"
+        <h2 className="text-sm font-semibold text-ink-900">RFP 파일 업로드</h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          공공 RFP의 제안요청서·과업지시서·별첨 등을 업로드하세요
+        </p>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => !busy && fileRef.current?.click()}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && !busy) fileRef.current?.click();
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragActive(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f && !busy) void onUpload(f);
+          }}
+          className={`mt-4 flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-12 text-center transition ${
+            dragActive
+              ? "border-ktred-400 bg-ktred-50/50"
+              : "border-neutral-300 bg-neutral-50/50 hover:border-ktred-300 hover:bg-neutral-50"
+          } ${busy ? "pointer-events-none opacity-60" : ""}`}
         >
-          <span className="text-sm font-medium text-ink-900">
-            {busy === "upload" ? "업로드 중…" : "클릭하여 파일 선택"}
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="mb-2 text-neutral-400">
+            <path d="M12 16V4m0 0L7 9m5-5l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+          <span className="text-sm font-semibold text-ink-900">
+            {busy === "upload" ? "업로드 중…" : "파일을 끌어다 놓거나 클릭해서 선택"}
           </span>
-        </button>
+          <span className="mt-1.5 text-[11px] text-neutral-400">
+            HWP · HWPX · DOCX · DOC · PPTX · PPT · PDF
+          </span>
+        </div>
         <input
           ref={fileRef}
           type="file"
-          accept=".pdf,.doc,.docx,.hwp,.hwpx"
+          accept=".pdf,.doc,.docx,.hwp,.hwpx,.ppt,.pptx"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];

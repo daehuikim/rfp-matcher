@@ -99,7 +99,7 @@ export function RequirementTable({
   remoteByReqId: RemoteMap;
   categoryFilterLabel: string;
   onOpenPage?: (page: number) => void;
-  onOpenTable?: (tableIndex: number) => void;
+  onOpenTable?: (tableIndex: number, anchor?: string) => void;
 }) {
   const groups = useMemo(() => {
     const map = new Map<string, RequirementView[]>();
@@ -188,7 +188,7 @@ function SheetBox({
   remoteByReqId: RemoteMap;
   categoryFilterLabel: string;
   onOpenPage?: (page: number) => void;
-  onOpenTable?: (tableIndex: number) => void;
+  onOpenTable?: (tableIndex: number, anchor?: string) => void;
 }) {
   const flags = useMemo(() => computeColumns(rows, !!onOpenTable), [rows, onOpenTable]);
   const source = rows[0]?.requirement.category_source ?? "document_table";
@@ -267,7 +267,7 @@ function SheetRow({
   remoteUpdate: { mark: Judgement; note: string; editor_id: string } | null;
   totalCols: number;
   onOpenPage?: (page: number) => void;
-  onOpenTable?: (tableIndex: number) => void;
+  onOpenTable?: (tableIndex: number, anchor?: string) => void;
 }) {
   const { requirement: r, recommendation: rec } = view;
   const [mark, setMark] = useState<Judgement>(view.judgement?.mark ?? "");
@@ -359,7 +359,7 @@ function SheetRow({
             ) : tableIndex != null && onOpenTable ? (
               <button
                 type="button"
-                onClick={() => onOpenTable(tableIndex)}
+                onClick={() => onOpenTable(tableIndex, r.name || body.title)}
                 className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
                 title="원본 문서에서 이 요건이 나온 표로 이동"
               >
