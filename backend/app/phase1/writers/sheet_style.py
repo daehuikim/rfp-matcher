@@ -16,6 +16,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 HEADER_FILL = PatternFill("solid", fgColor="305496")
 HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
 ZEBRA_FILL = PatternFill("solid", fgColor="EEF3FB")
+AI_FILL = PatternFill("solid", fgColor="FCE4D6")  # AI 생성 셀(원문 추출 아님) 구분색(주황)
 BODY_FONT = Font(size=10)
 _THIN = Side(style="thin", color="BFBFBF")
 BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
@@ -67,8 +68,17 @@ def _row_height(ws: Worksheet, ri: int, col_keys: list[str]) -> float | None:
     return min(15 + (lines - 1) * 14, 260)
 
 
-def style_data_sheet(ws: Worksheet, col_keys: list[str], n_rows: int) -> None:
-    """헤더 1행 + 데이터 n_rows 가 이미 append 된 시트에 스타일 적용."""
+def style_data_sheet(
+    ws: Worksheet,
+    col_keys: list[str],
+    n_rows: int,
+    gen_by_row: list[set[str]] | None = None,
+) -> None:
+    """헤더 1행 + 데이터 n_rows 가 이미 append 된 시트에 스타일 적용.
+
+    gen_by_row[i] 에 든 칼럼 key 셀은 AI 생성값이므로 주황(AI_FILL)으로 칠한다
+    (지브라 음영보다 우선). 원문 추출 셀은 기존 지브라 규칙 유지.
+    """
     for ci, key in enumerate(col_keys, 1):
         cell = ws.cell(1, ci)
         cell.fill = HEADER_FILL
@@ -80,13 +90,16 @@ def style_data_sheet(ws: Worksheet, col_keys: list[str], n_rows: int) -> None:
     ws.row_dimensions[1].height = 24
 
     for ri in range(2, n_rows + 2):
+        gen = gen_by_row[ri - 2] if gen_by_row and ri - 2 < len(gen_by_row) else None
         for ci, key in enumerate(col_keys, 1):
             cell = ws.cell(ri, ci)
             cell.border = BORDER
             cell.font = BODY_FONT
             _, center = COLUMN_STYLE.get(key, _DEFAULT)
             cell.alignment = CENTER if center else WRAP
-            if ri % 2 == 1:
+            if gen and key in gen:
+                cell.fill = AI_FILL  # AI 생성 셀 — 주황(지브라보다 우선)
+            elif ri % 2 == 1:
                 cell.fill = ZEBRA_FILL
         h = _row_height(ws, ri, col_keys)
         if h:

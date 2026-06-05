@@ -102,6 +102,9 @@ class Requirement(BaseModel):
     source_page: int | None = None  # PDF 원본 페이지 (1-based)
     source_section: str | None = None  # 섹션 제목 (예: 2.2 제안 요구사항 상세)
     source_table_index: int | None = None  # HTML table 순번
+    # 원문 추출이 아니라 LLM 이 생성한 값을 가진 export 칼럼 key 집합
+    # (예: {"code","name","subcategory"}) — Excel 에서 주황색 셀로 구분 표시.
+    ai_generated_fields: set[str] = Field(default_factory=set)
 
 
 class CatalogCandidateAudit(BaseModel):

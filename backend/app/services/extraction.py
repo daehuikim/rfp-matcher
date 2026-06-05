@@ -318,6 +318,15 @@ class ExtractionService:
         top = (getattr(r, "top", "") or "").strip()
         detail = getattr(r, "detail", "") or ""
         name = top or atom_title(detail) or (detail[:40] if detail else "")
+        # V2 gen_* 플래그(원문 추출이 아닌 LLM 생성값)를 export 칼럼 key 로 매핑
+        # → Excel writer 가 해당 셀을 주황색으로 표시 (V2 native excel 과 동일 규칙).
+        gen_fields: set[str] = set()
+        if getattr(r, "gen_rid", False):
+            gen_fields.add("code")
+        if getattr(r, "gen_top", False) and top:
+            gen_fields.add("name")
+        if getattr(r, "gen_mid", False) and mid:
+            gen_fields.update({"subcategory", "definition"})
         return Requirement(
             id=uuid.uuid4().hex,
             doc_id=doc_id,
@@ -333,6 +342,7 @@ class ExtractionService:
             source_page=getattr(r, "page", None),
             source_section=(getattr(r, "section_path", "") or None),
             source_table_index=getattr(r, "table_id", None),
+            ai_generated_fields=gen_fields,
         )
 
     async def _recommend_background(self, doc_id: str, *, use_cache: bool) -> None:
