@@ -79,6 +79,16 @@ async def export_excel(
     out_dir = container.settings.storage_root / doc_id / "exports"
     col_tag = cols.replace(",", "-")[:40] if cols else "adaptive"
     out_path = out_dir / f"requirements_{mode.value}_{layout_key}_{col_tag}.xlsx"
+
+    # V2 엔진 산출물이 있으면 results_final 포맷(개요+탭) 그대로 제공
+    v2_path = _export_via_v2(container, doc_id, out_dir)
+    if v2_path is not None:
+        download = _download_name(filename, v2_path)
+        return FileResponse(
+            path=v2_path,
+            filename=download,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
     RequirementSheetWriter().write(
         out_path,
         reqs,
@@ -92,14 +102,42 @@ async def export_excel(
         if doc_id in container.repo.documents
         else None,
     )
-    # 사용자 지정 다운로드 파일명 (없으면 기본 생성). 경로 문자 제거.
-    if filename:
-        safe = re.sub(r'[\\/:*?"<>|]+', "_", filename).strip() or out_path.stem
-        download_name = safe if safe.lower().endswith(".xlsx") else f"{safe}.xlsx"
-    else:
-        download_name = out_path.name
     return FileResponse(
         path=out_path,
-        filename=download_name,
+        filename=_download_name(filename, out_path),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+def _download_name(filename: str | None, out_path) -> str:
+    """사용자 지정 다운로드 파일명 (없으면 out_path 이름). 경로 문자 제거."""
+    if filename:
+        safe = re.sub(r'[\\/:*?"<>|]+', "_", filename).strip() or out_path.stem
+        return safe if safe.lower().endswith(".xlsx") else f"{safe}.xlsx"
+    return out_path.name
+
+
+def _export_via_v2(container, doc_id: str, out_dir):
+    """V2 추출 산출물(reqs+overview)이 있으면 results_final 포맷 xlsx 생성 후 경로 반환."""
+    import pickle
+    from pathlib import Path
+
+    candidates = [container.settings.storage_root / doc_id / "v2_export.pkl"]
+    doc = container.repo.documents.get(doc_id)
+    if doc is not None and getattr(doc, "content_hash", None):
+        candidates.append(
+            container.settings.artifact_cache_dir / doc.content_hash[:16] / "v2_export.pkl"
+        )
+    pkl = next((p for p in candidates if Path(p).is_file()), None)
+    if pkl is None:
+        return None
+    try:
+        payload = pickle.loads(Path(pkl).read_bytes())
+        from prototype.v2.excel_writer import write_excel as v2_write
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / "requirements_v2.xlsx"
+        v2_write(payload["reqs"], str(out_path), overview=payload.get("overview"))
+        return out_path
+    except Exception:  # noqa: BLE001
+        return None
