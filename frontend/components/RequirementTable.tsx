@@ -8,6 +8,7 @@ import {
   patchJudgement,
 } from "@/lib/api";
 import { formatRequirementDetail } from "@/lib/formatDetail";
+import { AiVerdictModal } from "./AiVerdictModal";
 import { CatalogAuditPanel } from "./CatalogAuditPanel";
 import { JudgementToggle } from "./JudgementToggle";
 
@@ -223,10 +224,10 @@ function SheetBox({
               {flags.subcategory && <th className="min-w-[8rem]">소분류</th>}
               {flags.deliverables && <th className="min-w-[12rem]">산출물</th>}
               {flags.source && <th className="min-w-[8rem]">출처</th>}
-              <th className="w-[6rem]">AI 판정</th>
-              {flags.aiReason && <th className="min-w-[20rem]">AI 근거</th>}
-              {flags.solutions && <th className="min-w-[12rem]">매칭 솔루션</th>}
+              {flags.solutions && <th className="min-w-[12rem]">KT 보유 기술</th>}
               {flags.missing && <th className="min-w-[10rem]">부족 기술</th>}
+              <th className="w-[6.5rem]">AI 판정</th>
+              {flags.aiReason && <th className="min-w-[20rem]">AI 설명</th>}
               {flags.consortium && <th className="min-w-[10rem]">컨소시엄</th>}
               <th className="w-[8.5rem]">판정</th>
               <th className="min-w-[10rem]">메모</th>
@@ -274,6 +275,7 @@ function SheetRow({
   const [note, setNote] = useState<string>(view.judgement?.note ?? "");
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "err" | "remote">("idle");
   const [expanded, setExpanded] = useState(false);
+  const [verdictOpen, setVerdictOpen] = useState(false);
 
   useEffect(() => {
     if (!remoteUpdate) return;
@@ -378,29 +380,6 @@ function SheetRow({
           </td>
         )}
 
-        <td>
-          <span
-            className={`pill ${badge.cls}`}
-            title={rec ? `AI · ${rec.ai_risk || "?"} ${badge.label}` : "AI 분석 대기"}
-          >
-            {rec ? `${rec.ai_risk || "?"} ${badge.label}` : "대기"}
-          </span>
-        </td>
-
-        {flags.aiReason && (
-          <td className="text-[11px] leading-relaxed text-neutral-700">
-            {rec?.ai_reason ? (
-              expanded ? (
-                rec.ai_reason
-              ) : (
-                <span className="line-clamp-2">{rec.ai_reason}</span>
-              )
-            ) : (
-              <span className="text-neutral-400">분석 중</span>
-            )}
-          </td>
-        )}
-
         {flags.solutions && (
           <td>
             {matchedSkus.length > 0 || matchedNames.length > 0 ? (
@@ -444,6 +423,39 @@ function SheetRow({
               </div>
             ) : (
               <span className="text-[11px] text-neutral-400">—</span>
+            )}
+          </td>
+        )}
+
+        <td>
+          <button
+            type="button"
+            onClick={() => rec && setVerdictOpen(true)}
+            disabled={!rec}
+            className={`pill ${badge.cls} ${rec ? "cursor-pointer transition hover:brightness-95" : "cursor-default"}`}
+            title={rec ? "클릭 — 판정 근거·검색 내역 보기" : "AI 분석 대기"}
+          >
+            {rec ? `${rec.ai_risk || "?"} ${badge.label}` : "대기"}
+            {rec && <span className="ml-0.5 opacity-60">ⓘ</span>}
+          </button>
+          <AiVerdictModal
+            open={verdictOpen}
+            onClose={() => setVerdictOpen(false)}
+            requirement={r}
+            recommendation={rec}
+          />
+        </td>
+
+        {flags.aiReason && (
+          <td className="text-[11px] leading-relaxed text-neutral-700">
+            {rec?.ai_reason ? (
+              expanded ? (
+                rec.ai_reason
+              ) : (
+                <span className="line-clamp-2">{rec.ai_reason}</span>
+              )
+            ) : (
+              <span className="text-neutral-400">분석 중</span>
             )}
           </td>
         )}

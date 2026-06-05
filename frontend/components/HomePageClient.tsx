@@ -88,7 +88,7 @@ function FlowWave() {
 
 function pickGridSamples(samples: SampleFile[]): SampleFile[] {
   const featured = samples.filter((s) => s.featured);
-  return (featured.length > 0 ? featured : samples).slice(0, 6);
+  return (featured.length > 0 ? featured : samples).slice(0, 7);
 }
 
 const START_ERRORS: Record<string, string> = {

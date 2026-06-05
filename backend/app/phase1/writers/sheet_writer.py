@@ -15,6 +15,7 @@ from app.phase1.extraction.category_provenance import (
 )
 
 from .export_columns import EXPORT_COLUMNS, column_headers, resolve_export_columns
+from .sheet_style import style_data_sheet, style_summary_sheet
 
 _INVALID_SHEET_CHARS = re.compile(r"[\\/?*\[\]:]")
 
@@ -22,6 +23,17 @@ _INVALID_SHEET_CHARS = re.compile(r"[\\/?*\[\]:]")
 def _safe_sheet_name(name: str) -> str:
     name = _INVALID_SHEET_CHARS.sub("_", name).strip() or "기타"
     return name[:31]
+
+
+def _document_order_key(r: Requirement) -> tuple[int, int, str]:
+    """RFP 원문 순서 정렬 키 — 페이지 → 표 인덱스 → 코드."""
+    page = r.source_page
+    try:
+        page_i = int(page) if page is not None else 10**6
+    except (TypeError, ValueError):
+        page_i = 10**6
+    table_i = r.source_table_index if isinstance(r.source_table_index, int) else 10**6
+    return (page_i, table_i, r.code or "")
 
 
 class RequirementSheetWriter:
@@ -41,7 +53,9 @@ class RequirementSheetWriter:
         columns: list[str] | None = None,
         adaptive: bool = True,
         extraction_meta: ExtractionMetadata | None = None,
+        layout: str = "cluster",
     ) -> Path:
+        """layout: "cluster"=분류별 시트(기술 중심) / "ordered"=RFP 원문 순서 단일 시트."""
         out_path.parent.mkdir(parents=True, exist_ok=True)
         recs = recommendations or {}
         judges = judgements or {}
@@ -81,16 +95,27 @@ class RequirementSheetWriter:
                 row.append(cat_sources.get(cat, ""))
             summary.append(row)
 
+        style_summary_sheet(summary)
+
         recs = recommendations or {}
         judges = judgements or {}
-        for cat, items in sorted(by_cat.items()):
-            ws = wb.create_sheet(title=_safe_sheet_name(cat))
+
+        if layout == "ordered":
+            # RFP 원문 순서(페이지→표→코드) 단일 시트
+            ordered = sorted(requirements, key=_document_order_key)
+            ws = wb.create_sheet(title="요구사항(원문순서)")
             ws.append(headers)
-            for r in items:
-                rec = recs.get(r.id)
-                jud = judges.get(r.id)
-                row = self._build_row(r, rec, jud, col_keys, mode)
-                ws.append(row)
+            for r in ordered:
+                ws.append(self._build_row(r, recs.get(r.id), judges.get(r.id), col_keys, mode))
+            style_data_sheet(ws, col_keys, len(ordered))
+        else:
+            # 분류별 시트(기술 중심)
+            for cat, items in sorted(by_cat.items()):
+                ws = wb.create_sheet(title=_safe_sheet_name(cat))
+                ws.append(headers)
+                for r in items:
+                    ws.append(self._build_row(r, recs.get(r.id), judges.get(r.id), col_keys, mode))
+                style_data_sheet(ws, col_keys, len(items))
 
         wb.save(out_path)
         return out_path
