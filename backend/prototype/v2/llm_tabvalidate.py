@@ -32,18 +32,22 @@ class _Result(BaseModel):
 def _prompt(samples: list[tuple[str, int, list[str]]]) -> str:
     blocks = []
     for tab, n, dets in samples:
-        ex = " / ".join(d[:70] for d in dets)
-        blocks.append(f"- 탭 '{tab}' ({n}건): {ex}")
+        lines = "\n".join(f"    · {d}" for d in dets)
+        blocks.append(f"- 탭 '{tab}' (총 {n}건, 대표 {len(dets)}건):\n{lines}")
     body = "\n".join(blocks)
     return (
         "RFP 요구사항 조견표의 탭 목록이다. 각 탭이 **제안사가 구축·이행할 시스템의 "
-        "기능·기술 요구사항**을 담은 진짜 조견표 탭인지 판정하라(keep).\n"
-        "keep=false(제거): 안내문(예: '다음을 참조하기 바랍니다'), 사업 개요/배경/범위 설명, "
-        "발주사 일반/현황, 제안서 작성요령·제출·평가·유의사항, 목차, 연락처, 일정·가격 등 "
-        "**요구사항 명세가 아닌 탭**.\n"
-        "keep=true: 기능/데이터/보안/인프라/성능/UX/AI 등 실제 요구사항 명세 탭.\n\n"
+        "기능·기술 요구사항**을 담은 진짜 조견표 탭인지 탭별로 판정하라(keep).\n"
+        "탭 이름만 보지 말고, 아래 대표 항목들의 '내용 성격'을 충분히 읽고 판단하라.\n\n"
+        "keep=false(제거):\n"
+        "  · 안내/참조문('…는 다음을 참조하기 바랍니다', '상세는 별첨')\n"
+        "  · 사업 개요·배경·목적·필요성·추진방향, **개발개념·추진체계·추진일정**\n"
+        "  · 발주사 일반현황, 제안서 작성요령·제출·평가·배점·유의사항, **목차/차례**\n"
+        "  · 연락처·일정·예산·가격 등 — **시스템 요구 명세가 아닌 것**\n"
+        "keep=true: 기능/데이터/보안/인프라/성능/연계/UX/AI/운영 등 '~해야 한다/제공/구축/지원'류 실제 요구 명세.\n"
+        "기준: 항목들이 *제안사가 만들/이행할 것*을 요구하면 keep, *발주사가 설명/안내*하면 false.\n\n"
         f"{body}\n\n"
-        '응답 JSON: {"verdicts": [{"tab": "...", "keep": <bool>, "reason": "..."}, ...]} — 모든 탭.'
+        '응답 JSON: {"verdicts": [{"tab": "...", "keep": <bool>, "reason": "근거 한 문장"}, ...]} — 모든 탭 빠짐없이.'
     )
 
 
@@ -59,17 +63,28 @@ async def validate_tabs(reqs: list[Req], protected: set[str] | None = None,
     cand = {t: items for t, items in by_tab.items() if t not in protected}
     if not cand:
         return reqs
-    # 탭당 샘플 5개(앞·중·뒤 고루) — 큰 탭도 신뢰성 있게 판정
-    samples = []
-    for t, items in cand.items():
-        idx = sorted({0, len(items) // 2, len(items) - 1, len(items) // 4, 3 * len(items) // 4})
-        samples.append((t, len(items), [items[i].detail for i in idx if i < len(items)]))
+    # 탭당 대표 표본을 넉넉히(최대 12건, 작은 탭은 전부) 고르게 추출 — 검수 신뢰성↑
+    def _pick(items: list[Req], k: int = 12) -> list[str]:
+        n = len(items)
+        if n <= k:
+            idxs = list(range(n))
+        else:
+            idxs = sorted({round(i * (n - 1) / (k - 1)) for i in range(k)})
+        out = []
+        for i in idxs:
+            top = (items[i].top or "").strip()
+            det = (items[i].detail or "").strip()
+            txt = f"{top} — {det}" if top and top not in det else det
+            out.append(txt[:200])
+        return out
+
+    samples = [(t, len(items), _pick(items)) for t, items in cand.items()]
     s = Settings()
     client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
     try:
         out = await client.structured_output(
             [Message(role="user", content=_prompt(samples))], _Result,
-            purpose="tab_validate", max_tokens=2500)
+            purpose="tab_validate", max_tokens=4000)
     except Exception:
         return reqs
     drop = {v.tab for v in out.verdicts if not v.keep and v.tab in cand}

@@ -102,12 +102,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell flex min-h-screen flex-col">
       {/* 상단 헤더 — kt 로고 + Easy제안 */}
-      <header className="topbar sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-[var(--border)] bg-white/90 px-4 py-3 backdrop-blur md:px-6">
+      <header className="topbar sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-[var(--border)] bg-white/90 px-4 py-2 backdrop-blur md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={toggleSidebar}
-            className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100"
+            className="grid h-8 w-8 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100"
             title={sidebarOpen ? "프로젝트 목록 닫기" : "프로젝트 목록 열기"}
             aria-label="프로젝트 목록 토글"
           >
@@ -116,7 +116,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="flex items-center gap-2.5">
             <Image src="/kt-logo.png" alt="kt" width={34} height={28} priority className="h-7 w-auto" />
             <span className="h-5 w-px bg-neutral-200" />
-            <span className="text-[17px] font-bold tracking-tight text-ink-900">Easy제안</span>
+            <span className="text-[15px] font-bold tracking-tight text-ink-900">Easy제안</span>
           </Link>
           {activeProject && (
             <span className="hidden min-w-0 items-center gap-2 md:flex">
@@ -145,10 +145,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
         <aside
           className={`sidebar z-20 shrink-0 overflow-hidden border-r border-[var(--border)] bg-white transition-[width] duration-200 ${
-            sidebarOpen ? "w-52" : "w-0"
+            sidebarOpen ? "w-48" : "w-0"
           } ${sidebarOpen ? "fixed inset-y-0 left-0 top-[57px] lg:static lg:top-0" : ""}`}
         >
-          <nav className="h-full w-52 overflow-y-auto p-2.5">
+          <nav className="h-full w-48 overflow-y-auto p-2">
             <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
               시작
             </p>
