@@ -131,8 +131,9 @@ export default function ReviewPageClient({
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [view, setView] = useState<"table" | "card">("table");
 
-  // 우측 원본 뷰어
+  // 상단 고정 원본 뷰어
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerCollapsed, setViewerCollapsed] = useState(true);
   const [viewerPage, setViewerPage] = useState<number | null>(null);
   const [viewerTable, setViewerTable] = useState<number | null>(null);
   const [viewerAnchor, setViewerAnchor] = useState<string | null>(null);
@@ -157,6 +158,7 @@ export default function ReviewPageClient({
     setViewerAnchor(null);
     setJumpNonce((n) => n + 1);
     setViewerOpen(true);
+    setViewerCollapsed(false);
   }, []);
 
   const openTable = useCallback((idx: number, anchor?: string) => {
@@ -165,6 +167,7 @@ export default function ReviewPageClient({
     setViewerPage(null);
     setJumpNonce((n) => n + 1);
     setViewerOpen(true);
+    setViewerCollapsed(false);
   }, []);
 
   useEffect(() => {
@@ -348,9 +351,12 @@ export default function ReviewPageClient({
               {canViewSource && (
                 <button
                   type="button"
-                  onClick={() => setViewerOpen((v) => !v)}
+                  onClick={() => {
+                    setViewerOpen((v) => !v);
+                    setViewerCollapsed(false);
+                  }}
                   className={`pill ${showViewer ? "pill-active" : "pill-idle"}`}
-                  title="우측에 원본 PDF 뷰어 표시 — 페이지 클릭 시 이동"
+                  title="상단에 원본 뷰어 표시 — 표에서 클릭 시 해당 위치로 이동"
                 >
                   📄 원본
                 </button>
@@ -436,37 +442,30 @@ export default function ReviewPageClient({
         </div>
       )}
 
-      {hasRequirements && filtered.length > 0 && (
-        <div className="flex items-start">
-          <div className="min-w-0 flex-1">
-            {view === "table" ? (
-              <RequirementTable
-                rows={filtered}
-                editorId={editorId}
-                remoteByReqId={remoteByReqId}
-                categoryFilterLabel={categoryFilterLabel}
-                onOpenPage={pageJumpEnabled ? openPage : undefined}
-                onOpenTable={tableJumpEnabled ? openTable : undefined}
-              />
-            ) : (
-              <div className="grid gap-3">
-                {filtered.map((v) => (
-                  <RequirementRow
-                    key={v.requirement.id}
-                    view={v}
-                    editorId={editorId}
-                    remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
-                    aiPending={!v.recommendation && !pipeline.aiComplete}
-                    onOpenPage={pageJumpEnabled ? openPage : undefined}
-                    onOpenTable={tableJumpEnabled ? openTable : undefined}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {showViewer && (
-            <aside className="ml-4 hidden h-[calc(100vh-5.5rem)] w-[24rem] shrink-0 lg:sticky lg:top-[4.5rem] lg:block xl:w-[28rem]">
+      {/* 상단 고정 원본 뷰어 — 표에서 클릭 시 이 패널로 뷰 이동 */}
+      {hasRequirements && showViewer && (
+        <div className="panel sticky top-[57px] z-10 mb-4 overflow-hidden">
+          {viewerCollapsed ? (
+            <button
+              type="button"
+              onClick={() => setViewerCollapsed(false)}
+              className="flex w-full items-center justify-between px-4 py-2 text-left transition hover:bg-neutral-50"
+            >
+              <span className="flex items-center gap-2 text-xs">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                  원본 뷰어
+                </span>
+                <span className="text-neutral-500">
+                  {sourceFilename ?? "미리보기"}
+                </span>
+                {viewerPage != null && (
+                  <span className="pill border-ktred-200 bg-ktred-50 text-ktred-700">p.{viewerPage}</span>
+                )}
+              </span>
+              <span className="text-[11px] font-medium text-neutral-500">펼치기 ▾</span>
+            </button>
+          ) : (
+            <div className="h-[42vh] min-h-[300px]">
               <PdfViewerPane
                 docId={docId}
                 kind={previewKind === "html" ? "html" : "pdf"}
@@ -475,9 +474,39 @@ export default function ReviewPageClient({
                 anchorText={viewerAnchor}
                 jumpNonce={jumpNonce}
                 sourceFilename={sourceFilename}
+                onCollapse={() => setViewerCollapsed(true)}
                 onClose={() => setViewerOpen(false)}
               />
-            </aside>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasRequirements && filtered.length > 0 && (
+        <div className="w-full">
+          {view === "table" ? (
+            <RequirementTable
+              rows={filtered}
+              editorId={editorId}
+              remoteByReqId={remoteByReqId}
+              categoryFilterLabel={categoryFilterLabel}
+              onOpenPage={pageJumpEnabled ? openPage : undefined}
+              onOpenTable={tableJumpEnabled ? openTable : undefined}
+            />
+          ) : (
+            <div className="grid gap-3">
+              {filtered.map((v) => (
+                <RequirementRow
+                  key={v.requirement.id}
+                  view={v}
+                  editorId={editorId}
+                  remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
+                  aiPending={!v.recommendation && !pipeline.aiComplete}
+                  onOpenPage={pageJumpEnabled ? openPage : undefined}
+                  onOpenTable={tableJumpEnabled ? openTable : undefined}
+                />
+              ))}
+            </div>
           )}
         </div>
       )}

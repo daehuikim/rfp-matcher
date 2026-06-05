@@ -63,6 +63,7 @@ async def export_excel(
     mode: ExportMode = ExportMode.BOTH,
     cols: str | None = None,
     adaptive: bool = True,
+    layout: str = "cluster",
 ) -> FileResponse:
     if doc_id not in container.repo.documents:
         raise HTTPException(404, f"document 없음: {doc_id}")
@@ -70,11 +71,12 @@ async def export_excel(
     if not reqs:
         raise HTTPException(409, "추출된 요구사항 없음")
 
+    layout_key = "ordered" if layout == "ordered" else "cluster"
     column_keys = [c.strip() for c in cols.split(",")] if cols else None
 
     out_dir = container.settings.storage_root / doc_id / "exports"
     col_tag = cols.replace(",", "-")[:40] if cols else "adaptive"
-    out_path = out_dir / f"requirements_{mode.value}_{col_tag}.xlsx"
+    out_path = out_dir / f"requirements_{mode.value}_{layout_key}_{col_tag}.xlsx"
     RequirementSheetWriter().write(
         out_path,
         reqs,
@@ -83,6 +85,7 @@ async def export_excel(
         mode=mode,
         columns=column_keys,
         adaptive=adaptive,
+        layout=layout_key,
         extraction_meta=container.repo.documents.get(doc_id).extraction_meta
         if doc_id in container.repo.documents
         else None,

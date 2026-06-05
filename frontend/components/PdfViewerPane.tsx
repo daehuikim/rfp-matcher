@@ -20,6 +20,7 @@ export function PdfViewerPane({
   jumpNonce,
   sourceFilename,
   onClose,
+  onCollapse,
 }: {
   docId: string;
   kind: "pdf" | "html";
@@ -29,6 +30,7 @@ export function PdfViewerPane({
   jumpNonce: number;
   sourceFilename?: string | null;
   onClose?: () => void;
+  onCollapse?: () => void;
 }) {
   const previewUrl = documentPreviewUrl(docId);
   const isPdf = kind === "pdf";
@@ -189,6 +191,16 @@ export function PdfViewerPane({
           >
             ↗ 새 탭
           </a>
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="rounded-md px-2 py-1 text-[11px] font-medium text-neutral-500 hover:bg-neutral-50 hover:text-ink-900"
+              title="뷰어 접기"
+            >
+              접기 ▴
+            </button>
+          )}
           {onClose && (
             <button
               type="button"

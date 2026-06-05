@@ -172,8 +172,9 @@ export function exportUrl(
   docId: string,
   mode: "ai" | "human" | "both",
   cols?: string[],
+  layout: "cluster" | "ordered" = "cluster",
 ): string {
-  const params = new URLSearchParams({ mode });
+  const params = new URLSearchParams({ mode, layout });
   if (cols?.length) params.set("cols", cols.join(","));
   else params.set("adaptive", "true");
   return `${apiBase()}/documents/${docId}/export?${params.toString()}`;
