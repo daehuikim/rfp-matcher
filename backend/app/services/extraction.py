@@ -252,6 +252,21 @@ class ExtractionService:
                 bucket.mkdir(parents=True, exist_ok=True)
                 (bucket / "v2_export.pkl").write_bytes(blob)
 
+            # 재오픈 시 재실행(스피너) 방지 — 추출 결과를 아티팩트 캐시에 저장
+            try:
+                html_src = (manifest.get("artifacts") or {}).get("source_html")
+                if html_src and Path(html_src).is_file():
+                    cache = ArtifactCache(self._c.settings.artifact_cache_dir)
+                    cache.save_extraction(
+                        document=document,
+                        requirements=requirements,
+                        html_path=Path(html_src),
+                        extraction_meta=None,
+                        event_bus=self._c.event_bus,
+                    )
+            except Exception:  # noqa: BLE001
+                logger.warning("V2 추출 캐시 저장 실패(무시)", exc_info=True)
+
             await self._pipeline.emit(
                 document.id,
                 PipelineStage.READY_FOR_REVIEW,

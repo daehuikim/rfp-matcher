@@ -20,7 +20,6 @@ import { useActiveProjectNavItem } from "@/context/WorkspaceProvider";
 import { removeWorkspaceSession } from "@/lib/workspace";
 import { ExportPanel } from "@/components/ExportPanel";
 import { ProjectTitleEditor } from "@/components/ProjectTitleEditor";
-import { RequirementRow } from "@/components/RequirementRow";
 import { RequirementTable } from "@/components/RequirementTable";
 import { PdfViewerPane } from "@/components/PdfViewerPane";
 import { PipelineStatus } from "@/components/PipelineStatus";
@@ -28,7 +27,6 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import { usePipelineProgress } from "@/hooks/usePipelineProgress";
 
 type Filter = "all" | "O" | "△" | "X" | "pending";
-type CategoryFilter = "all" | string;
 
 function useEditorId(): string {
   return useMemo(() => {
@@ -128,8 +126,6 @@ export default function ReviewPageClient({
   }, [docId, router]);
 
   const [filter, setFilter] = useState<Filter>("all");
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
-  const [view, setView] = useState<"table" | "card">("table");
 
   // 상단 고정 원본 뷰어
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -214,28 +210,12 @@ export default function ReviewPageClient({
     return init;
   }, [rows]);
 
-  const categoryStats = useMemo(() => {
-    if (!rows.length) return [];
-    const counts = new Map<string, number>();
-    for (const v of rows) {
-      const cat = v.requirement.category || "미분류";
-      counts.set(cat, (counts.get(cat) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .sort(([a], [b]) => a.localeCompare(b, "ko"))
-      .map(([name, count]) => ({ name, count }));
-  }, [rows]);
-
   const filtered = useMemo(() => {
     if (!rows.length) return [];
-    let list = rows;
-    if (categoryFilter !== "all") {
-      list = list.filter((v) => v.requirement.category === categoryFilter);
-    }
-    if (filter === "all") return list;
-    if (filter === "pending") return list.filter((v) => !v.judgement?.mark);
-    return list.filter((v) => v.judgement?.mark === filter);
-  }, [rows, filter, categoryFilter]);
+    if (filter === "all") return rows;
+    if (filter === "pending") return rows.filter((v) => !v.judgement?.mark);
+    return rows.filter((v) => v.judgement?.mark === filter);
+  }, [rows, filter]);
 
   const hasRequirements = rows.length > 0;
   const canExport = hasRequirements || pipeline.extractionReady;
@@ -244,7 +224,7 @@ export default function ReviewPageClient({
     : "분류";
 
   return (
-    <div className={view === "table" ? "w-full" : "mx-auto max-w-5xl"}>
+    <div className="w-full">
       <PipelineStatus
         projectTitle={projectTitle}
         sourceFilename={sourceFilename}
@@ -273,20 +253,6 @@ export default function ReviewPageClient({
           <ExportPanel docId={docId} disabled={!canExport} sourceName={sourceFilename} />
         </div>
 
-        {extractionProfile &&
-          (hasRequirements || pipeline.extractionReady) &&
-          !extractionProfile.has_requirement_category_column && (
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] leading-relaxed text-amber-950">
-            <p className="font-semibold">분류 명세</p>
-            <p className="mt-1">{extractionProfile.spec}</p>
-            {extractionProfile.has_inferred_categories && (
-              <p className="mt-1 text-amber-800">
-                「시스템 추론」·「섹션 구조」 표시는 원문 「요건 구분」이 아닌 자동 부여 분류입니다.
-              </p>
-            )}
-          </div>
-        )}
-
         {hasRequirements && (
           <div className="mt-3 grid grid-cols-2 gap-1.5 md:grid-cols-5">
             <Stat label="총 요건" value={stats.total} />
@@ -294,36 +260,6 @@ export default function ReviewPageClient({
             <Stat label="△" value={stats["△"]} />
             <Stat label="X" value={stats.X} />
             <Stat label="AI" value={`${stats.aiCovered}/${stats.total}`} />
-          </div>
-        )}
-
-        {hasRequirements && categoryStats.length > 0 && view === "card" && (
-          <div className="mt-4">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
-              {categoryFilterLabel} ({stats.total}건)
-            </p>
-            <div className="flex flex-wrap gap-1.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setCategoryFilter("all")}
-                className={`pill ${categoryFilter === "all" ? "pill-active" : "pill-idle"}`}
-              >
-                전체 {stats.total}
-              </button>
-              {categoryStats.map(({ name, count }) => (
-                <button
-                  key={name}
-                  type="button"
-                  title={name}
-                  onClick={() => setCategoryFilter(name)}
-                  className={`pill max-w-full truncate ${
-                    categoryFilter === name ? "pill-active" : "pill-idle"
-                  }`}
-                >
-                  {name} {count}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
@@ -347,37 +283,19 @@ export default function ReviewPageClient({
               ↻
             </button>
 
-            <span className="ml-auto inline-flex items-center gap-1.5">
-              {canViewSource && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewerOpen((v) => !v);
-                    setViewerCollapsed(false);
-                  }}
-                  className={`pill ${showViewer ? "pill-active" : "pill-idle"}`}
-                  title="상단에 원본 뷰어 표시 — 표에서 클릭 시 해당 위치로 이동"
-                >
-                  📄 원본
-                </button>
-              )}
-              <span className="inline-flex overflow-hidden rounded-lg border border-neutral-200">
-                {(["table", "card"] as const).map((vmode) => (
-                  <button
-                    key={vmode}
-                    type="button"
-                    onClick={() => setView(vmode)}
-                    className={`px-3 py-1 font-medium transition ${
-                      view === vmode
-                        ? "bg-ink-900 text-white"
-                        : "bg-white text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {vmode === "table" ? "표" : "카드"}
-                  </button>
-                ))}
-              </span>
-            </span>
+            {canViewSource && (
+              <button
+                type="button"
+                onClick={() => {
+                  setViewerOpen((v) => !v);
+                  setViewerCollapsed(false);
+                }}
+                className={`pill ml-auto ${showViewer ? "pill-active" : "pill-idle"}`}
+                title="상단에 문서 뷰어 표시 — 표에서 클릭 시 해당 위치로 이동"
+              >
+                📄 문서 viewer
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -392,9 +310,6 @@ export default function ReviewPageClient({
         <div className="panel border-rose-200 bg-rose-50 p-8 text-center">
           <p className="text-sm font-medium text-rose-800">추출 실패</p>
           <p className="mt-2 text-xs text-rose-700">{pipeline.error}</p>
-          <p className="mt-4 text-xs text-slate-500">
-            백엔드를 재시작한 뒤 PDF_CONVERTER=pymupdf 로 다시 업로드하세요.
-          </p>
           <a href="/" className="btn-primary mt-4 inline-flex">
             홈에서 다시 시도
           </a>
@@ -404,7 +319,7 @@ export default function ReviewPageClient({
       {!hasRequirements && !isLoading && !pipeline.error && (
         <div className="panel p-8 text-center">
           <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-ktred-100 border-t-ktred-500" />
-          <p className="text-sm font-medium text-slate-800">HTML 변환 후 조견표를 한 줄씩 추출 중</p>
+          <p className="text-sm font-medium text-slate-800">원문 변환·요구사항 추출 중</p>
           <p className="mt-1 font-mono text-lg font-semibold text-ktred-600">
             {pipeline.displayTime}
           </p>
@@ -414,7 +329,7 @@ export default function ReviewPageClient({
             </p>
           )}
           <p className="mt-2 text-xs text-slate-500">
-            추출된 줄은 아래 목록에 바로 표시됩니다. AI 검토는 조견표 완료 후 한 줄씩 진행됩니다.
+            추출이 끝나면 표가 표시되고, AI 검토가 한 줄씩 진행됩니다.
           </p>
         </div>
       )}
@@ -483,32 +398,14 @@ export default function ReviewPageClient({
       )}
 
       {hasRequirements && filtered.length > 0 && (
-        <div className="w-full">
-          {view === "table" ? (
-            <RequirementTable
-              rows={filtered}
-              editorId={editorId}
-              remoteByReqId={remoteByReqId}
-              categoryFilterLabel={categoryFilterLabel}
-              onOpenPage={pageJumpEnabled ? openPage : undefined}
-              onOpenTable={tableJumpEnabled ? openTable : undefined}
-            />
-          ) : (
-            <div className="grid gap-3">
-              {filtered.map((v) => (
-                <RequirementRow
-                  key={v.requirement.id}
-                  view={v}
-                  editorId={editorId}
-                  remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
-                  aiPending={!v.recommendation && !pipeline.aiComplete}
-                  onOpenPage={pageJumpEnabled ? openPage : undefined}
-                  onOpenTable={tableJumpEnabled ? openTable : undefined}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        <RequirementTable
+          rows={filtered}
+          editorId={editorId}
+          remoteByReqId={remoteByReqId}
+          categoryFilterLabel={categoryFilterLabel}
+          onOpenPage={pageJumpEnabled ? openPage : undefined}
+          onOpenTable={tableJumpEnabled ? openTable : undefined}
+        />
       )}
 
       <ScrollToTop />
