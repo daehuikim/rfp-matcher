@@ -6,8 +6,8 @@ import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from app.api.deps import ContainerDep
@@ -298,6 +298,7 @@ class DocumentMetaResponse(BaseModel):
     has_source_file: bool = False  # 원본 파일을 /source 로 받을 수 있는지
     has_preview: bool = False  # /preview 로 우측 뷰어에 표시 가능한지 (PDF·변환·HTML)
     is_pdf: bool = False  # 원본이 PDF인지 (페이지 점프 가능 여부)
+    preview_kind: str = "none"  # "pdf" | "html" | "none" — 위치 이동 방식 결정
 
 
 def _source_path(doc) -> Path | None:
@@ -331,6 +332,44 @@ def _converted_html_path(container, doc) -> Path | None:
         if p.is_file():
             return p
     return None
+
+
+# 변환 HTML은 보통 CSS가 없어 브라우저 기본 명조체로 렌더된다.
+# 가독성 좋은 한글 sans-serif + 표 테두리/여백을 주입한다.
+_VIEWER_STYLE = """
+<style id="rfp-viewer-style">
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+html, body {
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif !important;
+  font-size: 15px; line-height: 1.75; color: #1a1a1a; background: #fff;
+  margin: 0; padding: 28px 32px; max-width: 1000px;
+  -webkit-font-smoothing: antialiased;
+}
+* { font-family: inherit !important; letter-spacing: -0.01em; }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+td, th { border: 1px solid #d4d4d8; padding: 7px 10px; vertical-align: top; text-align: left; }
+th { background: #f4f4f5; font-weight: 600; }
+tr:nth-child(even) td { background: #fafafa; }
+p { margin: 8px 0; }
+img { max-width: 100%; height: auto; }
+h1, h2, h3 { font-weight: 700; line-height: 1.4; margin: 20px 0 8px; }
+</style>
+"""
+
+
+def _inject_viewer_style(html: str) -> str:
+    """변환 HTML에 가독성 스타일 주입 (head 닫기 직전 / 없으면 body 시작 / 맨 앞)."""
+    low = html.lower()
+    idx = low.find("</head>")
+    if idx != -1:
+        return html[:idx] + _VIEWER_STYLE + html[idx:]
+    idx = low.find("<body")
+    if idx != -1:
+        gt = html.find(">", idx)
+        if gt != -1:
+            return html[: gt + 1] + _VIEWER_STYLE + html[gt + 1 :]
+    return _VIEWER_STYLE + html
 
 
 async def _ensure_preview_pdf(container, doc) -> Path | None:
@@ -403,6 +442,23 @@ def _has_preview(container, doc) -> bool:
     return _converted_html_path(container, doc) is not None
 
 
+def _preview_kind(container, doc) -> str:
+    """뷰어가 받을 미리보기 형태 — 변환 시도 없이 결정.
+
+    - "pdf"  : PDF 원본(페이지 점프) 또는 PDF 변환 예정
+    - "html" : 추출 단계 converted.html (표 인덱스 앵커로 위치 이동 가능)
+    - "none" : 미리보기 불가
+    비-PDF는 위치 앵커(source_table_index)가 살아있는 HTML을 우선한다.
+    """
+    if str(doc.mime) == "application/pdf" and _source_path(doc) is not None:
+        return "pdf"
+    if _converted_html_path(container, doc) is not None:
+        return "html"
+    if _source_path(doc) is not None:
+        return "pdf"  # LibreOffice 변환 예정
+    return "none"
+
+
 @router.get("/{doc_id}/meta", response_model=DocumentMetaResponse)
 async def get_document_meta(doc_id: str, container: ContainerDep) -> DocumentMetaResponse:
     if doc_id not in container.repo.documents:
@@ -418,34 +474,49 @@ async def get_document_meta(doc_id: str, container: ContainerDep) -> DocumentMet
         has_source_file=_source_path(doc) is not None,
         has_preview=_has_preview(container, doc),
         is_pdf=str(doc.mime) == "application/pdf",
+        preview_kind=_preview_kind(container, doc),
     )
 
 
 @router.get("/{doc_id}/preview")
-async def get_document_preview(doc_id: str, container: ContainerDep) -> FileResponse:
+async def get_document_preview(doc_id: str, container: ContainerDep) -> Response:
     """우측 뷰어용 미리보기 — 어떤 포맷이든 볼 수 있는 형태로 제공.
 
-    우선순위: ① PDF 원본 그대로 → ② LibreOffice PDF 변환(캐시) →
-    ③ 추출 단계 converted.html (HWPX 등 변환 불가 시).
+    우선순위:
+    ① PDF 원본 → 그대로 (source_page 로 페이지 점프)
+    ② 비-PDF → 추출 단계 converted.html (source_table_index 앵커로 위치 이동)
+    ③ HTML 없으면 → LibreOffice PDF 변환 (표시 전용)
     """
     if doc_id not in container.repo.documents:
         raise HTTPException(404, f"document 없음: {doc_id}")
     doc = container.repo.documents[doc_id]
 
+    # ① PDF 원본
+    if str(doc.mime) == "application/pdf":
+        p = _source_path(doc)
+        if p is not None:
+            return FileResponse(
+                p,
+                media_type="application/pdf",
+                content_disposition_type="inline",
+                headers={"Cache-Control": "private, max-age=3600"},
+            )
+
+    # ② 비-PDF는 위치 앵커가 살아있는 converted.html 우선 (가독성 스타일 주입)
+    html = _converted_html_path(container, doc)
+    if html is not None:
+        styled = _inject_viewer_style(html.read_text(encoding="utf-8", errors="replace"))
+        return HTMLResponse(
+            content=styled,
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+    # ③ HTML 없으면 LibreOffice PDF 변환 (표시 전용, 앵커 없음)
     pdf = await _ensure_preview_pdf(container, doc)
     if pdf is not None:
         return FileResponse(
             pdf,
             media_type="application/pdf",
-            content_disposition_type="inline",
-            headers={"Cache-Control": "private, max-age=3600"},
-        )
-
-    html = _converted_html_path(container, doc)
-    if html is not None:
-        return FileResponse(
-            html,
-            media_type="text/html; charset=utf-8",
             content_disposition_type="inline",
             headers={"Cache-Control": "private, max-age=3600"},
         )

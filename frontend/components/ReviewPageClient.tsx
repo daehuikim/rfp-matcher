@@ -131,34 +131,88 @@ export default function ReviewPageClient({
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [view, setView] = useState<"table" | "card">("table");
 
-  // 우측 원본 뷰어 (PDF only)
+  // 우측 원본 뷰어
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerPage, setViewerPage] = useState<number | null>(null);
+  const [viewerTable, setViewerTable] = useState<number | null>(null);
   const [jumpNonce, setJumpNonce] = useState(0);
   const autoOpened = useRef(false);
 
-  // 어떤 포맷이든 미리보기 가능(PDF·DOCX 변환·HWPX HTML 폴백)
-  const canViewSource = docMeta?.has_preview === true;
-  const isPdf = docMeta?.is_pdf === true;
-  // 페이지 점프는 PDF 원본에만 (비-PDF는 source_page 미기록)
-  const pageJumpEnabled = isPdf;
+  // 미리보기 형태: PDF(페이지 점프) | HTML(표 인덱스 앵커 스크롤)
+  const previewKind = (docMeta?.preview_kind ?? "none") as "pdf" | "html" | "none";
+  const canViewSource = docMeta?.has_preview === true && previewKind !== "none";
   const anyPage = useMemo(() => rows.some((v) => v.requirement.source_page != null), [rows]);
+  const anyTable = useMemo(
+    () => rows.some((v) => v.requirement.source_table_index != null),
+    [rows],
+  );
+  // 페이지 점프는 PDF 원본, 위치(표) 점프는 HTML 미리보기에서
+  const pageJumpEnabled = previewKind === "pdf" && anyPage;
+  const tableJumpEnabled = previewKind === "html" && anyTable;
 
   const openPage = useCallback((p: number) => {
     setViewerPage(p);
+    setViewerTable(null);
+    setJumpNonce((n) => n + 1);
+    setViewerOpen(true);
+  }, []);
+
+  const openTable = useCallback((idx: number) => {
+    setViewerTable(idx);
+    setViewerPage(null);
     setJumpNonce((n) => n + 1);
     setViewerOpen(true);
   }, []);
 
   useEffect(() => {
-    // PDF는 페이지가 있을 때, 비-PDF(변환/HTML)는 바로 자동 오픈
-    if (!autoOpened.current && canViewSource && (!pageJumpEnabled || anyPage)) {
+    if (!autoOpened.current && canViewSource) {
       autoOpened.current = true;
       setViewerOpen(true);
     }
-  }, [canViewSource, pageJumpEnabled, anyPage]);
+  }, [canViewSource]);
 
   const showViewer = viewerOpen && canViewSource;
+
+  // 뷰어 폭 — 드래그로 조절 (조견표 가림 방지)
+  const [viewerWidth, setViewerWidth] = useState(440);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("rfp-viewer-width");
+    if (saved) {
+      const n = parseInt(saved, 10);
+      if (Number.isFinite(n)) setViewerWidth(Math.min(900, Math.max(300, n)));
+    }
+  }, []);
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!draggingRef.current) return;
+      // 오른쪽 가장자리에서 커서까지 = 뷰어 폭
+      const w = window.innerWidth - e.clientX - 16;
+      setViewerWidth(Math.min(Math.min(900, window.innerWidth - 420), Math.max(300, w)));
+    }
+    function onUp() {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      window.localStorage.setItem("rfp-viewer-width", String(viewerWidth));
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [viewerWidth]);
+
+  const startDrag = useCallback(() => {
+    draggingRef.current = true;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+  }, []);
   const [remoteByReqId, setRemoteByReqId] = useState<
     Record<string, { mark: Judgement; note: string; editor_id: string }>
   >({});
@@ -421,7 +475,7 @@ export default function ReviewPageClient({
       )}
 
       {hasRequirements && filtered.length > 0 && (
-        <div className="flex items-start gap-4">
+        <div className="flex items-start">
           <div className="min-w-0 flex-1">
             {view === "table" ? (
               <RequirementTable
@@ -430,6 +484,7 @@ export default function ReviewPageClient({
                 remoteByReqId={remoteByReqId}
                 categoryFilterLabel={categoryFilterLabel}
                 onOpenPage={pageJumpEnabled ? openPage : undefined}
+                onOpenTable={tableJumpEnabled ? openTable : undefined}
               />
             ) : (
               <div className="grid gap-3">
@@ -441,6 +496,7 @@ export default function ReviewPageClient({
                     remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
                     aiPending={!v.recommendation && !pipeline.aiComplete}
                     onOpenPage={pageJumpEnabled ? openPage : undefined}
+                    onOpenTable={tableJumpEnabled ? openTable : undefined}
                   />
                 ))}
               </div>
@@ -448,16 +504,32 @@ export default function ReviewPageClient({
           </div>
 
           {showViewer && (
-            <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[34rem] shrink-0 lg:block xl:w-[40rem]">
-              <PdfViewerPane
-                docId={docId}
-                page={viewerPage}
-                jumpNonce={jumpNonce}
-                sourceFilename={sourceFilename}
-                isPdf={isPdf}
-                onClose={() => setViewerOpen(false)}
-              />
-            </aside>
+            <>
+              {/* 드래그 핸들 — 뷰어/조견표 폭 조절 */}
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                onMouseDown={startDrag}
+                className="group sticky top-4 hidden h-[calc(100vh-2rem)] w-3 shrink-0 cursor-col-resize items-center justify-center lg:flex"
+                title="드래그하여 뷰어 폭 조절"
+              >
+                <span className="h-10 w-1 rounded-full bg-neutral-300 transition group-hover:bg-ktred-400" />
+              </div>
+              <aside
+                className="sticky top-4 hidden h-[calc(100vh-2rem)] shrink-0 lg:block"
+                style={{ width: viewerWidth }}
+              >
+                <PdfViewerPane
+                  docId={docId}
+                  kind={previewKind === "html" ? "html" : "pdf"}
+                  page={viewerPage}
+                  tableIndex={viewerTable}
+                  jumpNonce={jumpNonce}
+                  sourceFilename={sourceFilename}
+                  onClose={() => setViewerOpen(false)}
+                />
+              </aside>
+            </>
           )}
         </div>
       )}
