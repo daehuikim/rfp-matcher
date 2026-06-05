@@ -76,7 +76,7 @@ export function ProjectTitleEditor({ docId, initialTitle }: Props) {
             setDraft(title);
             setEditing(true);
           }}
-          className="mt-0.5 block max-w-full truncate text-left text-xl font-bold tracking-tight text-ink-900 hover:text-ktred-600"
+          className="mt-0.5 block max-w-full truncate text-left text-base font-bold tracking-tight text-ink-900 hover:text-ktred-600"
           title="클릭하여 프로젝트명 변경"
         >
           {title || initialTitle || "프로젝트 불러오는 중…"}
