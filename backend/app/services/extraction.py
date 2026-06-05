@@ -198,6 +198,31 @@ class ExtractionService:
 
         return document.id
 
+    async def _v2_input_path(self, document: Document) -> str:
+        """V2 엔진 입력 경로.
+
+        V2 `run()`은 .pdf(opendataloader)·.html 만 받는다. HWPX/DOC/DOCX 는
+        앱 컨버터(HwpxConverter·LibreOffice·mammoth)로 HTML 변환 후 그 경로를
+        넘겨 V2의 HTML 추출경로(grids_from_html)를 태운다. 법제처 hwpx 가
+        이 경로로 gold recall 100%.
+        """
+        import shutil
+
+        src = Path(document.src_path)
+        ext = src.suffix.lower()
+        if ext in (".pdf", ".html", ".htm"):
+            return str(src)
+        out_dir = self._c.settings.storage_root / document.id / "v2_convert"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        converter = select_converter(document.mime, self._c.settings)
+        html_doc = await converter.convert(document, out_dir)
+        # V2가 의미있는 doc 이름을 쓰도록 원본 stem 으로 복사
+        stem = Path(document.source_filename).stem if document.source_filename else document.id
+        nice = out_dir / f"{stem}.html"
+        if Path(html_doc.html_path) != nice:
+            shutil.copyfile(html_doc.html_path, nice)
+        return str(nice)
+
     async def _run_v2(self, document: Document) -> str:
         """prototype/v2 엔진으로 추출 — results_final 산출 파이프라인."""
         import pickle
@@ -213,9 +238,11 @@ class ExtractionService:
             from prototype.v2.pipeline import run as v2_run
 
             tab_mode = self._c.settings.v2_tab_mode
+            # PDF/HTML은 그대로, HWPX/DOC/DOCX는 앱 컨버터로 HTML 변환 후 V2에 투입
+            v2_input = await self._v2_input_path(document)
             # V2는 동기·블로킹(opendataloader + LLM) → 스레드에서 실행
             manifest = await asyncio.to_thread(
-                v2_run, str(document.src_path), None, mode="llm", tab_mode=tab_mode
+                v2_run, v2_input, None, mode="llm", tab_mode=tab_mode
             )
             v2_reqs = manifest.get("_reqs") or []
             overview = manifest.get("_overview")
