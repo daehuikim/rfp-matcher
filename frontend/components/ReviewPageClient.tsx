@@ -137,8 +137,11 @@ export default function ReviewPageClient({
   const [jumpNonce, setJumpNonce] = useState(0);
   const autoOpened = useRef(false);
 
-  const canViewSource =
-    docMeta?.mime === "application/pdf" && docMeta?.has_source_file === true;
+  // 어떤 포맷이든 미리보기 가능(PDF·DOCX 변환·HWPX HTML 폴백)
+  const canViewSource = docMeta?.has_preview === true;
+  const isPdf = docMeta?.is_pdf === true;
+  // 페이지 점프는 PDF 원본에만 (비-PDF는 source_page 미기록)
+  const pageJumpEnabled = isPdf;
   const anyPage = useMemo(() => rows.some((v) => v.requirement.source_page != null), [rows]);
 
   const openPage = useCallback((p: number) => {
@@ -148,11 +151,12 @@ export default function ReviewPageClient({
   }, []);
 
   useEffect(() => {
-    if (!autoOpened.current && canViewSource && anyPage) {
+    // PDF는 페이지가 있을 때, 비-PDF(변환/HTML)는 바로 자동 오픈
+    if (!autoOpened.current && canViewSource && (!pageJumpEnabled || anyPage)) {
       autoOpened.current = true;
       setViewerOpen(true);
     }
-  }, [canViewSource, anyPage]);
+  }, [canViewSource, pageJumpEnabled, anyPage]);
 
   const showViewer = viewerOpen && canViewSource;
   const [remoteByReqId, setRemoteByReqId] = useState<
@@ -425,7 +429,7 @@ export default function ReviewPageClient({
                 editorId={editorId}
                 remoteByReqId={remoteByReqId}
                 categoryFilterLabel={categoryFilterLabel}
-                onOpenPage={canViewSource ? openPage : undefined}
+                onOpenPage={pageJumpEnabled ? openPage : undefined}
               />
             ) : (
               <div className="grid gap-3">
@@ -436,7 +440,7 @@ export default function ReviewPageClient({
                     editorId={editorId}
                     remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
                     aiPending={!v.recommendation && !pipeline.aiComplete}
-                    onOpenPage={canViewSource ? openPage : undefined}
+                    onOpenPage={pageJumpEnabled ? openPage : undefined}
                   />
                 ))}
               </div>
@@ -450,6 +454,7 @@ export default function ReviewPageClient({
                 page={viewerPage}
                 jumpNonce={jumpNonce}
                 sourceFilename={sourceFilename}
+                isPdf={isPdf}
                 onClose={() => setViewerOpen(false)}
               />
             </aside>
