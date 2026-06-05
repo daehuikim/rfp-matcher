@@ -62,6 +62,10 @@ class ExtractionService:
             except Exception:
                 logger.warning("캐시 복원 실패 — 전체 파이프라인 재실행", exc_info=True)
 
+        # V2 엔진(results_final 산출) — opendataloader→LLM 스키마 추출
+        if self._c.settings.extraction_engine == "v2":
+            return await self._run_v2(document)
+
         try:
             tracker = self._c.llm_tracker(document.id)
             llm_meta = {
@@ -193,6 +197,101 @@ class ExtractionService:
         asyncio.create_task(self._recommend_background(document.id, use_cache=True))
 
         return document.id
+
+    async def _run_v2(self, document: Document) -> str:
+        """prototype/v2 엔진으로 추출 — results_final 산출 파이프라인."""
+        import pickle
+
+        try:
+            tracker = self._c.llm_tracker(document.id)
+            llm_meta = {
+                "llm_provider": self._c.settings.llm_provider,
+                "llm_model": self._c.active_llm_model(),
+            }
+            await self._pipeline.emit(document.id, PipelineStage.CONVERTING, payload=llm_meta)
+
+            from prototype.v2.pipeline import run as v2_run
+
+            tab_mode = self._c.settings.v2_tab_mode
+            # V2는 동기·블로킹(opendataloader + LLM) → 스레드에서 실행
+            manifest = await asyncio.to_thread(
+                v2_run, str(document.src_path), None, mode="llm", tab_mode=tab_mode
+            )
+            v2_reqs = manifest.get("_reqs") or []
+            overview = manifest.get("_overview")
+            await self._pipeline.emit(
+                document.id,
+                PipelineStage.ATOMIZED,
+                payload={"atoms": len(v2_reqs), "strategy": "v2", **llm_meta},
+            )
+
+            requirements = [self._v2_to_requirement(document.id, r) for r in v2_reqs]
+            await self._c.repo.save_document(document)
+            total = len(requirements)
+            for i, req in enumerate(requirements):
+                await self._c.repo.append_requirement(document.id, req)
+                await self._pipeline.emit(
+                    document.id,
+                    PipelineStage.ATOMIZING,
+                    payload={
+                        "done": i + 1,
+                        "total": total,
+                        "requirement_id": req.id,
+                        "snippet": f"V2 추출 {i + 1}/{total} · {(req.name or req.detail)[:48]}…",
+                    },
+                )
+
+            # V2 원본 reqs+overview 저장 (export = results_final 포맷)
+            payload = {"reqs": v2_reqs, "overview": overview, "tab_mode": tab_mode}
+            blob = pickle.dumps(payload)
+            doc_dir = self._c.settings.storage_root / document.id
+            doc_dir.mkdir(parents=True, exist_ok=True)
+            (doc_dir / "v2_export.pkl").write_bytes(blob)
+            if document.content_hash:
+                bucket = self._c.settings.artifact_cache_dir / document.content_hash[:16]
+                bucket.mkdir(parents=True, exist_ok=True)
+                (bucket / "v2_export.pkl").write_bytes(blob)
+
+            await self._pipeline.emit(
+                document.id,
+                PipelineStage.READY_FOR_REVIEW,
+                payload={
+                    "requirements": total,
+                    "snippet": f"V2 추출 {total}줄 완료 — Excel·검토 가능",
+                    "llm_usage": tracker.to_dict(),
+                    **llm_meta,
+                },
+            )
+        except Exception as e:  # noqa: BLE001
+            await self._pipeline.emit_failed(document.id, PipelineStage.READY_FOR_REVIEW, str(e))
+            raise
+
+        asyncio.create_task(self._recommend_background(document.id, use_cache=False))
+        return document.id
+
+    @staticmethod
+    def _v2_to_requirement(doc_id: str, r) -> Requirement:
+        cat = (getattr(r, "tab", "") or "미분류").strip() or "미분류"
+        mid = (getattr(r, "mid", "") or "").strip()
+        top = (getattr(r, "top", "") or "").strip()
+        detail = getattr(r, "detail", "") or ""
+        name = top or atom_title(detail) or (detail[:40] if detail else "")
+        return Requirement(
+            id=uuid.uuid4().hex,
+            doc_id=doc_id,
+            category=cat,
+            subcategory=mid or None,
+            category_source=CategorySource.DOCUMENT_TABLE,
+            subcategory_source=None,
+            code=getattr(r, "rid", "") or "",
+            name=name,
+            definition=mid or None,
+            detail=detail or name,
+            source_atomic_id=None,
+            source_page=getattr(r, "page", None),
+            source_section=(getattr(r, "section_path", "") or None),
+            source_table_index=getattr(r, "table_id", None),
+        )
 
     async def _recommend_background(self, doc_id: str, *, use_cache: bool) -> None:
         from app.services.recommendation import RecommendationService

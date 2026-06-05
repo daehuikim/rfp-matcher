@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
     llm_provider: Literal["openai", "anthropic", "fake"] = "openai"
+    # 추출 엔진: v2(prototype/v2 — results_final 산출 엔진) / legacy(기존 HTML 파이프라인)
+    extraction_engine: Literal["v2", "legacy"] = "v2"
+    v2_tab_mode: Literal["cluster", "ordered"] = "cluster"
     llm_model_openai: str = "gpt-4o"
     llm_model_anthropic: str = "claude-opus-4-7"
     llm_concurrency: int = 8
