@@ -1,13 +1,20 @@
 """
-탭 검수 — 각 탭이 '요구사항 조견표 탭'인지 LLM 이 **내용 기반**으로 판정해 비요구 탭 제거.
+탭 검수 — 문서 **전체 탭을 한 번에** 보고 '실제 상세 요구사항 조견표 탭'만 keep.
 
-핵심 판단: 각 항목이 *제안사(수주사)가 새로 구축·제공·준수·제시·이행해야 하는 요구*인가,
-아니면 *발주사가 이미 보유/운영 중인 현황·환경·사양을 서술*하거나 *개요/배경/목차/절차*인가.
-탭 이름이 안내문처럼 보여도 내용이 요구면 keep(이름 아니라 내용으로).
+탭을 하나씩 보면 요약/개요 탭('개발개념', '연구개발 개요')도 "기술 개발"이라 요구처럼
+보여 못 거른다. 전체를 같이 보여줘야 "어느 게 상세본이고 어느 게 요약본/총론/비요구인지"
+구조로 판단할 수 있다. 그래서 holistic(단일 호출)로 판정한다.
 
-탭별로 독립 판정(LLM 병렬). proposer_req_ratio(제안사 요구 항목 비율) < 0.5 면 제거.
-안전장치: 가장 큰 탭(주 요구사항)은 절대 제거하지 않고, drop_cap(40%) 초과 차단.
-LLM 실패/오류 시 보존(over-drop 방지).
+role:
+  · detail_requirement(keep): 제안사가 무엇을 해야 하는지 요구('~해야 함/구축/구현/준수/제시/마련').
+    '방안 제시·준수 방안'도 제안사 요구이므로 keep. 항목 수가 적어도 고유 요구면 keep.
+  · summary_of_others(false): 다른 탭에 동일 항목/기술이 더 상세히 중복되어, 이 탭은 한 줄 요약·나열만.
+    (반드시 '내용 중복'이 있어야 함. 짧다고 요약 아님.)
+  · overview/background/status/scope/guide/toc/process(false): 개요·배경·현황·범위·안내·목차·절차.
+
+안전장치: 가장 큰 탭(주 요구사항) 보존 + drop_cap(40%) 초과 차단 + LLM 실패 시 전체 보존.
+gold 검증: 법제처(SFR/DAR…) 0 제거 / 하나 프로젝트범위·영역별Task 제거, 요구탭 보존 /
+국방 개발개념·개요·필요성·과제제안요청서 제거.
 """
 from __future__ import annotations
 
@@ -24,98 +31,77 @@ from .extract import Req
 
 
 class _Verdict(BaseModel):
-    kind: str   # requirement|overview|background|status|scope|guide|toc|process
+    tab: str
+    role: str
     keep: bool
     reason: str
 
 
-def _tab_rows(items: list[Req], full_max: int = 40, big: int = 40) -> list[str]:
-    """탭의 행 텍스트(항목명/요구사항 :: 상세). 작은 탭은 전부, 큰 탭은 고르게 표본."""
+class _Result(BaseModel):
+    verdicts: list[_Verdict]
+
+
+def _rows(items: list[Req], cap: int = 30) -> list[str]:
+    """탭 항목 텍스트(항목명/요구사항 :: 상세, 200자). 큰 탭은 고르게 표본."""
     n = len(items)
-    idxs = list(range(n)) if n <= full_max else sorted(
-        {round(i * (n - 1) / (big - 1)) for i in range(big)})
+    idxs = list(range(n)) if n <= cap else sorted(
+        {round(i * (n - 1) / (cap - 1)) for i in range(cap)})
     out = []
     for i in idxs:
         top = (items[i].top or "").strip()
         mid = (items[i].mid or "").strip()
         det = (items[i].detail or "").strip()
         head = " / ".join(x for x in (top, mid) if x and x not in det)
-        out.append((f"{head} :: {det}" if head else det)[:140])
+        out.append((f"{head} :: {det}" if head else det)[:200])
     return out
 
 
-# 정답(gold) 기반 few-shot — '무엇이 요구인지(형태)'를 예시로 고정.
-_FEWSHOT = (
-    "'요구사항'은 제안사(수주사)가 무엇을 구축·제공·구현·준수·제시해야 하는지 명시한 "
-    "개별·검증가능한 진술이다.\n\n"
-    "[요구사항 O — 이런 형태이면 keep]\n"
-    "  · 사용자의 자연어 질문에서 의도를 분석하고 질의를 재구성하는 기능을 구현하여야 함\n"
-    "  · 고성능 벡터 DB 인프라를 구축하여 검색 성능을 고도화하여야 함\n"
-    "  · DB 구조 설계 시 향후 업무 변동에 따른 확장성을 충분히 고려하여야 함\n"
-    "  · 보안 규정·지침을 준수하고 보안약점 없이 개발하여야 함\n"
-    "  · 표준 H/W·S/W 아키텍처를 준수하고 그 준수 방안을 제안하여야 함  ← '준수/제안'은 제안사 행위 = 요구\n"
-    "  · 데이터 백업·생명주기 등 데이터 관리 방안을 제시하여야 함, 유지보수 방안을 마련하여야 함\n"
-    "    ← '~방안을 제시/마련/수립하여야 함'은 제안사가 해야 할 일을 요구하는 것 = 요구(keep)\n"
-    "  → 공통: 제안사가 '~하여야 함/구현/구축/제공/준수/제시/마련'. 기능·데이터·보안·인프라·성능·연계·운영.\n\n"
-    "[요구사항 X — 항목 다수가 이런 형태이면 그 탭은 제거]\n"
-    "  · 본 사업은 …를 구축하는 것을 목표로 한다 (overview: 개요)\n"
-    "  · 본 과제는 LLM 기반 자율전투체계 AI를 개발한다 / 개발개념: 통신 제한 상황에서도 작동하는…\n"
-    "    ← '개발개념·연구개발 개요'는 만들 시스템을 **큰 틀로 소개**하는 총론. 개별 '~해야 함' 명세가\n"
-    "      아니면 false(overview). 기술 내용이 들어가도 '소개·설명'이면 요구 아님.\n"
-    "  · 추진배경: 기존 시스템의 한계로 … / 본 과제의 필요성은 … (background: 배경/필요성)\n"
-    "  · 당행 K8S Worker CPU 64Core MEM 1024GB / 컨테이너 런타임 containerd / 환경 구분: 개발·운영\n"
-    "    ← 발주사가 **이미 보유·운영 중**인 환경·사양을 '나열·서술'(…이다/…로 구성)만 함 (status)\n"
-    "  · 본 사업 범위는 …를 포함한다 (scope: 범위 설명)\n"
-    "  · 상세 요구사항은 다음을 참조하기 바랍니다 (guide: 안내)\n"
-    "  · Ⅰ.사업개요 Ⅱ.사업내용 … (toc: 목차) / 추진일정·추진체계·예산 (process: 절차)\n\n"
-    "판정 규칙:\n"
-    "  · 항목 다수가 [요구사항 O] 형태(제안사가 무엇을 해야 함)면 keep=true.\n"
-    "  · 항목 다수가 [요구사항 X] 형태(발주사의 현황·개요·배경·범위·안내·목차·절차 '서술')면 false.\n"
-    "  · 헷갈리면: '제안사에게 행위를 요구'(해야 함/제시/마련/준수)면 O, '발주사가 가진 것/사업 설명'이면 X.\n"
-    "  · 탭 이름이 안내문 같아도 항목 내용이 요구 형태면 keep. 개발개념/개요/배경 총론은 false.\n\n"
-)
-
-
-def _prompt(tab: str, n: int, rows: list[str]) -> str:
-    body = "\n".join(f"  {i + 1}. {r}" for i, r in enumerate(rows))
+def _prompt(blocks: list[tuple[str, int, list[str]]]) -> str:
+    secs = []
+    for t, n, rows in blocks:
+        body = "\n".join(f"    {i + 1}. {r}" for i, r in enumerate(rows))
+        secs.append(f"### 탭 '{t}' ({n}건)\n{body}")
+    listing = "\n\n".join(secs)
     return (
-        _FEWSHOT
-        + f"## 탭 '{tab}' (총 {n}건)\n{body}\n\n"
-        + 'JSON: {"kind":"requirement|overview|background|status|scope|guide|toc|process",'
-          '"keep":<bool>,"reason":"한 문장"}'
+        "한 RFP 문서의 모든 '탭'과 각 탭 항목(전체)이다. "
+        "**실제 상세 요구사항 조견표 탭만 keep**, 나머지는 false.\n\n"
+        "role 분류:\n"
+        "- detail_requirement(keep): 제안사가 무엇을 해야 하는지의 요구. '~해야 함/구축/구현/준수/제시/마련' 형태.\n"
+        "  예: 'X 기능을 구현하여야 함', '표준 아키텍처를 준수하고 그 준수 방안을 제시하여야 함',\n"
+        "  '유지보수/확장 방안을 마련하여야 함'. ※ '방안을 제시/마련/수립'도 제안사 요구이므로 keep.\n"
+        "  ※ 항목 수가 적어도(7건 등) 고유 요구면 keep.\n"
+        "- summary_of_others(false): **다른 탭에 동일한 항목/기술이 더 상세히 중복**되어, 이 탭은\n"
+        "  그것을 한 줄씩 요약·나열만 하는 경우에만. (예: '개발개념'이 다른 상세 탭들의 기술명을 한 줄씩 열거.)\n"
+        "  반드시 '다른 탭과 내용 중복'이 있어야 함. **단지 짧거나 적다고 요약 아님. 고유 내용이면 keep.**\n"
+        "- overview/background(false): 사업 개요·목표·배경·필요성·개념 총론('233억 투자하여 ~ 목표로 함').\n"
+        "- status(false): 발주사 보유 현황·사양 나열. scope/toc/process/guide(false): 범위·목차·일정·안내.\n\n"
+        "먼저 detail_requirement 탭들을 정하고, 그것들과 **내용이 겹치는 요약본**만 summary로 빼라.\n\n"
+        f"{listing}\n\n"
+        'JSON: {"verdicts":[{"tab":"<탭명 그대로>","role":"<위 역할>","keep":<bool>,"reason":"한 문장"}, ...]}'
+        " — 모든 탭 빠짐없이."
     )
-
-
-async def _judge(client, tab: str, items: list[Req]) -> tuple[str, bool]:
-    try:
-        out = await client.structured_output(
-            [Message(role="user", content=_prompt(tab, len(items), _tab_rows(items)))],
-            _Verdict, purpose="tab_validate", max_tokens=300)
-        return tab, bool(out.keep)
-    except Exception:
-        return tab, True  # 실패 시 보존
 
 
 async def validate_tabs(reqs: list[Req], protected: set[str] | None = None,
                         drop_cap: float = 0.4) -> list[Req]:
-    """탭별 내용 기반 LLM 판정으로 비요구 탭 제거."""
+    """문서 전체 탭을 한 번에 LLM 판정 → 비요구/요약 탭 제거."""
     by_tab: "OrderedDict[str, list[Req]]" = OrderedDict()
     for r in reqs:
         by_tab.setdefault(r.tab, []).append(r)
     if len(by_tab) < 2:
         return reqs
 
+    blocks = [(t, len(items), _rows(items)) for t, items in by_tab.items()]
     s = Settings()
     client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
-    sem = asyncio.Semaphore(max(2, s.llm_concurrency))
+    try:
+        out = await client.structured_output(
+            [Message(role="user", content=_prompt(blocks))], _Result,
+            purpose="tab_validate", max_tokens=2500)
+    except Exception:
+        return reqs  # 실패 시 전체 보존
 
-    async def _guarded(t, items):
-        async with sem:
-            return await _judge(client, t, items)
-
-    results = await asyncio.gather(*[_guarded(t, items) for t, items in by_tab.items()])
-    drop = {t for t, keep in results if not keep}
-
+    drop = {v.tab for v in out.verdicts if not v.keep and v.tab in by_tab}
     # 안전장치: 가장 큰 탭(주 요구사항)은 절대 제거하지 않음
     largest = max(by_tab, key=lambda t: len(by_tab[t]))
     drop.discard(largest)
