@@ -51,7 +51,15 @@ export function PdfViewerPane({
     const tables = doc.querySelectorAll("table");
     const el = tables[idx] as HTMLElement | undefined;
     if (!el) return false;
-    el.scrollIntoView({ behavior: "auto", block: "center" });
+    // 변환 표는 매우 클 수 있어(레이아웃 표) 'start'로 상단에 맞춰야 유용함
+    el.scrollIntoView({ behavior: "auto", block: "start" });
+    // 상단에 약간 여백(헤더 가림 방지)
+    try {
+      const win = el.ownerDocument.defaultView;
+      if (win && win.scrollY > 24) win.scrollBy(0, -16);
+    } catch {
+      /* noop */
+    }
     const prevOutline = el.style.outline;
     const prevBg = el.style.backgroundColor;
     const prevTransition = el.style.transition;
@@ -71,17 +79,53 @@ export function PdfViewerPane({
     return true;
   }, []);
 
-  // HTML 모드에서 jump(또는 최초 로드) 시 스크롤. 로드 타이밍 보정 위해 약간 재시도.
+  // HTML 모드에서 jump(또는 최초 로드) 시 스크롤.
+  // 변환 HTML(특히 DOCX)은 base64 이미지가 늦게 디코드되며 레이아웃이 계속 밀리므로,
+  // ResizeObserver로 reflow가 멈출 때까지 재스크롤하고 일정 시간 뒤 정리한다.
   useEffect(() => {
     if (isPdf || tableIndex == null) return;
-    let tries = 0;
-    let timer = 0;
-    const attempt = () => {
-      if (scrollToTable(tableIndex)) return;
-      if (tries++ < 12) timer = window.setTimeout(attempt, 150);
+    let cancelled = false;
+    const cleanups: Array<() => void> = [];
+
+    const rescroll = () => {
+      if (!cancelled) scrollToTable(tableIndex);
     };
-    attempt();
-    return () => window.clearTimeout(timer);
+
+    // 즉시 + 단계별 보정
+    [0, 150, 400, 800].forEach((ms) => {
+      const t = window.setTimeout(rescroll, ms);
+      cleanups.push(() => window.clearTimeout(t));
+    });
+
+    try {
+      const frame = iframeRef.current;
+      const win = frame?.contentWindow as (Window & typeof globalThis) | null;
+      const doc = frame?.contentDocument;
+      if (win && doc?.documentElement) {
+        const RO = (win as unknown as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
+        if (RO) {
+          const ro = new RO(() => rescroll());
+          ro.observe(doc.documentElement);
+          // reflow가 멎는 데 충분한 시간 후 관찰 종료
+          const stop = window.setTimeout(() => ro.disconnect(), 3000);
+          cleanups.push(() => {
+            ro.disconnect();
+            window.clearTimeout(stop);
+          });
+        }
+        // 모든 리소스 로드 완료(load) 후 최종 보정
+        const onLoad = () => rescroll();
+        win.addEventListener("load", onLoad, { once: true });
+        cleanups.push(() => win.removeEventListener("load", onLoad));
+      }
+    } catch {
+      /* cross-origin (이론상 동일 출처라 발생 안 함) */
+    }
+
+    return () => {
+      cancelled = true;
+      cleanups.forEach((c) => c());
+    };
   }, [isPdf, tableIndex, jumpNonce, loadedNonce, scrollToTable]);
 
   useEffect(() => {
