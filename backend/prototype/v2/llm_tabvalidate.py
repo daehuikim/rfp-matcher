@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections import OrderedDict
 
 from pydantic import BaseModel
@@ -17,6 +18,25 @@ from app.llm.base import Message
 from app.llm.openai_client import OpenAIClient
 
 from .extract import Req
+
+# 탭 이름만으로 비요구가 명백한 패턴 (현황/범위/개요/안내/목차/추진체계 등).
+# '~방안/체계/기능' 등 요구가능한 어미는 제외하고, 명백한 비요구 명사구만.
+_NONREQ_NAME = re.compile(
+    r"(현황|배경|필요성|목적|개요|범위|목차|차례|참고|참조|유의\s*사항|작성\s*요령|"
+    r"제출\s*(방법|서류)|평가\s*(기준|항목|배점)|배점|추진\s*체계|추진\s*일정|"
+    r"사업\s*일정|개발\s*개념|연락처|일반\s*사항)"
+)
+
+
+def _name_nonreq(tab: str) -> bool:
+    """탭 이름이 명백한 비요구(현황·범위·안내·목차…)면 True."""
+    t = tab.strip()
+    if _NONREQ_NAME.search(t):
+        return True
+    # '…참고/참조하시기 바랍니다', '…를 따른다' 류 안내 문장형 탭명
+    if re.search(r"(바랍니다|따른다|참조|참고)\s*\.?$", t):
+        return True
+    return False
 
 
 class _Verdict(BaseModel):
@@ -60,9 +80,9 @@ async def validate_tabs(reqs: list[Req], protected: set[str] | None = None,
         by_tab.setdefault(r.tab, []).append(r)
     if len(by_tab) < 2:
         return reqs
+    # 이름만으로 명백한 비요구 탭은 protected라도 제거 후보 (LLM 콜 전에 먼저 확정)
+    name_drop = {t for t in by_tab if _name_nonreq(t)}
     cand = {t: items for t, items in by_tab.items() if t not in protected}
-    if not cand:
-        return reqs
     # 탭당 대표 표본을 넉넉히(최대 12건, 작은 탭은 전부) 고르게 추출 — 검수 신뢰성↑
     def _pick(items: list[Req], k: int = 12) -> list[str]:
         n = len(items)
@@ -78,16 +98,24 @@ async def validate_tabs(reqs: list[Req], protected: set[str] | None = None,
             out.append(txt[:200])
         return out
 
-    samples = [(t, len(items), _pick(items)) for t, items in cand.items()]
-    s = Settings()
-    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
-    try:
-        out = await client.structured_output(
-            [Message(role="user", content=_prompt(samples))], _Result,
-            purpose="tab_validate", max_tokens=4000)
-    except Exception:
-        return reqs
-    drop = {v.tab for v in out.verdicts if not v.keep and v.tab in cand}
+    llm_drop: set[str] = set()
+    if cand:  # 검수 대상(비protected)이 있으면 LLM 내용 기반 판정
+        samples = [(t, len(items), _pick(items)) for t, items in cand.items()]
+        s = Settings()
+        client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+        try:
+            out = await client.structured_output(
+                [Message(role="user", content=_prompt(samples))], _Result,
+                purpose="tab_validate", max_tokens=4000)
+            llm_drop = {v.tab for v in out.verdicts if not v.keep and v.tab in cand}
+        except Exception:
+            llm_drop = set()
+
+    drop = llm_drop | name_drop
+
+    # 가장 큰 탭(주 요구사항)은 절대 제거하지 않음 — 오판 안전장치
+    largest = max(by_tab, key=lambda t: len(by_tab[t]))
+    drop.discard(largest)
     if not drop:
         return reqs
     drop_rows = sum(len(by_tab[t]) for t in drop)
