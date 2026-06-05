@@ -27,6 +27,7 @@ from .extract import Req, extract_grids
 from .grid import grids_from_html, read_html_bytes
 from .ids import assign_ids
 from .llm_atomize import atomize_reqs_sync
+from .llm_cell_atomize import atomize_cells_sync
 from .llm_cluster import cluster_tabs_sync
 from .llm_meta import generate_metadata_sync
 from .llm_schema import schema_extract_tables_sync
@@ -127,6 +128,11 @@ def run(input_path: str | Path, gold_xlsx: str | None = None,
             table_reqs = schema_extract_tables_sync(cands)
             for r in table_reqs:
                 r.doc = name
+            # 평문 헤더+불릿이 grid 행 단위로 흩어진 표(messy)만 LLM few-shot 재구성
+            before_n = len(table_reqs)
+            table_reqs = atomize_cells_sync(table_reqs)
+            if len(table_reqs) != before_n:
+                steps.append(f"셀 원자화: 헤더-불릿 재구성 {before_n}→{len(table_reqs)} rows")
             reqs = dedup(list_reqs + table_reqs)
             steps.append(f"extract(llm-schema): 표 {len(cands)}개 스키마설계+결정적실행 + 리스트 → {len(reqs)} rows")
         else:
