@@ -219,18 +219,18 @@ function SheetBox({
         <table className="sheet-table">
           <thead>
             <tr>
-              <th className="col-sticky w-[7rem]">코드</th>
-              <th className="min-w-[22rem]">요구사항</th>
-              {flags.subcategory && <th className="min-w-[8rem]">소분류</th>}
-              {flags.deliverables && <th className="min-w-[12rem]">산출물</th>}
-              {flags.source && <th className="min-w-[8rem]">출처</th>}
-              {flags.solutions && <th className="min-w-[12rem]">KT 보유 기술</th>}
-              {flags.missing && <th className="min-w-[10rem]">부족 기술</th>}
-              <th className="w-[6.5rem]">AI 판정</th>
-              {flags.aiReason && <th className="min-w-[20rem]">AI 설명</th>}
-              {flags.consortium && <th className="min-w-[10rem]">컨소시엄</th>}
-              <th className="w-[8.5rem]">판정</th>
-              <th className="min-w-[10rem]">메모</th>
+              <th className="col-sticky w-[5.5rem]">코드</th>
+              <th className="min-w-[15rem]">요구사항</th>
+              {flags.subcategory && <th className="min-w-[7rem]">소분류</th>}
+              {flags.deliverables && <th className="min-w-[9rem]">산출물</th>}
+              {flags.source && <th className="w-[5.5rem]">출처</th>}
+              {flags.solutions && <th className="min-w-[8rem]">KT 보유 기술</th>}
+              {flags.missing && <th className="min-w-[7rem]">부족 기술</th>}
+              <th className="w-[5.5rem]">AI 판정</th>
+              {flags.aiReason && <th className="min-w-[13rem]">AI 설명</th>}
+              {flags.consortium && <th className="min-w-[8rem]">컨소시엄</th>}
+              <th className="w-[7rem]">판정</th>
+              <th className="min-w-[7rem]">메모</th>
             </tr>
           </thead>
           <tbody>

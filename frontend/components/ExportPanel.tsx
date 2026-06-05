@@ -14,7 +14,20 @@ const LAYOUTS: { id: "cluster" | "ordered"; label: string; desc: string }[] = [
   { id: "ordered", label: "RFP 원문 순서", desc: "원문 페이지 순서대로 한 시트에" },
 ];
 
-export function ExportPanel({ docId, disabled }: { docId: string; disabled?: boolean }) {
+function baseFromName(name?: string | null): string {
+  if (!name) return "조견표";
+  return name.replace(/\.[^.]+$/, "").trim() || "조견표";
+}
+
+export function ExportPanel({
+  docId,
+  disabled,
+  sourceName,
+}: {
+  docId: string;
+  disabled?: boolean;
+  sourceName?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"human" | "ai" | "both">("both");
   const [layout, setLayout] = useState<"cluster" | "ordered">("cluster");
@@ -22,6 +35,18 @@ export function ExportPanel({ docId, disabled }: { docId: string; disabled?: boo
   const [applicable, setApplicable] = useState<ExportColumnInfo[]>([]);
   const [cols, setCols] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [filename, setFilename] = useState("");
+  const [filenameTouched, setFilenameTouched] = useState(false);
+
+  // 기본 파일명: {원본}_rfp분석_{구성}_{대상}
+  const defaultName = useMemo(() => {
+    const layoutTag = layout === "ordered" ? "원문순서" : "기술별";
+    const modeTag = mode === "ai" ? "AI" : mode === "human" ? "사람" : "전체";
+    return `${baseFromName(sourceName)}_rfp분석_${layoutTag}_${modeTag}`;
+  }, [sourceName, layout, mode]);
+
+  // 사용자가 직접 수정 전까지는 옵션 변경에 따라 기본명 자동 갱신
+  const effectiveName = filenameTouched ? filename : defaultName;
 
   useEffect(() => {
     if (!open || disabled) return;
@@ -45,8 +70,11 @@ export function ExportPanel({ docId, disabled }: { docId: string; disabled?: boo
   }, [open, disabled, docId, mode, preset]);
 
   const href = useMemo(
-    () => (disabled || cols.length === 0 ? "#" : exportUrl(docId, mode, cols, layout)),
-    [docId, mode, cols, layout, disabled],
+    () =>
+      disabled || cols.length === 0
+        ? "#"
+        : exportUrl(docId, mode, cols, layout, effectiveName),
+    [docId, mode, cols, layout, effectiveName, disabled],
   );
 
   function toggleCol(key: string) {
@@ -150,6 +178,36 @@ export function ExportPanel({ docId, disabled }: { docId: string; disabled?: boo
                 {m === "human" ? "사람" : m === "ai" ? "AI" : "둘 다"}
               </button>
             ))}
+          </div>
+
+          <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+            파일명
+          </p>
+          <div className="mt-1 flex items-center gap-1 rounded-lg border border-neutral-200 px-2 py-1.5 focus-within:border-ink-900">
+            <input
+              type="text"
+              value={effectiveName}
+              onChange={(e) => {
+                setFilenameTouched(true);
+                setFilename(e.target.value);
+              }}
+              placeholder={defaultName}
+              className="min-w-0 flex-1 text-[12px] text-neutral-800 outline-none placeholder:text-neutral-400"
+            />
+            <span className="shrink-0 text-[11px] text-neutral-400">.xlsx</span>
+            {filenameTouched && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilenameTouched(false);
+                  setFilename("");
+                }}
+                className="shrink-0 text-[10px] text-neutral-400 hover:text-ink-900"
+                title="기본값으로"
+              >
+                ↺
+              </button>
+            )}
           </div>
 
           <a

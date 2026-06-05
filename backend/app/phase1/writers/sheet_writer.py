@@ -15,7 +15,7 @@ from app.phase1.extraction.category_provenance import (
 )
 
 from .export_columns import EXPORT_COLUMNS, column_headers, resolve_export_columns
-from .sheet_style import style_data_sheet, style_summary_sheet
+from .sheet_style import style_data_sheet, write_overview_sheet
 
 _INVALID_SHEET_CHARS = re.compile(r"[\\/?*\[\]:]")
 
@@ -80,22 +80,14 @@ class RequirementSheetWriter:
             if cat not in cat_sources:
                 cat_sources[cat] = category_source_label(r.category_source)
 
-        summary = wb.create_sheet(title="총괄표")
-        summary.append(["내보내기 명세"])
-        summary.append(["분류 기준", document_category_spec(extraction_meta, requirements)])
-        source_counts = summarize_category_sources(requirements)
-        if source_counts:
-            summary.append(["분류 출처 집계", ", ".join(f"{k} {v}건" for k, v in source_counts.items())])
-        summary.append([])
-        show_source_col = "category_source" in col_keys
-        summary.append(["분류", "요구사항수"] + (["출처"] if show_source_col else []))
-        for cat, items in sorted(by_cat.items()):
-            row = [cat, len(items)]
-            if show_source_col:
-                row.append(cat_sources.get(cat, ""))
-            summary.append(row)
-
-        style_summary_sheet(summary)
+        overview = wb.create_sheet(title="개요")
+        write_overview_sheet(
+            overview,
+            requirements,
+            recs,
+            by_cat,
+            document_category_spec(extraction_meta, requirements),
+        )
 
         recs = recommendations or {}
         judges = judgements or {}

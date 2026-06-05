@@ -104,3 +104,125 @@ def style_summary_sheet(ws: Worksheet) -> None:
     ws.column_dimensions["C"].width = 16
     if ws.max_row >= 1:
         ws.cell(1, 1).font = Font(bold=True, size=12)
+
+
+# ── 개요 시트 (RFP 개요·요약·핵심기술·RISK) ──
+_OV_TITLE_FONT = Font(bold=True, size=14, color="305496")
+_OV_SEC_FILL = PatternFill("solid", fgColor="D9E1F2")
+_OV_SEC_FONT = Font(bold=True, size=11, color="1F3864")
+_OV_HEAD_FONT = Font(bold=True, size=10)
+_OV_ID_FILL = PatternFill("solid", fgColor="FCE4D6")
+_RISK_LABEL = {"O": "가능", "△": "조건부", "X": "리스크"}
+
+
+def write_overview_sheet(ws, requirements, recommendations, by_cat, category_spec):
+    """RFP 개요 — 전체 요약(집계) + 핵심 기술(보유/부족) + 핵심 RISK(X 판정)."""
+    from collections import Counter
+
+    recs = recommendations or {}
+    ws.column_dimensions["A"].width = 26
+    ws.column_dimensions["B"].width = 80
+    ws.column_dimensions["C"].width = 26
+
+    ws.cell(1, 1, "RFP 개요").font = _OV_TITLE_FONT
+    row = 3
+
+    def section(title: str):
+        nonlocal row
+        c = ws.cell(row, 1, title)
+        c.fill = _OV_SEC_FILL
+        c.font = _OV_SEC_FONT
+        ws.cell(row, 2).fill = _OV_SEC_FILL
+        ws.cell(row, 3).fill = _OV_SEC_FILL
+        row += 1
+
+    # 전체 요약 (집계 기반)
+    total = len(requirements)
+    n_cat = len(by_cat)
+    dist = Counter((recs.get(r.id).ai_risk if recs.get(r.id) else "") for r in requirements)
+    summary = (
+        f"총 {total}건의 요구사항을 {n_cat}개 분류로 정리했습니다. "
+        f"AI 판정 — 가능(O) {dist.get('O', 0)} · 조건부(△) {dist.get('△', 0)} · "
+        f"리스크(X) {dist.get('X', 0)} · 미산출 {dist.get('', 0)}. "
+        f"분류 기준: {category_spec}"
+    )
+    section("전체 요약")
+    cell = ws.cell(row, 1, summary)
+    cell.alignment = WRAP
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    ws.row_dimensions[row].height = 60
+    row += 2
+
+    # 핵심 기술 — KT 보유(채택 솔루션) / 부족 기술 집계
+    section("핵심 기술")
+    for ci, lbl in enumerate(("구분", "기술 / 솔루션", "관련 요구사항"), 1):
+        c = ws.cell(row, ci, lbl)
+        c.font = _OV_HEAD_FONT
+        c.fill = _OV_SEC_FILL
+        c.border = BORDER
+    row += 1
+
+    owned: dict[str, list[str]] = {}
+    missing: dict[str, list[str]] = {}
+    for r in requirements:
+        rec = recs.get(r.id)
+        if not rec:
+            continue
+        for sku in getattr(rec, "matched_solution_skus", None) or []:
+            label = sku.sku_label or sku.solution_name
+            owned.setdefault(label, []).append(r.code)
+        for t in getattr(rec, "missing_tech", None) or []:
+            missing.setdefault(t, []).append(r.code)
+
+    def tech_rows(label: str, data: dict[str, list[str]], fill_ids: bool):
+        nonlocal row
+        for name, ids in sorted(data.items(), key=lambda kv: -len(kv[1]))[:10]:
+            ws.cell(row, 1, label)
+            ws.cell(row, 2, name).alignment = WRAP
+            idc = ws.cell(row, 3, ", ".join(ids[:8]) + (" 외" if len(ids) > 8 else ""))
+            idc.alignment = WRAP
+            if fill_ids:
+                idc.fill = _OV_ID_FILL
+            for ci in (1, 2, 3):
+                ws.cell(row, ci).border = BORDER
+                ws.cell(row, ci).font = BODY_FONT
+            row += 1
+
+    if owned:
+        tech_rows("KT 보유", owned, False)
+    if missing:
+        tech_rows("부족", missing, True)
+    if not owned and not missing:
+        ws.cell(row, 1, "(매칭·부족 기술 집계 없음)").font = Font(italic=True, size=10, color="808080")
+        row += 1
+    row += 1
+
+    # 핵심 RISK — X(리스크) 판정 요구사항
+    section("핵심 RISK (리스크 판정)")
+    for ci, lbl in enumerate(("요구사항", "리스크 사유"), 1):
+        c = ws.cell(row, ci, lbl)
+        c.font = _OV_HEAD_FONT
+        c.fill = _OV_SEC_FILL
+        c.border = BORDER
+    row += 1
+    risks = [
+        (r, recs.get(r.id))
+        for r in requirements
+        if recs.get(r.id) and recs.get(r.id).ai_risk == "X"
+    ]
+    if not risks:
+        ws.cell(row, 1, "(리스크(X) 판정 요구사항 없음)").font = Font(
+            italic=True, size=10, color="808080"
+        )
+        row += 1
+    for r, rec in risks[:30]:
+        idc = ws.cell(row, 1, f"{r.code} · {r.name}"[:60])
+        idc.alignment = WRAP
+        idc.fill = _OV_ID_FILL
+        rc = ws.cell(row, 2, rec.ai_reason if rec else "")
+        rc.alignment = WRAP
+        ws.cell(row, 1).border = BORDER
+        ws.cell(row, 2).border = BORDER
+        row += 1
+
+    ws.cell(1, 1).font = _OV_TITLE_FONT

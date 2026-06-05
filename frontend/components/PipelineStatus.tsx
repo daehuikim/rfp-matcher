@@ -58,44 +58,29 @@ export function PipelineStatus({
   sourceFilename,
 }: Props) {
   const [showPrompts, setShowPrompts] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const currentIdx = PIPELINE_STAGES.indexOf(stage as (typeof PIPELINE_STAGES)[number]);
   const modelLabel = llmUsage?.model || llmModel || "—";
   const providerLabel = llmUsage?.provider || llmProvider || "—";
 
   return (
-    <section className="panel mb-6 overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
-        <div className="min-w-0 flex-1">
-          {projectTitle ? (
-            <>
-              <p className="truncate text-base font-bold tracking-tight text-slate-900">
-                {projectTitle}
-              </p>
-              {sourceFilename && (
-                <p className="mt-0.5 truncate text-xs text-slate-500" title={sourceFilename}>
-                  원본: {sourceFilename}
-                </p>
-              )}
-            </>
-          ) : null}
-          <p
-            className={`${projectTitle ? "mt-2" : ""} text-[11px] font-medium uppercase tracking-wider text-slate-400`}
-          >
+    <section className="panel mb-4 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
+        <div className="flex min-w-0 flex-1 items-baseline gap-2.5">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
             Pipeline
-          </p>
-          <div className="mt-1 flex items-baseline gap-3">
-            <span
-              className={`font-mono text-2xl font-bold tabular-nums ${
-                isComplete ? "text-emerald-700" : "text-slate-900"
-              }`}
-            >
-              {displayTime}
-            </span>
-            <span className="text-sm text-slate-500">
-              {isComplete ? "완료" : STAGE_LABEL[stage] ?? stage}
-              {timingFromCache && !isComplete && " · 기록 시간"}
-            </span>
-          </div>
+          </span>
+          <span
+            className={`font-mono text-lg font-bold tabular-nums ${
+              isComplete ? "text-ktteal-600" : "text-slate-900"
+            }`}
+          >
+            {displayTime}
+          </span>
+          <span className="text-xs text-slate-500">
+            {isComplete ? "완료" : STAGE_LABEL[stage] ?? stage}
+            {timingFromCache && !isComplete && " · 기록"}
+          </span>
         </div>
         {extractedTotal > 0 && !extractionReady && (
           <div className="rounded-lg bg-amber-50 px-3 py-2 text-right">
@@ -128,8 +113,17 @@ export function PipelineStatus({
             </div>
           </div>
         )}
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+        >
+          {collapsed ? "자세히 ▾" : "접기 ▴"}
+        </button>
       </div>
 
+      {!collapsed && (
+      <>
       {/* LLM model & prompts */}
       <div className="border-b border-slate-100 px-5 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -264,6 +258,8 @@ export function PipelineStatus({
         <div className="border-t border-emerald-100 bg-emerald-50/60 px-5 py-2 text-xs text-emerald-800">
           AI 분석이 모두 완료되었습니다.
         </div>
+      )}
+      </>
       )}
     </section>
   );

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -64,6 +65,7 @@ async def export_excel(
     cols: str | None = None,
     adaptive: bool = True,
     layout: str = "cluster",
+    filename: str | None = None,
 ) -> FileResponse:
     if doc_id not in container.repo.documents:
         raise HTTPException(404, f"document 없음: {doc_id}")
@@ -90,8 +92,14 @@ async def export_excel(
         if doc_id in container.repo.documents
         else None,
     )
+    # 사용자 지정 다운로드 파일명 (없으면 기본 생성). 경로 문자 제거.
+    if filename:
+        safe = re.sub(r'[\\/:*?"<>|]+', "_", filename).strip() or out_path.stem
+        download_name = safe if safe.lower().endswith(".xlsx") else f"{safe}.xlsx"
+    else:
+        download_name = out_path.name
     return FileResponse(
         path=out_path,
-        filename=out_path.name,
+        filename=download_name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )

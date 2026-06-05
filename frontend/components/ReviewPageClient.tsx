@@ -266,11 +266,11 @@ export default function ReviewPageClient({
         timingFromCache={pipeline.timingFromCache}
       />
 
-      <section className="panel mb-6 p-5">
+      <section className="panel mb-4 p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <ProjectTitleEditor docId={docId} initialTitle={projectTitle} />
 
-          <ExportPanel docId={docId} disabled={!canExport} />
+          <ExportPanel docId={docId} disabled={!canExport} sourceName={sourceFilename} />
         </div>
 
         {extractionProfile &&
@@ -442,9 +442,9 @@ export default function ReviewPageClient({
         </div>
       )}
 
-      {/* 상단 고정 원본 뷰어 — 표에서 클릭 시 이 패널로 뷰 이동 */}
+      {/* 상단 원본 뷰어 — 표에서 클릭 시 이 패널로 뷰 이동 (스티키 X, 겹침 방지) */}
       {hasRequirements && showViewer && (
-        <div className="panel sticky top-[57px] z-10 mb-4 overflow-hidden">
+        <div className="panel mb-4 overflow-hidden">
           {viewerCollapsed ? (
             <button
               type="button"
@@ -465,7 +465,7 @@ export default function ReviewPageClient({
               <span className="text-[11px] font-medium text-neutral-500">펼치기 ▾</span>
             </button>
           ) : (
-            <div className="h-[42vh] min-h-[300px]">
+            <div className="h-[80vh] min-h-[460px]">
               <PdfViewerPane
                 docId={docId}
                 kind={previewKind === "html" ? "html" : "pdf"}
