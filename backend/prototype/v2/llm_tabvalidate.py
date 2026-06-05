@@ -1,51 +1,99 @@
 """
-탭 검수 — 비요구(현황/개요/범위/안내/목차/절차) 탭 제거.
+탭 검수 — 각 탭이 '요구사항 조견표 탭'인지 LLM 이 **내용 기반**으로 판정해 비요구 탭 제거.
 
-LLM 내용 판정은 신뢰성이 낮아(요구사항 탭을 잘못 제거하거나 현황·개요 탭을 보존)
-gold 기준 검증에서 실패한다. 대신 **한국 RFP 보편적인 '비요구 섹션' 명칭**으로
-판정한다(특정 문서 하드코딩이 아니라, 어느 RFP에나 공통인 안내성 섹션 어휘).
+핵심 판단: 각 항목이 *제안사(수주사)가 새로 구축·제공·준수·제시·이행해야 하는 요구*인가,
+아니면 *발주사가 이미 보유/운영 중인 현황·환경·사양을 서술*하거나 *개요/배경/목차/절차*인가.
+탭 이름이 안내문처럼 보여도 내용이 요구면 keep(이름 아니라 내용으로).
 
-gold 검증:
-  · 법제처(SFR/DAR/PER…): 0개 제거(요구 탭 보존), recall 100% 유지
-  · 하나: 프로젝트 범위·쿠버네티스 현황·"…참고하시기 바랍니다" 제거
-  · 국방: 개발개념·연구개발 개요·필요성·목차류 제거
-
+탭별로 독립 판정(LLM 병렬). proposer_req_ratio(제안사 요구 항목 비율) < 0.5 면 제거.
 안전장치: 가장 큰 탭(주 요구사항)은 절대 제거하지 않고, drop_cap(40%) 초과 차단.
+LLM 실패/오류 시 보존(over-drop 방지).
 """
 from __future__ import annotations
 
-import re
+import asyncio
 from collections import OrderedDict
+
+from pydantic import BaseModel
+
+from app.core.config import Settings
+from app.llm.base import Message
+from app.llm.openai_client import OpenAIClient
 
 from .extract import Req
 
-# RFP 비요구 섹션 명칭 — 안내/개요/현황/범위/절차/평가. (요구 가능 어미 방안/체계/기능 등은 제외)
-_NONREQ = re.compile(
-    r"현황|배경|필요성|목적|개요|개념|범위(?!\s*분석)|목차|차례|"
-    r"참고|참조|유의\s*사항|작성\s*요령|제출\s*(방법|서류|방식)|"
-    r"평가\s*(기준|항목|배점|방법)|배점|심사|"
-    r"추진\s*체계|추진\s*일정|사업\s*일정|일정\s*계획|"
-    r"연락처|일반\s*사항|기대\s*효과|투자\s*계획|소요\s*예산|예산"
-)
-# 문장형 안내 탭명: '…참조하기 바랍니다', '…를 따른다'
-_GUIDE_SENT = re.compile(r"(바랍니다|따른다|참조|참고)\s*[.…]?\s*$")
+
+class _Verdict(BaseModel):
+    proposer_req_ratio: float  # 제안사가 구축/제공/준수/제시해야 하는 항목 비율(0~1)
+    kind: str                  # requirement|status|overview|scope|guide|toc|process
+    keep: bool
+    reason: str
 
 
-def _is_nonreq_name(tab: str) -> bool:
-    t = (tab or "").strip()
-    return bool(_NONREQ.search(t) or _GUIDE_SENT.search(t))
+def _tab_rows(items: list[Req], full_max: int = 40, big: int = 40) -> list[str]:
+    """탭의 행 텍스트(항목명/요구사항 :: 상세). 작은 탭은 전부, 큰 탭은 고르게 표본."""
+    n = len(items)
+    idxs = list(range(n)) if n <= full_max else sorted(
+        {round(i * (n - 1) / (big - 1)) for i in range(big)})
+    out = []
+    for i in idxs:
+        top = (items[i].top or "").strip()
+        mid = (items[i].mid or "").strip()
+        det = (items[i].detail or "").strip()
+        head = " / ".join(x for x in (top, mid) if x and x not in det)
+        out.append((f"{head} :: {det}" if head else det)[:140])
+    return out
 
 
-def validate_tabs(reqs: list[Req], protected: set[str] | None = None,
-                  drop_cap: float = 0.4) -> list[Req]:
-    """비요구 섹션명 탭 제거. protected와 무관하게 명칭 기준으로 판정(폼 탭도 적용)."""
+def _prompt(tab: str, n: int, rows: list[str]) -> str:
+    body = "\n".join(f"  {i + 1}. {r}" for i, r in enumerate(rows))
+    return (
+        "한 RFP 문서에서 추출한 '탭(시트)'의 항목들이다. 이 탭이 '요구사항 조견표 탭'인지 판정하라.\n\n"
+        "가장 중요한 구분: 각 항목이 **제안사(수주사)가 새로 구축·제공·준수·제시·이행해야 하는 '요구'**인가,\n"
+        "아니면 **발주사가 이미 보유/운영 중인 현황·환경·사양을 '서술'한 것**인가?\n"
+        "- 발주사의 기존 인프라/조직/시스템 현황·사양 나열(예: 'CPU 64Core', '컨테이너 런타임 containerd',\n"
+        "  '환경 구분: 개발/운영')은 제안사가 만드는 게 아니므로 **요구 아님(status)**. 기술 용어가 많아도 false.\n"
+        "- 사업 개요·배경·목적·필요성·추진방향·개발개념은 큰 틀의 총론이면 **요구 아님(overview)**.\n"
+        "- 범위 설명(scope)·목차(toc)·추진체계/일정/예산(process)·안내참조/작성요령/평가(guide) = 요구 아님.\n"
+        "- '~해야 한다/제공/구축/지원/연계/준수/제시하여야' 등 제안사에게 행위를 요구하면 요구(requirement).\n"
+        "- 탭 이름이 안내문 같아도 내용이 요구면 keep.\n\n"
+        "proposer_req_ratio = 위 정의의 '제안사 요구' 항목 비율(0~1). keep = (ratio >= 0.5).\n\n"
+        f"## 탭 '{tab}' (총 {n}건)\n{body}\n\n"
+        'JSON: {"proposer_req_ratio":<0~1>,"kind":"requirement|status|overview|scope|guide|toc|process",'
+        '"keep":<bool>,"reason":"한 문장"}'
+    )
+
+
+async def _judge(client, tab: str, items: list[Req]) -> tuple[str, bool]:
+    try:
+        out = await client.structured_output(
+            [Message(role="user", content=_prompt(tab, len(items), _tab_rows(items)))],
+            _Verdict, purpose="tab_validate", max_tokens=400)
+        return tab, bool(out.keep and out.proposer_req_ratio >= 0.5)
+    except Exception:
+        return tab, True  # 실패 시 보존
+
+
+async def validate_tabs(reqs: list[Req], protected: set[str] | None = None,
+                        drop_cap: float = 0.4) -> list[Req]:
+    """탭별 내용 기반 LLM 판정으로 비요구 탭 제거."""
     by_tab: "OrderedDict[str, list[Req]]" = OrderedDict()
     for r in reqs:
         by_tab.setdefault(r.tab, []).append(r)
     if len(by_tab) < 2:
         return reqs
 
-    drop = {t for t in by_tab if _is_nonreq_name(t)}
+    s = Settings()
+    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+    sem = asyncio.Semaphore(max(2, s.llm_concurrency))
+
+    async def _guarded(t, items):
+        async with sem:
+            return await _judge(client, t, items)
+
+    results = await asyncio.gather(*[_guarded(t, items) for t, items in by_tab.items()])
+    drop = {t for t, keep in results if not keep}
+
     # 안전장치: 가장 큰 탭(주 요구사항)은 절대 제거하지 않음
     largest = max(by_tab, key=lambda t: len(by_tab[t]))
     drop.discard(largest)
@@ -58,4 +106,4 @@ def validate_tabs(reqs: list[Req], protected: set[str] | None = None,
 
 
 def validate_tabs_sync(reqs: list[Req], protected: set[str] | None = None) -> list[Req]:
-    return validate_tabs(reqs, protected)
+    return asyncio.run(validate_tabs(reqs, protected))
