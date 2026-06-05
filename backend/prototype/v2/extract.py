@@ -83,23 +83,59 @@ _GROUP_MARK = "□■◇◆▣"
 _SUB_MARK = "∙•·◦▪○●‣"
 _CELL_SPLIT = re.compile(r"\s*([□■◇◆▣∙•·◦▪○●‣①-⑩]|(?<=\s)[-–—](?=\s))\s*")
 
+# 평문 그룹 헤더 판별 — □ 마커 없는 짧은 항목명("원천 시스템 연계", "지원 파일 형식").
+# 문장 종결(…다/요/니다 등)·구두점으로 끝나지 않는 짧은 명사구.
+_SENT_END = re.compile(r"(?:다|요|함|음|됨|오|죠|까|래|라|세요)\.?$|[.。:;,)\]]$|니다\.?$")
+# 불릿 끝에 붙은 다음 헤더: "...제공해야 합니다. 지원 파일 형식"
+_GLUED_HEADER = re.compile(r"^(.*?(?:다|요|함|음|됨|니다)[.。]?)\s+([^.。\n]{2,24})$")
+
+
+def _is_header(t: str) -> bool:
+    t = (t or "").strip()
+    if not (1 < len(t) <= 24):
+        return False
+    if _SENT_END.search(t):
+        return False
+    return any(ch.isalpha() or "가" <= ch <= "힣" for ch in t)
+
 
 def parse_cell_hierarchy(cell: str) -> list[tuple[str, str]]:
-    """셀의 □/∙/- 내부 계위를 (그룹, 상세) 쌍 목록으로 분해.
+    """셀의 계위를 (그룹, 상세) 쌍으로 분해.
 
-    □ X (자식 -/∙ 있음) → (X, 자식) 행들. □ X (자식 없음) → (None, X).
-    선두 불릿/평문 → (None, 텍스트). 마커 없으면 [(None, cell)] (분할 안 함).
+    □/∙/- 마커뿐 아니라 **평문 그룹 헤더**(원천 시스템 연계 등)도 그룹으로 인식하고,
+    불릿 끝에 붙은 다음 헤더(…합니다. 지원 파일 형식)도 분리한다.
     """
     parts = _CELL_SPLIT.split(cell)
     segs: list[tuple[str | None, str]] = []
+    # 평문 헤더 승격은 '진짜 불릿(∙•·◦▪○●‣)/□'이 있을 때만 (dash 시퀀스 과분할 방지)
+    has_bullet = any(
+        parts[i] in (_SUB_MARK + _GROUP_MARK) for i in range(1, len(parts), 2)
+    )
+
+    def _add_content(marker, content):
+        """불릿 내용에서 끝에 붙은 평문 헤더를 떼어 별도 그룹 seg로 분리."""
+        content = content.strip()
+        if not content:
+            return
+        m = _GLUED_HEADER.match(content)
+        if has_bullet and m and _is_header(m.group(2)):
+            segs.append((marker, m.group(1).strip()))
+            segs.append(("□", m.group(2).strip()))  # 다음 그룹 헤더
+        else:
+            segs.append((marker, content))
+
     pre = parts[0].strip()
     if pre:
-        segs.append((None, pre))
+        # 선두 평문이 헤더형이고 뒤에 불릿이 있으면 그룹으로 승격
+        if has_bullet and _is_header(pre):
+            segs.append(("□", pre))
+        else:
+            _add_content(None, pre)
     for i in range(1, len(parts), 2):
         marker = parts[i]
         content = parts[i + 1].strip() if i + 1 < len(parts) else ""
         if content:
-            segs.append((marker, content))
+            _add_content(marker, content)
     if len(segs) <= 1:
         return [("", cell.strip())]
 
