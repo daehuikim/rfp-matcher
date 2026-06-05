@@ -16,6 +16,7 @@ export function PdfViewerPane({
   kind,
   page,
   tableIndex,
+  anchorText,
   jumpNonce,
   sourceFilename,
   onClose,
@@ -24,6 +25,7 @@ export function PdfViewerPane({
   kind: "pdf" | "html";
   page: number | null;
   tableIndex: number | null;
+  anchorText?: string | null;
   jumpNonce: number;
   sourceFilename?: string | null;
   onClose?: () => void;
@@ -37,38 +39,16 @@ export function PdfViewerPane({
   const [loadedNonce, setLoadedNonce] = useState(0); // iframe load 신호 (html scroll 트리거)
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // HTML 모드: 지정한 <table> 로 스크롤 + 하이라이트
-  const scrollToTable = useCallback((idx: number) => {
-    const frame = iframeRef.current;
-    if (!frame) return false;
-    let doc: Document | null = null;
-    try {
-      doc = frame.contentDocument;
-    } catch {
-      return false; // cross-origin (이론상 동일 출처라 발생 안 함)
-    }
-    if (!doc || !doc.body) return false;
-    const tables = doc.querySelectorAll("table");
-    const el = tables[idx] as HTMLElement | undefined;
-    if (!el) return false;
-    // 변환 표는 매우 클 수 있어(레이아웃 표) 'start'로 상단에 맞춰야 유용함
-    el.scrollIntoView({ behavior: "auto", block: "start" });
-    // 상단에 약간 여백(헤더 가림 방지)
-    try {
-      const win = el.ownerDocument.defaultView;
-      if (win && win.scrollY > 24) win.scrollBy(0, -16);
-    } catch {
-      /* noop */
-    }
+  // 강조 효과
+  function flash(el: HTMLElement) {
     const prevOutline = el.style.outline;
     const prevBg = el.style.backgroundColor;
     const prevTransition = el.style.transition;
     el.style.outline = "3px solid #e0282f";
     el.style.outlineOffset = "3px";
-    el.style.backgroundColor = "rgba(224,40,47,0.10)";
+    el.style.backgroundColor = "rgba(224,40,47,0.12)";
     el.style.transition = "background-color 0.6s ease, outline-color 0.6s ease";
     window.setTimeout(() => {
-      // 부드럽게 사라지도록 색만 먼저 투명 처리 후 원복
       el.style.outline = "3px solid rgba(224,40,47,0)";
       el.style.backgroundColor = prevBg;
       window.setTimeout(() => {
@@ -76,8 +56,51 @@ export function PdfViewerPane({
         el.style.transition = prevTransition;
       }, 700);
     }, 2600);
-    return true;
-  }, []);
+  }
+
+  // HTML 모드: N번째 <table> 로 이동. anchorText가 있으면 표 안에서
+  // 해당 요건 텍스트가 들어있는 셀/행을 찾아 그 위치로 정밀 이동.
+  const scrollToTable = useCallback(
+    (idx: number, anchor?: string | null) => {
+      const frame = iframeRef.current;
+      if (!frame) return false;
+      let doc: Document | null = null;
+      try {
+        doc = frame.contentDocument;
+      } catch {
+        return false; // cross-origin (이론상 동일 출처라 발생 안 함)
+      }
+      if (!doc || !doc.body) return false;
+      const tables = doc.querySelectorAll("table");
+      const table = tables[idx] as HTMLElement | undefined;
+      if (!table) return false;
+
+      // 정밀 타겟: 표 안에서 anchor 텍스트를 포함한 가장 작은 셀
+      let target: HTMLElement = table;
+      const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+      const key = anchor ? norm(anchor).slice(0, 18) : "";
+      if (key.length >= 4) {
+        const cells = table.querySelectorAll("td,th,p,li");
+        for (const c of Array.from(cells)) {
+          if (norm(c.textContent || "").includes(key)) {
+            target = c as HTMLElement;
+            break;
+          }
+        }
+      }
+
+      target.scrollIntoView({ behavior: "auto", block: target === table ? "start" : "center" });
+      try {
+        const win = target.ownerDocument.defaultView;
+        if (win && win.scrollY > 24) win.scrollBy(0, -16);
+      } catch {
+        /* noop */
+      }
+      flash(target);
+      return true;
+    },
+    [],
+  );
 
   // HTML 모드에서 jump(또는 최초 로드) 시 스크롤.
   // 변환 HTML(특히 DOCX)은 base64 이미지가 늦게 디코드되며 레이아웃이 계속 밀리므로,
@@ -88,7 +111,7 @@ export function PdfViewerPane({
     const cleanups: Array<() => void> = [];
 
     const rescroll = () => {
-      if (!cancelled) scrollToTable(tableIndex);
+      if (!cancelled) scrollToTable(tableIndex, anchorText);
     };
 
     // 즉시 + 단계별 보정
@@ -126,7 +149,7 @@ export function PdfViewerPane({
       cancelled = true;
       cleanups.forEach((c) => c());
     };
-  }, [isPdf, tableIndex, jumpNonce, loadedNonce, scrollToTable]);
+  }, [isPdf, tableIndex, anchorText, jumpNonce, loadedNonce, scrollToTable]);
 
   useEffect(() => {
     setLoadFailed(false);

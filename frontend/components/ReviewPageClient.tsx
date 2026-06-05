@@ -135,6 +135,7 @@ export default function ReviewPageClient({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerPage, setViewerPage] = useState<number | null>(null);
   const [viewerTable, setViewerTable] = useState<number | null>(null);
+  const [viewerAnchor, setViewerAnchor] = useState<string | null>(null);
   const [jumpNonce, setJumpNonce] = useState(0);
   const autoOpened = useRef(false);
 
@@ -153,12 +154,14 @@ export default function ReviewPageClient({
   const openPage = useCallback((p: number) => {
     setViewerPage(p);
     setViewerTable(null);
+    setViewerAnchor(null);
     setJumpNonce((n) => n + 1);
     setViewerOpen(true);
   }, []);
 
-  const openTable = useCallback((idx: number) => {
+  const openTable = useCallback((idx: number, anchor?: string) => {
     setViewerTable(idx);
+    setViewerAnchor(anchor ?? null);
     setViewerPage(null);
     setJumpNonce((n) => n + 1);
     setViewerOpen(true);
@@ -172,47 +175,6 @@ export default function ReviewPageClient({
   }, [canViewSource]);
 
   const showViewer = viewerOpen && canViewSource;
-
-  // 뷰어 폭 — 드래그로 조절 (조견표 가림 방지)
-  const [viewerWidth, setViewerWidth] = useState(440);
-  const draggingRef = useRef(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem("rfp-viewer-width");
-    if (saved) {
-      const n = parseInt(saved, 10);
-      if (Number.isFinite(n)) setViewerWidth(Math.min(900, Math.max(300, n)));
-    }
-  }, []);
-
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      if (!draggingRef.current) return;
-      // 오른쪽 가장자리에서 커서까지 = 뷰어 폭
-      const w = window.innerWidth - e.clientX - 16;
-      setViewerWidth(Math.min(Math.min(900, window.innerWidth - 420), Math.max(300, w)));
-    }
-    function onUp() {
-      if (!draggingRef.current) return;
-      draggingRef.current = false;
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-      window.localStorage.setItem("rfp-viewer-width", String(viewerWidth));
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [viewerWidth]);
-
-  const startDrag = useCallback(() => {
-    draggingRef.current = true;
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "col-resize";
-  }, []);
   const [remoteByReqId, setRemoteByReqId] = useState<
     Record<string, { mark: Judgement; note: string; editor_id: string }>
   >({});
@@ -279,7 +241,7 @@ export default function ReviewPageClient({
     : "분류";
 
   return (
-    <div className={`mx-auto ${view === "table" || showViewer ? "max-w-[110rem]" : "max-w-5xl"}`}>
+    <div className={view === "table" ? "w-full" : "mx-auto max-w-5xl"}>
       <PipelineStatus
         projectTitle={projectTitle}
         sourceFilename={sourceFilename}
@@ -504,32 +466,18 @@ export default function ReviewPageClient({
           </div>
 
           {showViewer && (
-            <>
-              {/* 드래그 핸들 — 뷰어/조견표 폭 조절 */}
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                onMouseDown={startDrag}
-                className="group sticky top-4 hidden h-[calc(100vh-2rem)] w-3 shrink-0 cursor-col-resize items-center justify-center lg:flex"
-                title="드래그하여 뷰어 폭 조절"
-              >
-                <span className="h-10 w-1 rounded-full bg-neutral-300 transition group-hover:bg-ktred-400" />
-              </div>
-              <aside
-                className="sticky top-4 hidden h-[calc(100vh-2rem)] shrink-0 lg:block"
-                style={{ width: viewerWidth }}
-              >
-                <PdfViewerPane
-                  docId={docId}
-                  kind={previewKind === "html" ? "html" : "pdf"}
-                  page={viewerPage}
-                  tableIndex={viewerTable}
-                  jumpNonce={jumpNonce}
-                  sourceFilename={sourceFilename}
-                  onClose={() => setViewerOpen(false)}
-                />
-              </aside>
-            </>
+            <aside className="ml-4 hidden h-[calc(100vh-5.5rem)] w-[24rem] shrink-0 lg:sticky lg:top-[4.5rem] lg:block xl:w-[28rem]">
+              <PdfViewerPane
+                docId={docId}
+                kind={previewKind === "html" ? "html" : "pdf"}
+                page={viewerPage}
+                tableIndex={viewerTable}
+                anchorText={viewerAnchor}
+                jumpNonce={jumpNonce}
+                sourceFilename={sourceFilename}
+                onClose={() => setViewerOpen(false)}
+              />
+            </aside>
           )}
         </div>
       )}

@@ -32,7 +32,7 @@ export function RequirementRow({
   remoteUpdate: { mark: Judgement; note: string; editor_id: string } | null;
   aiPending?: boolean;
   onOpenPage?: (page: number) => void;
-  onOpenTable?: (tableIndex: number) => void;
+  onOpenTable?: (tableIndex: number, anchor?: string) => void;
 }) {
   const { requirement: r, recommendation: rec, judgement } = view;
   const [mark, setMark] = useState<Judgement>(judgement?.mark ?? "");
@@ -116,7 +116,7 @@ export function RequirementRow({
           {pageNum == null && tableIndex != null && onOpenTable && (
             <button
               type="button"
-              onClick={() => onOpenTable(tableIndex)}
+              onClick={() => onOpenTable(tableIndex, r.name)}
               className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
               title="원본 문서에서 이 요건이 나온 표로 이동"
             >

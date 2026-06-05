@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useActiveProjectKey,
   useActiveProjectNavItem,
@@ -44,16 +45,16 @@ function ProjectNavButton({ item, active }: { item: WorkspaceNavItem; active: bo
       className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-60 ${
         active
           ? "bg-neutral-100 text-ink-900 ring-1 ring-neutral-200"
-          : "text-slate-700 hover:bg-slate-50"
+          : "text-neutral-700 hover:bg-neutral-50"
       }`}
     >
       <div className="truncate font-medium">{item.title}</div>
       {item.sourceFilename && (
-        <div className="truncate text-[10px] text-slate-400" title={item.sourceFilename}>
+        <div className="truncate text-[10px] text-neutral-400" title={item.sourceFilename}>
           {item.sourceFilename}
         </div>
       )}
-      <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-slate-500">
+      <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-neutral-500">
         <span className="truncate">
           {busy ? "불러오는 중…" : stageBadge(item.stage, item.isComplete)}
           {item.fromCacheOnly && !busy && " · 캐시"}
@@ -68,6 +69,22 @@ function ProjectNavButton({ item, active }: { item: WorkspaceNavItem; active: bo
   );
 }
 
+function HamburgerIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      {open ? (
+        <>
+          <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </>
+      ) : (
+        <>
+          <path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const activeDocId = useActiveProjectKey(pathname);
@@ -75,103 +92,118 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { navReady, backendReachable } = useWorkspace();
   const projects = useWorkspaceNavItems();
 
+  // 사이드바는 기본 접힘 — 조견표가 메인이 되도록
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  useEffect(() => {
+    const saved = window.localStorage.getItem("rfp-sidebar-open");
+    if (saved === "1") setSidebarOpen(true);
+  }, []);
+  function toggleSidebar() {
+    setSidebarOpen((v) => {
+      window.localStorage.setItem("rfp-sidebar-open", v ? "0" : "1");
+      return !v;
+    });
+  }
+
   return (
-    <div className="app-shell flex min-h-screen">
-      <aside className="sidebar hidden w-60 shrink-0 flex-col border-r border-slate-200/80 bg-white md:flex">
-        <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-5">
-          <span className="brand-mark grid h-9 w-9 place-items-center rounded-lg text-sm font-bold text-white">
-            R
-          </span>
-          <div>
-            <div className="text-sm font-semibold text-slate-900">RFP Matcher</div>
-            <div className="text-[10px] text-slate-500">조견표 · AI 추천</div>
-          </div>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto p-3">
-          <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            시작
-          </p>
-          {PRIMARY_NAV.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`nav-link mb-3 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${
-                  active ? "nav-link-active" : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-100 text-xs font-semibold">
-                  {item.icon}
-                </span>
-                {item.label}
-              </Link>
-            );
-          })}
-
-          <p className="mb-1.5 mt-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            프로젝트
-          </p>
-          {projects.length === 0 ? (
-            <p className="px-3 py-2 text-xs leading-relaxed text-slate-400">
-              {!navReady
-                ? "프로젝트 불러오는 중…"
-                : !backendReachable
-                  ? "백엔드(8000) 미연결 — uvicorn 실행 후 새로고침"
-                  : "열린 프로젝트 없음 — 홈에서 샘플 시작"}
-            </p>
-          ) : (
-            <ul className="space-y-0.5">
-              {projects.map((p) => {
-                const active =
-                  activeDocId != null &&
-                  (p.docId === activeDocId || p.staleDocId === activeDocId);
-                return (
-                  <li key={p.key}>
-                    <ProjectNavButton item={p} active={active} />
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </nav>
-
-        <div className="border-t border-slate-100 p-4 text-[10px] leading-relaxed text-slate-400">
-          백그라운드에서 AI·추출이 계속됩니다.
-          <br />
-          artifacts 캐시 프로젝트도 사이드바에서 재오픈.
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="topbar flex items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 py-3 backdrop-blur md:px-6">
-          <div className="flex items-center gap-2 md:hidden">
-            <span className="brand-mark grid h-8 w-8 place-items-center rounded-lg text-xs font-bold text-white">
-              R
+    <div className="app-shell flex min-h-screen flex-col">
+      {/* 상단 헤더 — kt 로고 + Easy제안 */}
+      <header className="topbar sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-[var(--border)] bg-white/90 px-4 py-3 backdrop-blur md:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100"
+            title={sidebarOpen ? "프로젝트 목록 닫기" : "프로젝트 목록 열기"}
+            aria-label="프로젝트 목록 토글"
+          >
+            <HamburgerIcon open={sidebarOpen} />
+          </button>
+          <Link href="/" className="flex items-center gap-2.5">
+            <Image src="/kt-logo.png" alt="kt" width={34} height={28} priority className="h-7 w-auto" />
+            <span className="h-5 w-px bg-neutral-200" />
+            <span className="text-[17px] font-bold tracking-tight text-ink-900">Easy제안</span>
+          </Link>
+          {activeProject && (
+            <span className="hidden min-w-0 items-center gap-2 md:flex">
+              <span className="h-4 w-px bg-neutral-200" />
+              <span className="truncate text-sm text-neutral-500" title={activeProject.title}>
+                {activeProject.title}
+              </span>
             </span>
-            <span className="text-sm font-semibold">RFP Matcher</span>
-          </div>
-          <div className="hidden min-w-0 md:block">
-            {activeProject ? (
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">{activeProject.title}</p>
-                {activeProject.sourceFilename && (
-                  <p className="truncate text-[10px] text-slate-500">{activeProject.sourceFilename}</p>
-                )}
-              </div>
+          )}
+        </div>
+        <span className="status-pill shrink-0">
+          <span className="status-dot" />
+          Live
+        </span>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* 사이드바 (오버레이형 — 접힘 기본) */}
+        {sidebarOpen && (
+          <button
+            type="button"
+            aria-label="사이드바 닫기"
+            onClick={toggleSidebar}
+            className="fixed inset-0 z-20 bg-ink-900/10 lg:hidden"
+          />
+        )}
+        <aside
+          className={`sidebar z-20 shrink-0 overflow-hidden border-r border-[var(--border)] bg-white transition-[width] duration-200 ${
+            sidebarOpen ? "w-60" : "w-0"
+          } ${sidebarOpen ? "fixed inset-y-0 left-0 top-[57px] lg:static lg:top-0" : ""}`}
+        >
+          <nav className="h-full w-60 overflow-y-auto p-3">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+              시작
+            </p>
+            {PRIMARY_NAV.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`nav-link mb-3 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${
+                    active ? "nav-link-active" : "text-neutral-600 hover:bg-neutral-50"
+                  }`}
+                >
+                  <span className="grid h-7 w-7 place-items-center rounded-md bg-neutral-100 text-xs font-semibold">
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </Link>
+              );
+            })}
+
+            <p className="mb-1.5 mt-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+              프로젝트
+            </p>
+            {projects.length === 0 ? (
+              <p className="px-3 py-2 text-xs leading-relaxed text-neutral-400">
+                {!navReady
+                  ? "프로젝트 불러오는 중…"
+                  : !backendReachable
+                    ? "백엔드(8000) 미연결 — uvicorn 실행 후 새로고침"
+                    : "열린 프로젝트 없음 — 홈에서 샘플 시작"}
+              </p>
             ) : (
-              <div className="text-xs text-slate-500">
-                RFP/RFI 조견표 자동 추출 · O/△/X AI 리스크
-              </div>
+              <ul className="space-y-0.5">
+                {projects.map((p) => {
+                  const active =
+                    activeDocId != null && (p.docId === activeDocId || p.staleDocId === activeDocId);
+                  return (
+                    <li key={p.key}>
+                      <ProjectNavButton item={p} active={active} />
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </div>
-          <span className="status-pill">
-            <span className="status-dot" />
-            Live
-          </span>
-        </header>
-        <main className="main-content flex-1 px-4 py-6 md:px-8">{children}</main>
+          </nav>
+        </aside>
+
+        <main className="main-content min-w-0 flex-1 px-4 py-6 md:px-8">{children}</main>
       </div>
     </div>
   );
