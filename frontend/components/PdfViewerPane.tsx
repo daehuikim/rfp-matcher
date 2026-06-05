@@ -1,32 +1,36 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { documentSourceUrl } from "@/lib/api";
+import { documentPreviewUrl } from "@/lib/api";
 
 /**
- * 우측 원본 PDF 뷰어 — 브라우저 내장 PDFium 뷰어(iframe)를 사용.
- * 조견표의 source_page(1-based) 클릭 시 `#page=N` 으로 해당 페이지로 이동한다.
+ * 우측 원본 뷰어 — 브라우저 내장 뷰어(iframe)로 미리보기를 표시.
+ * 서버 /preview 가 포맷에 맞춰 PDF(원본·변환) 또는 변환 HTML 을 내려준다.
  *
+ * PDF 문서는 조견표 source_page(1-based) 클릭 시 `#page=N` 으로 이동.
  * 같은 문서에서 hash만 바뀌면 내장 뷰어가 재이동하지 않으므로,
- * jump마다 nonce를 키에 넣어 iframe을 재마운트 → 해당 페이지로 로드한다.
- * (Cache-Control 로 원본 바이트는 디스크 캐시에서 재사용)
+ * jump마다 nonce를 키에 넣어 iframe을 재마운트해 해당 페이지로 로드한다.
  */
 export function PdfViewerPane({
   docId,
   page,
   jumpNonce,
   sourceFilename,
+  isPdf = true,
   onClose,
 }: {
   docId: string;
   page: number | null;
   jumpNonce: number;
   sourceFilename?: string | null;
+  isPdf?: boolean;
   onClose?: () => void;
 }) {
-  const baseUrl = documentSourceUrl(docId);
-  const targetPage = page ?? 1;
-  const src = `${baseUrl}#page=${targetPage}&view=FitH&toolbar=1&navpanes=0`;
+  const previewUrl = documentPreviewUrl(docId);
+  // PDF만 페이지 프래그먼트 사용. 변환 PDF/HTML 폴백은 그대로 표시.
+  const pageHash =
+    isPdf && page != null ? `#page=${page}&view=FitH&toolbar=1&navpanes=0` : "";
+  const src = `${previewUrl}${pageHash}`;
   const [loadFailed, setLoadFailed] = useState(false);
   const lastNonce = useRef(jumpNonce);
 
@@ -44,8 +48,16 @@ export function PdfViewerPane({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
             원본
           </span>
-          {page != null && (
+          {isPdf && page != null && (
             <span className="pill border-ktred-200 bg-ktred-50 text-ktred-700">p.{page}</span>
+          )}
+          {!isPdf && (
+            <span
+              className="pill border-amber-200 bg-amber-50 text-amber-800"
+              title="원본을 PDF로 변환할 수 없어 변환 미리보기로 표시 — 레이아웃이 원본과 다를 수 있습니다."
+            >
+              변환 미리보기
+            </span>
           )}
           {sourceFilename && (
             <span className="truncate text-[11px] text-neutral-500" title={sourceFilename}>
@@ -55,7 +67,7 @@ export function PdfViewerPane({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <a
-            href={`${baseUrl}#page=${targetPage}`}
+            href={src}
             target="_blank"
             rel="noreferrer"
             className="rounded-md px-2 py-1 text-[11px] font-medium text-neutral-500 hover:bg-neutral-50 hover:text-ink-900"
@@ -82,10 +94,10 @@ export function PdfViewerPane({
             <div>
               <p className="text-sm font-medium text-ink-900">미리보기를 표시할 수 없습니다</p>
               <p className="mt-1 text-xs text-neutral-500">
-                브라우저 내장 PDF 뷰어가 비활성화되어 있을 수 있습니다.
+                브라우저 내장 뷰어가 비활성화되어 있을 수 있습니다.
               </p>
               <a
-                href={`${baseUrl}#page=${targetPage}`}
+                href={src}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-secondary mt-3 inline-flex"
@@ -98,7 +110,7 @@ export function PdfViewerPane({
           <iframe
             key={`${docId}-${jumpNonce}`}
             src={src}
-            title="원본 PDF 미리보기"
+            title="원본 미리보기"
             className="absolute inset-0 h-full w-full"
             onError={() => setLoadFailed(true)}
           />

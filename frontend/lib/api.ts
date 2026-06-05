@@ -261,11 +261,22 @@ export type DocumentMeta = {
   content_hash?: string | null;
   mime?: string | null;
   has_source_file?: boolean;
+  has_preview?: boolean;
+  is_pdf?: boolean;
 };
 
-/** 원본 파일(브라우저 내장 뷰어용) URL. PDF면 #page=N 으로 페이지 이동 가능. */
+/** 원본 파일 그대로(다운로드·새 탭용). */
 export function documentSourceUrl(docId: string): string {
   return `${apiBase()}/documents/${docId}/source`;
+}
+
+/**
+ * 우측 뷰어용 미리보기 URL — 어떤 포맷이든 표시 가능.
+ * PDF는 원본 그대로(#page=N 페이지 이동), DOC/DOCX 등은 PDF 변환,
+ * 변환 불가(HWPX 등)는 변환 HTML 로 폴백된다.
+ */
+export function documentPreviewUrl(docId: string): string {
+  return `${apiBase()}/documents/${docId}/preview`;
 }
 
 export async function fetchDocumentMeta(docId: string): Promise<DocumentMeta | null> {

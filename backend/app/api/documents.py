@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import shutil
 import uuid
@@ -11,6 +12,7 @@ from pydantic import BaseModel
 
 from app.api.deps import ContainerDep
 from app.domain.models import ExtractionMetadata
+from app.phase1.converters.libreoffice_paths import resolve_soffice_bin
 from app.phase1.extraction.category_provenance import (
     document_category_spec,
     has_inferred_categories,
@@ -294,6 +296,8 @@ class DocumentMetaResponse(BaseModel):
     content_hash: str | None = None
     mime: str | None = None
     has_source_file: bool = False  # 원본 파일을 /source 로 받을 수 있는지
+    has_preview: bool = False  # /preview 로 우측 뷰어에 표시 가능한지 (PDF·변환·HTML)
+    is_pdf: bool = False  # 원본이 PDF인지 (페이지 점프 가능 여부)
 
 
 def _source_path(doc) -> Path | None:
@@ -303,6 +307,100 @@ def _source_path(doc) -> Path | None:
     except (TypeError, ValueError):
         return None
     return p if p.is_file() else None
+
+
+# ── 우측 뷰어용 미리보기 렌더링 ──
+# 어떤 포맷이든 (PDF는 그대로, DOC/DOCX/HWP 등은 LibreOffice로 PDF 변환,
+# 변환 실패 시 추출 단계의 converted.html) "브라우저에서 볼 수 있는" 형태로 제공.
+
+_preview_locks: dict[str, asyncio.Lock] = {}
+
+
+def _artifact_bucket(container, doc) -> Path | None:
+    h = doc.content_hash
+    if not h:
+        return None
+    return container.settings.artifact_cache_dir / h[:16]
+
+
+def _converted_html_path(container, doc) -> Path | None:
+    """추출 단계가 만든 converted.html (HWPX 등 PDF 변환 불가 시 폴백)."""
+    bucket = _artifact_bucket(container, doc)
+    if bucket:
+        p = bucket / "converted.html"
+        if p.is_file():
+            return p
+    return None
+
+
+async def _ensure_preview_pdf(container, doc) -> Path | None:
+    """원본을 LibreOffice로 PDF 변환 (성공 시 캐시 경로 반환, 실패 시 None)."""
+    if str(doc.mime) == "application/pdf":
+        return _source_path(doc)
+
+    src = _source_path(doc)
+    if src is None:
+        return None
+
+    bucket = _artifact_bucket(container, doc)
+    cache_pdf = (bucket / "preview.pdf") if bucket else None
+    if cache_pdf and cache_pdf.is_file():
+        return cache_pdf
+
+    try:
+        soffice = resolve_soffice_bin(getattr(container.settings, "soffice_bin", None))
+    except FileNotFoundError:
+        return None
+
+    key = doc.content_hash or doc.id
+    lock = _preview_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        if cache_pdf and cache_pdf.is_file():
+            return cache_pdf
+        out_dir = bucket if bucket else (container.settings.storage_root / "preview")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        # 실행 중인 LibreOffice와 프로필 충돌 방지용 임시 UserInstallation
+        profile = f"file://{(container.settings.storage_root / 'lo_profile').resolve()}"
+        proc = await asyncio.create_subprocess_exec(
+            soffice,
+            "--headless",
+            f"-env:UserInstallation={profile}",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            str(out_dir),
+            str(src),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
+        except asyncio.TimeoutError:
+            proc.kill()
+            logger.warning("preview PDF 변환 타임아웃 doc=%s", doc.id[:8])
+            return None
+        if proc.returncode != 0:
+            logger.info(
+                "preview PDF 변환 실패 doc=%s rc=%s: %s",
+                doc.id[:8],
+                proc.returncode,
+                stderr.decode("utf-8", errors="replace")[:200],
+            )
+            return None
+        produced = out_dir / f"{src.stem}.pdf"
+        if not produced.is_file():
+            return None
+        if cache_pdf and produced != cache_pdf:
+            produced.replace(cache_pdf)
+            return cache_pdf
+        return produced
+
+
+def _has_preview(container, doc) -> bool:
+    """미리보기를 만들 수 있는지 (변환 시도 없이 가볍게 판정)."""
+    if _source_path(doc) is not None:
+        return True
+    return _converted_html_path(container, doc) is not None
 
 
 @router.get("/{doc_id}/meta", response_model=DocumentMetaResponse)
@@ -318,7 +416,41 @@ async def get_document_meta(doc_id: str, container: ContainerDep) -> DocumentMet
         content_hash=doc.content_hash,
         mime=str(doc.mime) if doc.mime else None,
         has_source_file=_source_path(doc) is not None,
+        has_preview=_has_preview(container, doc),
+        is_pdf=str(doc.mime) == "application/pdf",
     )
+
+
+@router.get("/{doc_id}/preview")
+async def get_document_preview(doc_id: str, container: ContainerDep) -> FileResponse:
+    """우측 뷰어용 미리보기 — 어떤 포맷이든 볼 수 있는 형태로 제공.
+
+    우선순위: ① PDF 원본 그대로 → ② LibreOffice PDF 변환(캐시) →
+    ③ 추출 단계 converted.html (HWPX 등 변환 불가 시).
+    """
+    if doc_id not in container.repo.documents:
+        raise HTTPException(404, f"document 없음: {doc_id}")
+    doc = container.repo.documents[doc_id]
+
+    pdf = await _ensure_preview_pdf(container, doc)
+    if pdf is not None:
+        return FileResponse(
+            pdf,
+            media_type="application/pdf",
+            content_disposition_type="inline",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+    html = _converted_html_path(container, doc)
+    if html is not None:
+        return FileResponse(
+            html,
+            media_type="text/html; charset=utf-8",
+            content_disposition_type="inline",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+    raise HTTPException(404, "미리보기를 생성할 수 없습니다 (원본·변환 모두 불가)")
 
 
 @router.get("/{doc_id}/source")
