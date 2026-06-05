@@ -162,11 +162,11 @@ body {
 
   .sheet-table th,
   .sheet-table td {
-    @apply border-b border-r border-neutral-200 px-2.5 py-2 align-top;
+    @apply border-b border-r border-neutral-200 px-2 py-1.5 align-top leading-snug;
   }
 
   .sheet-table th {
-    @apply sticky top-0 z-10 whitespace-nowrap border-t bg-neutral-100 px-2.5 py-2 text-left text-[11px] font-semibold text-neutral-600;
+    @apply sticky top-0 z-10 whitespace-nowrap border-t bg-neutral-100 px-2 py-1.5 text-left text-[11px] font-semibold text-neutral-600;
   }
 
   .sheet-table th:first-child,

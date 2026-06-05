@@ -173,10 +173,12 @@ export function exportUrl(
   mode: "ai" | "human" | "both",
   cols?: string[],
   layout: "cluster" | "ordered" = "cluster",
+  filename?: string,
 ): string {
   const params = new URLSearchParams({ mode, layout });
   if (cols?.length) params.set("cols", cols.join(","));
   else params.set("adaptive", "true");
+  if (filename && filename.trim()) params.set("filename", filename.trim());
   return `${apiBase()}/documents/${docId}/export?${params.toString()}`;
 }
 
