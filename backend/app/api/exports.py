@@ -80,15 +80,8 @@ async def export_excel(
     col_tag = cols.replace(",", "-")[:40] if cols else "adaptive"
     out_path = out_dir / f"requirements_{mode.value}_{layout_key}_{col_tag}.xlsx"
 
-    # V2 엔진 산출물이 있으면 results_final 포맷(개요+탭) 그대로 제공
-    v2_path = _export_via_v2(container, doc_id, out_dir)
-    if v2_path is not None:
-        download = _download_name(filename, v2_path)
-        return FileResponse(
-            path=v2_path,
-            filename=download,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+    # V2 LLM 개요(요약·핵심기술·리스크)가 있으면 개요 시트에 사용 (AI 칼럼은 앱 writer가 포함)
+    v2_overview = _load_v2_overview(container, doc_id)
     RequirementSheetWriter().write(
         out_path,
         reqs,
@@ -98,6 +91,7 @@ async def export_excel(
         columns=column_keys,
         adaptive=adaptive,
         layout=layout_key,
+        v2_overview=v2_overview,
         extraction_meta=container.repo.documents.get(doc_id).extraction_meta
         if doc_id in container.repo.documents
         else None,
@@ -117,8 +111,8 @@ def _download_name(filename: str | None, out_path) -> str:
     return out_path.name
 
 
-def _export_via_v2(container, doc_id: str, out_dir):
-    """V2 추출 산출물(reqs+overview)이 있으면 results_final 포맷 xlsx 생성 후 경로 반환."""
+def _load_v2_overview(container, doc_id: str):
+    """V2 추출 시 생성한 LLM 개요(summary/techs/risks) dict — 없으면 None."""
     import pickle
     from pathlib import Path
 
@@ -133,11 +127,6 @@ def _export_via_v2(container, doc_id: str, out_dir):
         return None
     try:
         payload = pickle.loads(Path(pkl).read_bytes())
-        from prototype.v2.excel_writer import write_excel as v2_write
-
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / "requirements_v2.xlsx"
-        v2_write(payload["reqs"], str(out_path), overview=payload.get("overview"))
-        return out_path
+        return payload.get("overview")
     except Exception:  # noqa: BLE001
         return None

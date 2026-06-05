@@ -65,6 +65,9 @@ _TAB_BRACKET = re.compile(r"\[[^\]]*\]|\([^)]*\)|「[^」]*」")
 def _clean_tab_name(section_path: str) -> str:
     seg = section_path.split(" > ")[-1]
     seg = _TAB_BRACKET.sub("", seg)
+    # 목차(TOC) 점선 leader + 페이지번호 제거: "과제 제안요청서 ········· 7" → "과제 제안요청서"
+    seg = re.sub(r"[·.·…‧\.\-_\s]{3,}\d*\s*$", "", seg)
+    seg = re.sub(r"\s+\d+\s*$", "", seg)
     for _ in range(3):
         new = _TAB_BULLET.sub("", _TAB_NUM.sub("", seg))
         if new == seg:

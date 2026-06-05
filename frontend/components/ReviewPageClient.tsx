@@ -21,6 +21,7 @@ import { removeWorkspaceSession } from "@/lib/workspace";
 import { ExportPanel } from "@/components/ExportPanel";
 import { ProjectTitleEditor } from "@/components/ProjectTitleEditor";
 import { RequirementTable } from "@/components/RequirementTable";
+import { OverviewPanel } from "@/components/OverviewPanel";
 import { PdfViewerPane } from "@/components/PdfViewerPane";
 import { PipelineStatus } from "@/components/PipelineStatus";
 import { ScrollToTop } from "@/components/ScrollToTop";
@@ -299,6 +300,8 @@ export default function ReviewPageClient({
           </div>
         )}
       </section>
+
+      {hasRequirements && <OverviewPanel docId={docId} />}
 
       {error && (
         <div className="panel mb-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
