@@ -101,7 +101,10 @@ class RequirementSheetWriter:
             ws.append(headers)
             for r in ordered:
                 ws.append(self._build_row(r, recs.get(r.id), judges.get(r.id), col_keys, mode))
-            style_data_sheet(ws, col_keys, len(ordered))
+            style_data_sheet(
+                ws, col_keys, len(ordered),
+                gen_by_row=[r.ai_generated_fields for r in ordered],
+            )
         else:
             # 분류별 시트(기술 중심)
             for cat, items in sorted(by_cat.items()):
@@ -109,7 +112,10 @@ class RequirementSheetWriter:
                 ws.append(headers)
                 for r in items:
                     ws.append(self._build_row(r, recs.get(r.id), judges.get(r.id), col_keys, mode))
-                style_data_sheet(ws, col_keys, len(items))
+                style_data_sheet(
+                    ws, col_keys, len(items),
+                    gen_by_row=[r.ai_generated_fields for r in items],
+                )
 
         wb.save(out_path)
         return out_path
