@@ -178,10 +178,11 @@ def run(input_path: str | Path, gold_xlsx: str | None = None,
         reqs = [r for r in reqs if r.tab != "요구사항"]
     steps.append(f"tab: 사전 {len({r.tab for r in preset})} + 그룹핑 {len({r.tab for r in loose})} 탭")
 
-    # 탭 검수 — 비요구(참조안내/범위설명/현황/절차) 탭 제거. form(SFR) 탭은 보호.
+    # 탭 검수 — 비요구(참조안내/범위설명/현황/절차) 탭 제거.
+    # 폼 탭도 비요구일 수 있으므로 모두 검수 대상(가장 큰 탭·drop_cap 안전장치로 보호).
     if mode == "llm":
         before_tabs = len({r.tab for r in reqs})
-        reqs = validate_tabs_sync(reqs, protected={r.tab for r in preset})
+        reqs = validate_tabs_sync(reqs)
         after_tabs = len({r.tab for r in reqs})
         if after_tabs < before_tabs:
             steps.append(f"탭 검수: 비요구 탭 {before_tabs - after_tabs}개 제거")
