@@ -35,6 +35,7 @@ body {
 
 body {
   background: var(--surface);
+  font-size: 14px; /* 전체적으로 한 단계 작게 — 더 깔끔하게 */
 }
 
 @layer components {
