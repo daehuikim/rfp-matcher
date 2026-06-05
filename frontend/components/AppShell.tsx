@@ -42,22 +42,16 @@ function ProjectNavButton({ item, active }: { item: WorkspaceNavItem; active: bo
       type="button"
       onClick={() => void onClick()}
       disabled={busy}
-      className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-60 ${
+      className={`block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors disabled:opacity-60 ${
         active
-          ? "bg-neutral-100 text-ink-900 ring-1 ring-neutral-200"
+          ? "bg-neutral-100 text-ink-900"
           : "text-neutral-700 hover:bg-neutral-50"
       }`}
     >
-      <div className="truncate font-medium">{item.title}</div>
-      {item.sourceFilename && (
-        <div className="truncate text-[10px] text-neutral-400" title={item.sourceFilename}>
-          {item.sourceFilename}
-        </div>
-      )}
-      <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+      <div className="truncate font-medium leading-tight">{item.title}</div>
+      <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-neutral-400">
         <span className="truncate">
           {busy ? "불러오는 중…" : stageBadge(item.stage, item.isComplete)}
-          {item.fromCacheOnly && !busy && " · 캐시"}
         </span>
         {item.totalElapsedMs > 0 && (
           <span className="shrink-0 font-mono tabular-nums">
@@ -151,10 +145,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
         <aside
           className={`sidebar z-20 shrink-0 overflow-hidden border-r border-[var(--border)] bg-white transition-[width] duration-200 ${
-            sidebarOpen ? "w-60" : "w-0"
+            sidebarOpen ? "w-52" : "w-0"
           } ${sidebarOpen ? "fixed inset-y-0 left-0 top-[57px] lg:static lg:top-0" : ""}`}
         >
-          <nav className="h-full w-60 overflow-y-auto p-3">
+          <nav className="h-full w-52 overflow-y-auto p-2.5">
             <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
               시작
             </p>

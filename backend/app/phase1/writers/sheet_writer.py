@@ -54,6 +54,7 @@ class RequirementSheetWriter:
         adaptive: bool = True,
         extraction_meta: ExtractionMetadata | None = None,
         layout: str = "cluster",
+        v2_overview: dict | None = None,
     ) -> Path:
         """layout: "cluster"=분류별 시트(기술 중심) / "ordered"=RFP 원문 순서 단일 시트."""
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -87,6 +88,7 @@ class RequirementSheetWriter:
             recs,
             by_cat,
             document_category_spec(extraction_meta, requirements),
+            v2_overview=v2_overview,
         )
 
         recs = recommendations or {}

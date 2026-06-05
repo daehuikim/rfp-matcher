@@ -478,6 +478,35 @@ async def get_document_meta(doc_id: str, container: ContainerDep) -> DocumentMet
     )
 
 
+@router.get("/{doc_id}/overview")
+async def get_document_overview(doc_id: str, container: ContainerDep) -> dict:
+    """V2 추출 시 생성한 RFP 개요(요약·핵심기술·리스크) — 웹 표시용. 없으면 빈 값."""
+    import pickle
+
+    if doc_id not in container.repo.documents:
+        raise HTTPException(404, f"document 없음: {doc_id}")
+    doc = container.repo.documents[doc_id]
+    candidates = [container.settings.storage_root / doc_id / "v2_export.pkl"]
+    if doc.content_hash:
+        candidates.append(
+            container.settings.artifact_cache_dir / doc.content_hash[:16] / "v2_export.pkl"
+        )
+    pkl = next((p for p in candidates if p.is_file()), None)
+    if pkl is None:
+        return {"available": False}
+    try:
+        payload = pickle.loads(pkl.read_bytes())
+        ov = payload.get("overview") or {}
+        return {
+            "available": bool(ov),
+            "summary": ov.get("summary", ""),
+            "techs": [list(t) for t in (ov.get("techs") or [])],
+            "risks": [list(r) for r in (ov.get("risks") or [])],
+        }
+    except Exception:  # noqa: BLE001
+        return {"available": False}
+
+
 @router.get("/{doc_id}/preview")
 async def get_document_preview(doc_id: str, container: ContainerDep) -> Response:
     """우측 뷰어용 미리보기 — 어떤 포맷이든 볼 수 있는 형태로 제공.

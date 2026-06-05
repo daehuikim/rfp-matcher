@@ -283,6 +283,19 @@ export function documentPreviewUrl(docId: string): string {
   return `${apiBase()}/documents/${docId}/preview`;
 }
 
+export type RfpOverview = {
+  available: boolean;
+  summary?: string;
+  techs?: string[][]; // [기술, 요구, 관련 ID]
+  risks?: string[][]; // [내용/ID ...]
+};
+
+export async function fetchOverview(docId: string): Promise<RfpOverview | null> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/overview`, { cache: "no-store" });
+  if (!r.ok) return null;
+  return r.json();
+}
+
 export async function fetchDocumentMeta(docId: string): Promise<DocumentMeta | null> {
   const r = await fetch(`${apiBase()}/documents/${docId}/meta`, { cache: "no-store" });
   if (!r.ok) return null;

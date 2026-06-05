@@ -115,8 +115,11 @@ _OV_ID_FILL = PatternFill("solid", fgColor="FCE4D6")
 _RISK_LABEL = {"O": "가능", "△": "조건부", "X": "리스크"}
 
 
-def write_overview_sheet(ws, requirements, recommendations, by_cat, category_spec):
-    """RFP 개요 — 전체 요약(집계) + 핵심 기술(보유/부족) + 핵심 RISK(X 판정)."""
+def write_overview_sheet(ws, requirements, recommendations, by_cat, category_spec, v2_overview=None):
+    """RFP 개요 — 전체 요약 + 핵심 기술(보유/부족) + 핵심 RISK.
+
+    v2_overview(LLM 생성: summary/techs/risks)가 있으면 그 서술형 요약·기술을 우선 사용.
+    """
     from collections import Counter
 
     recs = recommendations or {}
@@ -136,16 +139,18 @@ def write_overview_sheet(ws, requirements, recommendations, by_cat, category_spe
         ws.cell(row, 3).fill = _OV_SEC_FILL
         row += 1
 
-    # 전체 요약 (집계 기반)
     total = len(requirements)
     n_cat = len(by_cat)
     dist = Counter((recs.get(r.id).ai_risk if recs.get(r.id) else "") for r in requirements)
-    summary = (
-        f"총 {total}건의 요구사항을 {n_cat}개 분류로 정리했습니다. "
-        f"AI 판정 — 가능(O) {dist.get('O', 0)} · 조건부(△) {dist.get('△', 0)} · "
-        f"리스크(X) {dist.get('X', 0)} · 미산출 {dist.get('', 0)}. "
-        f"분류 기준: {category_spec}"
-    )
+    if v2_overview and v2_overview.get("summary"):
+        summary = str(v2_overview["summary"])
+    else:
+        summary = (
+            f"총 {total}건의 요구사항을 {n_cat}개 분류로 정리했습니다. "
+            f"AI 판정 — 가능(O) {dist.get('O', 0)} · 조건부(△) {dist.get('△', 0)} · "
+            f"리스크(X) {dist.get('X', 0)} · 미산출 {dist.get('', 0)}. "
+            f"분류 기준: {category_spec}"
+        )
     section("전체 요약")
     cell = ws.cell(row, 1, summary)
     cell.alignment = WRAP
@@ -188,12 +193,24 @@ def write_overview_sheet(ws, requirements, recommendations, by_cat, category_spe
                 ws.cell(row, ci).font = BODY_FONT
             row += 1
 
+    # RFP 핵심 기술 (V2 LLM 분석)
+    v2_techs = (v2_overview or {}).get("techs") or []
+    for item in v2_techs[:12]:
+        name, req, ids = (list(item) + ["", "", ""])[:3]
+        ws.cell(row, 1, "RFP 기술")
+        ws.cell(row, 2, f"{name} — {req}" if req else str(name)).alignment = WRAP
+        ws.cell(row, 3, str(ids)).alignment = WRAP
+        ws.cell(row, 3).fill = _OV_ID_FILL
+        for ci in (1, 2, 3):
+            ws.cell(row, ci).border = BORDER
+            ws.cell(row, ci).font = BODY_FONT
+        row += 1
     if owned:
         tech_rows("KT 보유", owned, False)
     if missing:
         tech_rows("부족", missing, True)
-    if not owned and not missing:
-        ws.cell(row, 1, "(매칭·부족 기술 집계 없음)").font = Font(italic=True, size=10, color="808080")
+    if not v2_techs and not owned and not missing:
+        ws.cell(row, 1, "(기술 집계 없음)").font = Font(italic=True, size=10, color="808080")
         row += 1
     row += 1
 
