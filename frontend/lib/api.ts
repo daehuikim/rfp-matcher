@@ -263,6 +263,7 @@ export type DocumentMeta = {
   has_source_file?: boolean;
   has_preview?: boolean;
   is_pdf?: boolean;
+  preview_kind?: "pdf" | "html" | "none";
 };
 
 /** 원본 파일 그대로(다운로드·새 탭용). */

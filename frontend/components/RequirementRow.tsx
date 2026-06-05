@@ -25,12 +25,14 @@ export function RequirementRow({
   remoteUpdate,
   aiPending = false,
   onOpenPage,
+  onOpenTable,
 }: {
   view: RequirementView;
   editorId: string;
   remoteUpdate: { mark: Judgement; note: string; editor_id: string } | null;
   aiPending?: boolean;
   onOpenPage?: (page: number) => void;
+  onOpenTable?: (tableIndex: number) => void;
 }) {
   const { requirement: r, recommendation: rec, judgement } = view;
   const [mark, setMark] = useState<Judgement>(judgement?.mark ?? "");
@@ -68,6 +70,7 @@ export function RequirementRow({
           const n = typeof rawPage === "number" ? rawPage : parseInt(String(rawPage), 10);
           return Number.isFinite(n) && n > 0 ? n : null;
         })();
+  const tableIndex = typeof r.source_table_index === "number" ? r.source_table_index : null;
   const categorySource = r.category_source ?? "document_table";
   const showCategorySource = categorySource !== "document_table";
 
@@ -108,6 +111,16 @@ export function RequirementRow({
               title={`원본 ${pageNum}페이지로 이동`}
             >
               p.{pageNum} ↗
+            </button>
+          )}
+          {pageNum == null && tableIndex != null && onOpenTable && (
+            <button
+              type="button"
+              onClick={() => onOpenTable(tableIndex)}
+              className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
+              title="원본 문서에서 이 요건이 나온 표로 이동"
+            >
+              원문 ↗
             </button>
           )}
           {(((pageNum != null && !onOpenPage) || r.source_section)) && (

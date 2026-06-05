@@ -24,7 +24,7 @@ type ColumnFlags = {
   consortium: boolean;
 };
 
-function computeColumns(rows: RequirementView[]): ColumnFlags {
+function computeColumns(rows: RequirementView[], hasTableJump: boolean): ColumnFlags {
   const flags: ColumnFlags = {
     subcategory: false,
     deliverables: false,
@@ -40,6 +40,8 @@ function computeColumns(rows: RequirementView[]): ColumnFlags {
     if (r.subcategory) flags.subcategory = true;
     if (r.deliverables && r.deliverables.trim()) flags.deliverables = true;
     if (r.source_page || r.source_section) flags.source = true;
+    // HTML 미리보기에서 표 인덱스로 위치 이동 가능하면 출처 칼럼 노출
+    if (hasTableJump && r.source_table_index != null) flags.source = true;
     if (rec?.ai_reason) flags.aiReason = true;
     if ((rec?.matched_solution_skus?.length ?? 0) > 0 || (rec?.matched_solutions?.length ?? 0) > 0)
       flags.solutions = true;
@@ -90,12 +92,14 @@ export function RequirementTable({
   remoteByReqId,
   categoryFilterLabel,
   onOpenPage,
+  onOpenTable,
 }: {
   rows: RequirementView[];
   editorId: string;
   remoteByReqId: RemoteMap;
   categoryFilterLabel: string;
   onOpenPage?: (page: number) => void;
+  onOpenTable?: (tableIndex: number) => void;
 }) {
   const groups = useMemo(() => {
     const map = new Map<string, RequirementView[]>();
@@ -161,6 +165,7 @@ export function RequirementTable({
             editorId={editorId}
             remoteByReqId={remoteByReqId}
             onOpenPage={onOpenPage}
+            onOpenTable={onOpenTable}
           />
         ))}
       </div>
@@ -175,6 +180,7 @@ function SheetBox({
   remoteByReqId,
   categoryFilterLabel,
   onOpenPage,
+  onOpenTable,
 }: {
   title: string;
   rows: RequirementView[];
@@ -182,8 +188,9 @@ function SheetBox({
   remoteByReqId: RemoteMap;
   categoryFilterLabel: string;
   onOpenPage?: (page: number) => void;
+  onOpenTable?: (tableIndex: number) => void;
 }) {
-  const flags = useMemo(() => computeColumns(rows), [rows]);
+  const flags = useMemo(() => computeColumns(rows, !!onOpenTable), [rows, onOpenTable]);
   const source = rows[0]?.requirement.category_source ?? "document_table";
   const showSource = source !== "document_table";
 
@@ -235,6 +242,7 @@ function SheetBox({
                 remoteUpdate={remoteByReqId[v.requirement.id] ?? null}
                 totalCols={colCount(flags)}
                 onOpenPage={onOpenPage}
+                onOpenTable={onOpenTable}
               />
             ))}
           </tbody>
@@ -251,6 +259,7 @@ function SheetRow({
   remoteUpdate,
   totalCols,
   onOpenPage,
+  onOpenTable,
 }: {
   view: RequirementView;
   flags: ColumnFlags;
@@ -258,6 +267,7 @@ function SheetRow({
   remoteUpdate: { mark: Judgement; note: string; editor_id: string } | null;
   totalCols: number;
   onOpenPage?: (page: number) => void;
+  onOpenTable?: (tableIndex: number) => void;
 }) {
   const { requirement: r, recommendation: rec } = view;
   const [mark, setMark] = useState<Judgement>(view.judgement?.mark ?? "");
@@ -288,6 +298,7 @@ function SheetRow({
 
   const body = formatRequirementDetail(r.detail || r.name);
   const pageNum = toPageNumber(r.source_page);
+  const tableIndex = typeof r.source_table_index === "number" ? r.source_table_index : null;
   const badge = rec ? riskBadge(rec.ai_risk) : riskBadge("");
   const matchedSkus = rec?.matched_solution_skus ?? [];
   const matchedNames = rec?.matched_solutions ?? [];
@@ -336,26 +347,34 @@ function SheetRow({
 
         {flags.source && (
           <td className="text-[11px] text-neutral-500">
-            {pageNum != null &&
-              (onOpenPage ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenPage(pageNum)}
-                  className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
-                  title={`원본 ${pageNum}페이지로 이동`}
-                >
-                  p.{pageNum} ↗
-                </button>
-              ) : (
-                <span>p.{pageNum}</span>
-              ))}
-            {pageNum != null && r.source_section ? " " : ""}
+            {pageNum != null && onOpenPage ? (
+              <button
+                type="button"
+                onClick={() => onOpenPage(pageNum)}
+                className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
+                title={`원본 ${pageNum}페이지로 이동`}
+              >
+                p.{pageNum} ↗
+              </button>
+            ) : tableIndex != null && onOpenTable ? (
+              <button
+                type="button"
+                onClick={() => onOpenTable(tableIndex)}
+                className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
+                title="원본 문서에서 이 요건이 나온 표로 이동"
+              >
+                원문 ↗
+              </button>
+            ) : pageNum != null ? (
+              <span>p.{pageNum}</span>
+            ) : null}
+            {(pageNum != null || (tableIndex != null && onOpenTable)) && r.source_section ? " " : ""}
             {r.source_section ? (
               <span title={r.source_section}>{r.source_section.slice(0, 24)}</span>
             ) : (
               ""
             )}
-            {pageNum == null && !r.source_section ? "—" : ""}
+            {pageNum == null && tableIndex == null && !r.source_section ? "—" : ""}
           </td>
         )}
 

@@ -1,44 +1,91 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { documentPreviewUrl } from "@/lib/api";
 
 /**
  * 우측 원본 뷰어 — 브라우저 내장 뷰어(iframe)로 미리보기를 표시.
  * 서버 /preview 가 포맷에 맞춰 PDF(원본·변환) 또는 변환 HTML 을 내려준다.
  *
- * PDF 문서는 조견표 source_page(1-based) 클릭 시 `#page=N` 으로 이동.
- * 같은 문서에서 hash만 바뀌면 내장 뷰어가 재이동하지 않으므로,
- * jump마다 nonce를 키에 넣어 iframe을 재마운트해 해당 페이지로 로드한다.
+ * - PDF(kind="pdf"): 조견표 source_page → `#page=N` 으로 이동(jump마다 iframe 재마운트).
+ * - HTML(kind="html"): 조견표 source_table_index → iframe 내 N번째 <table> 로
+ *   스크롤 + 하이라이트(같은 출처라 contentDocument 접근 가능, 재마운트 없이 이동).
  */
 export function PdfViewerPane({
   docId,
+  kind,
   page,
+  tableIndex,
   jumpNonce,
   sourceFilename,
-  isPdf = true,
   onClose,
 }: {
   docId: string;
+  kind: "pdf" | "html";
   page: number | null;
+  tableIndex: number | null;
   jumpNonce: number;
   sourceFilename?: string | null;
-  isPdf?: boolean;
   onClose?: () => void;
 }) {
   const previewUrl = documentPreviewUrl(docId);
-  // PDF만 페이지 프래그먼트 사용. 변환 PDF/HTML 폴백은 그대로 표시.
+  const isPdf = kind === "pdf";
   const pageHash =
     isPdf && page != null ? `#page=${page}&view=FitH&toolbar=1&navpanes=0` : "";
   const src = `${previewUrl}${pageHash}`;
   const [loadFailed, setLoadFailed] = useState(false);
-  const lastNonce = useRef(jumpNonce);
+  const [loadedNonce, setLoadedNonce] = useState(0); // iframe load 신호 (html scroll 트리거)
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // HTML 모드: 지정한 <table> 로 스크롤 + 하이라이트
+  const scrollToTable = useCallback((idx: number) => {
+    const frame = iframeRef.current;
+    if (!frame) return false;
+    let doc: Document | null = null;
+    try {
+      doc = frame.contentDocument;
+    } catch {
+      return false; // cross-origin (이론상 동일 출처라 발생 안 함)
+    }
+    if (!doc || !doc.body) return false;
+    const tables = doc.querySelectorAll("table");
+    const el = tables[idx] as HTMLElement | undefined;
+    if (!el) return false;
+    el.scrollIntoView({ behavior: "auto", block: "center" });
+    const prevOutline = el.style.outline;
+    const prevBg = el.style.backgroundColor;
+    const prevTransition = el.style.transition;
+    el.style.outline = "3px solid #e0282f";
+    el.style.outlineOffset = "3px";
+    el.style.backgroundColor = "rgba(224,40,47,0.10)";
+    el.style.transition = "background-color 0.6s ease, outline-color 0.6s ease";
+    window.setTimeout(() => {
+      // 부드럽게 사라지도록 색만 먼저 투명 처리 후 원복
+      el.style.outline = "3px solid rgba(224,40,47,0)";
+      el.style.backgroundColor = prevBg;
+      window.setTimeout(() => {
+        el.style.outline = prevOutline;
+        el.style.transition = prevTransition;
+      }, 700);
+    }, 2600);
+    return true;
+  }, []);
+
+  // HTML 모드에서 jump(또는 최초 로드) 시 스크롤. 로드 타이밍 보정 위해 약간 재시도.
+  useEffect(() => {
+    if (isPdf || tableIndex == null) return;
+    let tries = 0;
+    let timer = 0;
+    const attempt = () => {
+      if (scrollToTable(tableIndex)) return;
+      if (tries++ < 12) timer = window.setTimeout(attempt, 150);
+    };
+    attempt();
+    return () => window.clearTimeout(timer);
+  }, [isPdf, tableIndex, jumpNonce, loadedNonce, scrollToTable]);
 
   useEffect(() => {
-    if (jumpNonce !== lastNonce.current) {
-      lastNonce.current = jumpNonce;
-      setLoadFailed(false);
-    }
+    setLoadFailed(false);
   }, [jumpNonce]);
 
   return (
@@ -54,7 +101,7 @@ export function PdfViewerPane({
           {!isPdf && (
             <span
               className="pill border-amber-200 bg-amber-50 text-amber-800"
-              title="원본을 PDF로 변환할 수 없어 변환 미리보기로 표시 — 레이아웃이 원본과 다를 수 있습니다."
+              title="원본을 PDF로 변환할 수 없어 변환 미리보기(HTML)로 표시 — 클릭한 요건의 표로 이동·강조합니다."
             >
               변환 미리보기
             </span>
@@ -108,10 +155,13 @@ export function PdfViewerPane({
           </div>
         ) : (
           <iframe
-            key={`${docId}-${jumpNonce}`}
+            // PDF는 jump마다 재마운트(#page 적용), HTML은 안정 유지(스크롤로 이동)
+            key={isPdf ? `${docId}-${jumpNonce}` : `${docId}-html`}
+            ref={iframeRef}
             src={src}
             title="원본 미리보기"
             className="absolute inset-0 h-full w-full"
+            onLoad={() => setLoadedNonce((n) => n + 1)}
             onError={() => setLoadFailed(true)}
           />
         )}
