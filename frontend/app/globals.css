@@ -69,11 +69,11 @@ body {
   }
 
   .panel {
-    @apply rounded-2xl border border-[var(--border)] bg-white shadow-[0_1px_2px_rgba(26,26,26,0.04)];
+    @apply rounded-xl border border-[var(--border)] bg-white shadow-[0_1px_2px_rgba(26,26,26,0.04)];
   }
 
   .glass-card {
-    @apply rounded-2xl border border-[var(--border)] bg-white shadow-[0_1px_2px_rgba(26,26,26,0.04)];
+    @apply rounded-xl border border-[var(--border)] bg-white shadow-[0_1px_2px_rgba(26,26,26,0.04)];
   }
 
   .step-chip {
@@ -89,7 +89,7 @@ body {
   }
 
   .pill {
-    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium;
   }
 
   /* 선택/비선택 칩 — grayscale 우선, 활성은 ink */
@@ -102,11 +102,11 @@ body {
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-ink-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-ink-700 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-ink-900 px-3.5 py-1.5 text-[13px] font-medium text-white shadow-sm transition hover:bg-ink-700 disabled:opacity-50;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-3.5 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-[13px] font-medium text-neutral-700 transition hover:bg-neutral-50;
   }
 
   .btn-ghost {
@@ -156,7 +156,7 @@ body {
   }
 
   .sheet-table {
-    @apply w-full border-separate text-[12px];
+    @apply w-full border-separate text-[11px];
     border-spacing: 0;
   }
 

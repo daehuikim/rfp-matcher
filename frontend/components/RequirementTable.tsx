@@ -197,11 +197,11 @@ function SheetBox({
 
   return (
     <section className="panel overflow-hidden">
-      <header className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+      <header className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-3 py-1.5">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-neutral-400">
           {categoryFilterLabel}
         </span>
-        <h3 className="text-sm font-semibold text-ink-900">{title}</h3>
+        <h3 className="text-[13px] font-semibold text-ink-900">{title}</h3>
         <span className="pill border-neutral-200 bg-neutral-50 text-neutral-500">
           {rows.length}건
         </span>

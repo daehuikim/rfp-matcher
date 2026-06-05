@@ -288,7 +288,7 @@ export default function ReviewPageClient({
         )}
 
         {hasRequirements && (
-          <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-5">
+          <div className="mt-3 grid grid-cols-2 gap-1.5 md:grid-cols-5">
             <Stat label="총 요건" value={stats.total} />
             <Stat label="O" value={stats.O} />
             <Stat label="△" value={stats["△"]} />
@@ -518,9 +518,9 @@ export default function ReviewPageClient({
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-      <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
-      <div className="mt-0.5 text-xl font-bold tabular-nums">{value}</div>
+    <div className="flex items-baseline justify-between rounded-md border border-neutral-100 bg-neutral-50/80 px-2.5 py-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-neutral-400">{label}</span>
+      <span className="text-sm font-bold tabular-nums text-ink-900">{value}</span>
     </div>
   );
 }
