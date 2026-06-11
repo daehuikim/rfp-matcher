@@ -16,6 +16,7 @@ from app.phase2.retrieval.bm25_catalog import Bm25CatalogRetriever
 from app.storage.repo import InMemoryRepo
 
 if TYPE_CHECKING:
+    from app.phase2.company_tech.index import CompanyTechIndex
     from app.services.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class Container:
     event_bus: EventBus
     repo: InMemoryRepo
     catalog_retriever: Bm25CatalogRetriever
+    company_tech_index: CompanyTechIndex | None = None
     pdf_converter: HtmlConverter = field(default_factory=PymupdfConverter)
     llm_usage_by_doc: dict[str, LlmUsageTracker] = field(default_factory=dict)
     pipeline_tasks: dict[str, asyncio.Task[None]] = field(default_factory=dict)
@@ -84,8 +86,19 @@ async def build_container() -> Container:
                 "brew install openjdk 또는 PDF_CONVERTER=pymupdf 권장"
             )
 
+    company_tech_index = None
+    if settings.recommend_engine == "company_tech":
+        from app.phase2.company_tech.index import CompanyTechIndex
+
+        company_tech_index = await CompanyTechIndex.load(settings)
+        if company_tech_index is None:
+            logger.warning(
+                "company_tech 인덱스 미준비 — data/chroma_db 빌드 필요 "
+                "(python -m app.preprocessing.build_vectordb)"
+            )
+
     # BM25 인덱스 — 카탈로그 JSON에서 lifespan 시 1회 빌드 (수백 건 → ms)
-    if not catalog_retriever.indexed:
+    if settings.recommend_engine == "catalog" and not catalog_retriever.indexed:
         if settings.catalog_path.exists():
             cat_store = CatalogStore.load(settings.catalog_path)
         else:
@@ -117,10 +130,13 @@ async def build_container() -> Container:
         else:
             logger.warning("카탈로그 비어 있음 — AI 매칭 검색 불가")
 
+    tech_chunks = company_tech_index.chunk_count if company_tech_index else 0
     logger.info(
-        "Container 초기화 완료 (llm=%s, catalog_bm25=%d entries, pdf=%s)",
+        "Container 초기화 완료 (llm=%s, engine=%s, catalog_bm25=%d, tech_chunks=%d, pdf=%s)",
         settings.llm_provider,
+        settings.recommend_engine,
         await catalog_retriever.count(),
+        tech_chunks,
         settings.pdf_converter,
     )
     return Container(
@@ -129,6 +145,7 @@ async def build_container() -> Container:
         event_bus=event_bus,
         repo=repo,
         catalog_retriever=catalog_retriever,
+        company_tech_index=company_tech_index,
         pdf_converter=pdf_converter,
     )
 

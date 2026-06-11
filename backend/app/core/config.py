@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     llm_concurrency: int = Field(default=16, alias="LLM_CONCURRENCY")
     recommend_batch_size: int = 5
 
+    # 추천 엔진: catalog(kt_solutions.json BM25) | company_tech(Chroma Hybrid)
+    recommend_engine: Literal["catalog", "company_tech"] = "company_tech"
+    chroma_persist_dir: Path = PROJECT_ROOT / "data" / "chroma_db"
+    chroma_collection: str = "company_tech_docs"
+    company_tech_embedding_model: str = "text-embedding-3-small"
+    company_tech_routing_model: str = "gpt-4o-mini"
+    company_tech_review_model: str = "gpt-4o-mini"
+    company_tech_search_mode: Literal["Hybrid", "Vector", "BM25"] = "Hybrid"
+    company_tech_top_k: int = 5
+    company_tech_use_auto_routing: bool = True
+
     # deprecated — OpenAI embedding 미사용 (BM25로 대체)
     embedding_provider: Literal["openai", "local", "bm25"] = "bm25"
     embedding_model_openai: str = "text-embedding-3-large"
