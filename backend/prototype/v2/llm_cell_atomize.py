@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.llm.base import Message
-from app.llm.openai_client import OpenAIClient
+from app.llm.factory import build_llm_client
 
 from .extract import Req
 from .text import sig
@@ -77,9 +77,13 @@ _FEWSHOT = (
 async def _restructure(client, rows: list[Req]) -> list[Req] | None:
     body = "\n".join(f"  {i + 1}. {r.detail.strip()}" for i, r in enumerate(rows))
     try:
+        prompt = _FEWSHOT + "아래 [입력]을 위 형식의 JSON으로 재구성하라.\n[입력]\n" + body
         out = await client.structured_output(
-            [Message(role="user", content=_FEWSHOT + "아래 [입력]을 위 형식의 JSON으로 재구성하라.\n[입력]\n" + body)],
+            [Message(role="user", content=prompt)],
             _Out, purpose="cell_atomize", max_tokens=2000)
+        from app.services.pipeline_logger import record_llm_io
+
+        record_llm_io("cell_atomize", prompt=prompt, response=out, meta={"rows": len(rows)})
     except Exception:
         return None
     items = [it for it in out.items if sig(it.detail) and len(sig(it.detail)) >= 2]
@@ -113,7 +117,7 @@ async def atomize_cells(reqs: list[Req]) -> list[Req]:
         return reqs
 
     s = Settings()
-    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+    client = build_llm_client(s)
     sem = asyncio.Semaphore(max(2, s.llm_concurrency))
 
     async def _run(k):
@@ -129,4 +133,5 @@ async def atomize_cells(reqs: list[Req]) -> list[Req]:
 
 
 def atomize_cells_sync(reqs: list[Req]) -> list[Req]:
-    return asyncio.run(atomize_cells(reqs))
+    from .async_run import run_coro
+    return run_coro(atomize_cells(reqs))

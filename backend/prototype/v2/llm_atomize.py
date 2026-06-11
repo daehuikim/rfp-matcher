@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.llm.base import Message
-from app.llm.openai_client import OpenAIClient
+from app.llm.factory import build_llm_client
 
 from .extract import Req
 
@@ -48,7 +48,7 @@ def _prompt(batch: list[tuple[int, str]]) -> str:
     )
 
 
-async def _run_batch(client: OpenAIClient, sem: asyncio.Semaphore,
+async def _run_batch(client, sem: asyncio.Semaphore,
                      batch: list[tuple[int, str]]) -> dict[int, list[str]]:
     async with sem:
         try:
@@ -66,7 +66,7 @@ async def atomize_reqs(reqs: list[Req], batch_size: int = 12,
     if not targets:
         return reqs
     s = Settings()
-    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+    client = build_llm_client(s)
     sem = asyncio.Semaphore(concurrency)
     batches = [targets[k:k + batch_size] for k in range(0, len(targets), batch_size)]
     results = await asyncio.gather(*[_run_batch(client, sem, b) for b in batches])

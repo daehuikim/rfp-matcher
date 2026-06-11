@@ -402,6 +402,7 @@ export default function ReviewPageClient({
 
       {hasRequirements && filtered.length > 0 && (
         <RequirementTable
+          docId={docId}
           rows={filtered}
           editorId={editorId}
           remoteByReqId={remoteByReqId}

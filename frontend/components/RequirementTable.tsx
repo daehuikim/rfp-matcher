@@ -7,7 +7,7 @@ import {
   categorySourceLabel,
   patchJudgement,
 } from "@/lib/api";
-import { formatRequirementDetail } from "@/lib/formatDetail";
+import { RequirementDetailContent } from "./RequirementDetailContent";
 import { AiVerdictModal } from "./AiVerdictModal";
 import { CatalogAuditPanel } from "./CatalogAuditPanel";
 import { JudgementToggle } from "./JudgementToggle";
@@ -40,7 +40,7 @@ function computeColumns(rows: RequirementView[], hasTableJump: boolean): ColumnF
     const rec = v.recommendation;
     if (r.subcategory) flags.subcategory = true;
     if (r.deliverables && r.deliverables.trim()) flags.deliverables = true;
-    if (r.source_page || r.source_section) flags.source = true;
+    if (r.source_page || r.source_section || r.source_ref) flags.source = true;
     // HTML 미리보기에서 표 인덱스로 위치 이동 가능하면 출처 칼럼 노출
     if (hasTableJump && r.source_table_index != null) flags.source = true;
     if (rec?.ai_reason) flags.aiReason = true;
@@ -88,6 +88,7 @@ function colCount(flags: ColumnFlags): number {
 }
 
 export function RequirementTable({
+  docId,
   rows,
   editorId,
   remoteByReqId,
@@ -95,6 +96,7 @@ export function RequirementTable({
   onOpenPage,
   onOpenTable,
 }: {
+  docId: string;
   rows: RequirementView[];
   editorId: string;
   remoteByReqId: RemoteMap;
@@ -160,6 +162,7 @@ export function RequirementTable({
         {visibleGroups.map((g) => (
           <SheetBox
             key={g.name}
+            docId={docId}
             title={g.name}
             categoryFilterLabel={categoryFilterLabel}
             rows={g.items}
@@ -175,6 +178,7 @@ export function RequirementTable({
 }
 
 function SheetBox({
+  docId,
   title,
   rows,
   editorId,
@@ -183,6 +187,7 @@ function SheetBox({
   onOpenPage,
   onOpenTable,
 }: {
+  docId: string;
   title: string;
   rows: RequirementView[];
   editorId: string;
@@ -237,6 +242,7 @@ function SheetBox({
             {rows.map((v) => (
               <SheetRow
                 key={v.requirement.id}
+                docId={docId}
                 view={v}
                 flags={flags}
                 editorId={editorId}
@@ -254,6 +260,7 @@ function SheetBox({
 }
 
 function SheetRow({
+  docId,
   view,
   flags,
   editorId,
@@ -262,6 +269,7 @@ function SheetRow({
   onOpenPage,
   onOpenTable,
 }: {
+  docId: string;
   view: RequirementView;
   flags: ColumnFlags;
   editorId: string;
@@ -298,7 +306,6 @@ function SheetRow({
     }
   }
 
-  const body = formatRequirementDetail(r.detail || r.name);
   const pageNum = toPageNumber(r.source_page);
   const tableIndex = typeof r.source_table_index === "number" ? r.source_table_index : null;
   const badge = rec ? riskBadge(rec.ai_risk) : riskBadge("");
@@ -321,22 +328,12 @@ function SheetRow({
         </td>
 
         <td>
-          <p className="font-medium leading-snug text-ink-900">{body.title || r.name}</p>
-          {body.bullets.length > 0 && (
-            <ul className="mt-1 space-y-0.5">
-              {body.bullets.slice(0, expanded ? body.bullets.length : 2).map((b, i) => (
-                <li key={i} className="flex gap-1 text-[11px] text-neutral-600">
-                  <span className="shrink-0 text-neutral-300">•</span>
-                  <span>{b}</span>
-                </li>
-              ))}
-              {!expanded && body.bullets.length > 2 && (
-                <li className="text-[11px] text-neutral-400">
-                  외 {body.bullets.length - 2}개 · 펼치기 ▸
-                </li>
-              )}
-            </ul>
-          )}
+          <RequirementDetailContent
+            docId={docId}
+            requirement={r}
+            expanded={expanded}
+            bulletLimit={2}
+          />
         </td>
 
         {flags.subcategory && (
@@ -361,7 +358,7 @@ function SheetRow({
             ) : tableIndex != null && onOpenTable ? (
               <button
                 type="button"
-                onClick={() => onOpenTable(tableIndex, r.name || body.title)}
+                onClick={() => onOpenTable(tableIndex, r.name || r.detail)}
                 className="pill border-ktred-200 bg-ktred-50 font-medium text-ktred-700 transition hover:border-ktred-300 hover:bg-ktred-100"
                 title="원본 문서에서 이 요건이 나온 표로 이동"
               >
@@ -370,13 +367,19 @@ function SheetRow({
             ) : pageNum != null ? (
               <span>p.{pageNum}</span>
             ) : null}
-            {(pageNum != null || (tableIndex != null && onOpenTable)) && r.source_section ? " " : ""}
-            {r.source_section ? (
-              <span title={r.source_section}>{r.source_section.slice(0, 24)}</span>
+            {r.source_ref ? (
+              <span title={r.source_ref}>{r.source_ref}</span>
             ) : (
-              ""
+              <>
+                {(pageNum != null || (tableIndex != null && onOpenTable)) && r.source_section ? " " : ""}
+                {r.source_section ? (
+                  <span title={r.source_section}>{r.source_section.slice(0, 24)}</span>
+                ) : (
+                  ""
+                )}
+                {pageNum == null && tableIndex == null && !r.source_section ? "—" : ""}
+              </>
             )}
-            {pageNum == null && tableIndex == null && !r.source_section ? "—" : ""}
           </td>
         )}
 

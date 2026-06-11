@@ -14,9 +14,10 @@ from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.llm.base import Message
-from app.llm.openai_client import OpenAIClient
+from app.llm.factory import build_llm_client
 
 from .extract import Req
+from .text import norm
 
 
 class _Tech(BaseModel):
@@ -80,17 +81,69 @@ def _prompt(doc_text: str, reqs_text: str) -> str:
 
 async def _build(doc: dict, reqs: list[Req]) -> _Overview | None:
     s = Settings()
-    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+    client = build_llm_client(s)
     try:
-        return await client.structured_output(
-            [Message(role="user", content=_prompt(_doc_text(doc), _reqs_text(reqs)))],
+        prompt = _prompt(_doc_text(doc), _reqs_text(reqs))
+        out = await client.structured_output(
+            [Message(role="user", content=prompt)],
             _Overview, purpose="overview", max_tokens=4000)
+        from app.services.pipeline_logger import record_llm_io
+
+        record_llm_io("overview", prompt=prompt, response=out, meta={"reqs": len(reqs)})
+        return out
+    except Exception:
+        return None
+
+
+def _html_doc_text(html: str, limit: int = 16000) -> str:
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    for tag in soup.find_all(["script", "style"]):
+        tag.decompose()
+    return norm(soup.get_text("\n", strip=True))[:limit]
+
+
+def build_overview_from_html_sync(html: str, reqs: list[Req]) -> dict | None:
+    """HTML 본문 + 조견표 → 개요(요약·핵심기술·리스크)."""
+    from .async_run import run_coro
+
+    return run_coro(_build_from_text(_html_doc_text(html), reqs))
+
+
+async def _build_from_text(doc_text: str, reqs: list[Req]) -> dict | None:
+    s = Settings()
+    if not s.openai_api_key:
+        return None
+    client = build_llm_client(s)
+    try:
+        prompt = _prompt(doc_text, _reqs_text(reqs))
+        out = await client.structured_output(
+            [Message(role="user", content=prompt)],
+            _Overview,
+            purpose="overview",
+            max_tokens=4000,
+        )
+        from app.services.pipeline_logger import record_llm_io
+
+        record_llm_io("overview", prompt=prompt, response=out, meta={"reqs": len(reqs)})
+        valid_ids = {r.rid for r in reqs}
+
+        def keep_ids(ids: list[str]) -> str:
+            return ", ".join(i for i in ids if i in valid_ids)
+
+        return {
+            "summary": out.summary,
+            "techs": [(t.name, t.requirement, keep_ids(t.req_ids)) for t in out.techs],
+            "risks": [(r.clause, keep_ids(r.req_ids)) for r in out.risks],
+        }
     except Exception:
         return None
 
 
 def build_overview_sync(doc: dict, reqs: list[Req]) -> dict | None:
-    ov = asyncio.run(_build(doc, reqs))
+    from .async_run import run_coro
+    ov = run_coro(_build(doc, reqs))
     if ov is None:
         return None
     # ID 는 실제 존재하는 것만 통과(할루시 ID 방지)

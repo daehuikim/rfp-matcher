@@ -13,8 +13,8 @@ from collections import Counter
 from pydantic import BaseModel
 
 from app.core.config import Settings
-from app.llm.base import Message
-from app.llm.openai_client import OpenAIClient
+from app.llm.base import AsyncLlmClient, Message
+from app.llm.factory import build_llm_client
 
 from .extract import Req
 
@@ -37,9 +37,8 @@ class _TabResult(BaseModel):
     assignments: list[_Assignment]
 
 
-def _client() -> OpenAIClient:
-    s = Settings()
-    return OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+def _client() -> AsyncLlmClient:
+    return build_llm_client(Settings())
 
 
 def _keep_prompt(sections: list[tuple[str, int, str]]) -> str:

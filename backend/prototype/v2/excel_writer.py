@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import re
 from collections import OrderedDict
+from copy import copy
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -23,8 +24,11 @@ COLUMNS = [
     ("항목명", "top", 22, False, True),
     ("요구사항", "mid", 26, False, True),
     ("상세요건", "detail", 82, False, False),
+    ("산출정보", "deliverable", 22, False, True),
+    ("관련요구사항", "related_req", 18, True, True),
     ("출처", "source", 16, True, False),
 ]
+_DETAIL_COL = next(i for i, (_l, k, _w, _c, _m) in enumerate(COLUMNS, 1) if k == "detail")
 
 _HEADER_FILL = PatternFill("solid", fgColor="305496")
 _HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
@@ -74,7 +78,65 @@ def _merge_runs(ws, col_idx: int, key_fn, reqs: list[Req]) -> None:
         start = end + 1
 
 
+def _expand_image_rows(reqs: list[Req]) -> list[Req]:
+    """텍스트와 이미지를 다른 행으로 — 셀 겹침 방지."""
+    out: list[Req] = []
+    for r in reqs:
+        imgs = r.detail_images
+        if not imgs:
+            out.append(r)
+            continue
+        detail = (r.detail or "").strip()
+        is_caption = detail.startswith("[관련 화면(안)]") or detail == "[표]"
+        if detail and not is_caption:
+            t = copy(r)
+            t.detail_images = []
+            out.append(t)
+            first_detail = "[표]"
+        elif is_caption:
+            first_detail = detail
+        else:
+            first_detail = "[관련 화면(안)]"
+        for i, path in enumerate(imgs):
+            ir = copy(r)
+            ir.detail = first_detail if i == 0 else ""
+            ir.detail_images = [path]
+            out.append(ir)
+            first_detail = ""
+    return out
+
+
+def _embed_detail_images(ws, ri: int, paths: list[str], *, text_lines: int = 0) -> None:
+    """상세요건 셀 — 이미지 전용 행에 삽입(텍스트와 겹치지 않음)."""
+    if not paths:
+        return
+    try:
+        from openpyxl.drawing.image import Image as XLImage
+    except ImportError:
+        return
+    col = get_column_letter(_DETAIL_COL)
+    row_h = ws.row_dimensions[ri].height or 15
+    y_off = 0
+    if text_lines:
+        y_off = min(14 * text_lines, 120)
+    for path in paths:
+        try:
+            img = XLImage(path)
+        except Exception:
+            continue
+        scale = min(1.0, 520 / max(img.width, 1), 480 / max(img.height, 1))
+        img.width = max(120, int(img.width * scale))
+        img.height = max(80, int(img.height * scale))
+        img.anchor = f"{col}{ri}"
+        ws.add_image(img)
+        need = img.height * 0.75 + 8 + y_off
+        row_h = max(row_h, need)
+        y_off = 0
+    ws.row_dimensions[ri].height = row_h
+
+
 def _write_sheet(ws, reqs: list[Req]) -> None:
+    reqs = _expand_image_rows(reqs)
     for ci, (label, _k, width, _c, _m) in enumerate(COLUMNS, 1):
         cell = ws.cell(1, ci, label)
         cell.fill = _HEADER_FILL
@@ -85,7 +147,15 @@ def _write_sheet(ws, reqs: list[Req]) -> None:
     ws.row_dimensions[1].height = 24
 
     for ri, r in enumerate(reqs, 2):
-        vals = {"rid": r.rid, "top": r.top, "mid": r.mid, "detail": r.detail, "source": r.source}
+        vals = {
+            "rid": r.rid,
+            "top": r.top,
+            "mid": r.mid,
+            "detail": r.detail,
+            "deliverable": r.deliverable,
+            "related_req": r.related_req,
+            "source": r.source,
+        }
         gen = {"rid": r.gen_rid, "top": r.gen_top, "mid": r.gen_mid}
         for ci, (_l, key, _w, center, _m) in enumerate(COLUMNS, 1):
             cell = ws.cell(ri, ci, vals[key])
@@ -99,10 +169,15 @@ def _write_sheet(ws, reqs: list[Req]) -> None:
         h = _row_height(r.detail)
         if h:
             ws.row_dimensions[ri].height = h
+        if r.detail_images:
+            _embed_detail_images(ws, ri, r.detail_images)
 
-    # 항목명(top) / 요구사항(top+mid) 셀 병합
+    # ID(top+mid) / 항목명(top) / 요구사항(top+mid) 셀 병합
+    _merge_runs(ws, 1, lambda r: r.rid, reqs)
     _merge_runs(ws, 2, lambda r: r.top, reqs)
     _merge_runs(ws, 3, lambda r: (r.top, r.mid), reqs)
+    _merge_runs(ws, 5, lambda r: (r.rid, r.deliverable), reqs)
+    _merge_runs(ws, 6, lambda r: (r.rid, r.related_req), reqs)
 
     ws.freeze_panes = "A2"
     if reqs:
@@ -112,6 +187,112 @@ def _write_sheet(ws, reqs: list[Req]) -> None:
 _TITLE_FONT = Font(bold=True, size=14, color="305496")
 _SEC_FILL = PatternFill("solid", fgColor="D9E1F2")
 _SEC_FONT = Font(bold=True, size=11, color="1F3864")
+
+
+def _write_public_rfp_overview(ws, overview: dict) -> None:
+    """개요(좌) + 빈열 + 요구사항 총괄표(우) — 시트명 '개요'."""
+    meta = overview.get("meta") or {}
+    headers = overview.get("headers") or []
+    rows = overview.get("rows") or []
+
+    left_cols = 3
+    gap_col = 4
+    right_start = 5
+
+    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["B"].width = 52
+    ws.column_dimensions["C"].width = 22
+    ws.column_dimensions[get_column_letter(gap_col)].width = 2
+    for ci, label in enumerate(headers, right_start):
+        ws.column_dimensions[get_column_letter(ci)].width = 24 if ci == right_start else 20
+
+    ws.cell(1, 1, "RFP 개요").font = _TITLE_FONT
+    ws.cell(1, right_start, "요구사항 총괄표").font = _TITLE_FONT
+
+    row = 3
+
+    def section(title: str, start_row: int) -> int:
+        c = ws.cell(start_row, 1, title)
+        c.fill = _SEC_FILL
+        c.font = _SEC_FONT
+        ws.cell(start_row, 2).fill = _SEC_FILL
+        ws.cell(start_row, 3).fill = _SEC_FILL
+        return start_row + 1
+
+    row = section("전체 요약", row)
+    summary = meta.get("summary", "")
+    cell = ws.cell(row, 1, summary)
+    cell.alignment = _WRAP
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    h = _row_height(summary)
+    if h:
+        ws.row_dimensions[row].height = max(h, 60)
+    row += 2
+
+    row = section("핵심 기술", row)
+    for ci, lbl in enumerate(("기술", "요구", "관련 ID"), 1):
+        c = ws.cell(row, ci, lbl)
+        c.font = Font(bold=True, size=10)
+        c.fill = _SEC_FILL
+    row += 1
+    for name, req, ids in meta.get("techs", []):
+        ws.cell(row, 1, name).font = Font(bold=True, size=10)
+        ws.cell(row, 1).alignment = _WRAP
+        ws.cell(row, 2, req).alignment = _WRAP
+        ws.cell(row, 3, ids).fill = _AI_FILL
+        ws.cell(row, 3).alignment = _WRAP
+        for ci in (1, 2, 3):
+            ws.cell(row, ci).border = _BORDER
+        row += 1
+    row += 1
+
+    row = section("핵심 RISK (독소조항)", row)
+    for ci, lbl in enumerate(("관련 ID", "리스크/독소조항"), 1):
+        c = ws.cell(row, ci, lbl)
+        c.font = Font(bold=True, size=10)
+        c.fill = _SEC_FILL
+    ws.cell(row, 2).fill = _SEC_FILL
+    row += 1
+    risks = meta.get("risks", [])
+    if not risks:
+        ws.cell(row, 1, "(식별된 독소조항 없음)").font = Font(italic=True, size=10, color="808080")
+        row += 1
+    for clause, ids in risks:
+        ws.cell(row, 1, ids).alignment = _WRAP
+        ws.cell(row, 1).fill = _AI_FILL
+        ws.cell(row, 2, clause).alignment = _WRAP
+        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
+        ws.cell(row, 1).border = _BORDER
+        ws.cell(row, 2).border = _BORDER
+        row += 1
+
+    left_end = max(row, 3)
+
+    for ci, label in enumerate(headers, right_start):
+        cell = ws.cell(3, ci, label)
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.alignment = _CENTER
+        cell.border = _BORDER
+    for ri, data in enumerate(rows, 4):
+        for ci, val in enumerate(data, right_start):
+            cell = ws.cell(ri, ci, val)
+            cell.border = _BORDER
+            cell.font = _BODY_FONT
+            cell.alignment = _WRAP
+            if ri % 2 == 0:
+                cell.fill = _ZEBRA_FILL
+    right_end = 3 + len(rows)
+
+    ws.freeze_panes = "A4"
+    if rows:
+        ws.auto_filter.ref = (
+            f"{get_column_letter(right_start)}3:"
+            f"{get_column_letter(right_start + max(len(headers), 1) - 1)}{right_end}"
+        )
+    # 좌·우 블록 높이 맞춤
+    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[2].height = 8
 
 
 def _write_overview(ws, overview: dict) -> None:
@@ -174,7 +355,12 @@ def _write_overview(ws, overview: dict) -> None:
         row += 1
 
 
-def write_excel(reqs: list[Req], path, overview: dict | None = None) -> None:
+def write_excel(
+    reqs: list[Req],
+    path,
+    overview: dict | None = None,
+    tab_order: list[str] | None = None,
+) -> None:
     by_tab: "OrderedDict[str, list[Req]]" = OrderedDict()
     for r in reqs:
         by_tab.setdefault(r.tab or "요구사항", []).append(r)
@@ -182,13 +368,51 @@ def write_excel(reqs: list[Req], path, overview: dict | None = None) -> None:
     wb = Workbook()
     wb.remove(wb.active)
     used: set[str] = set()
-    if overview:
+    if overview and overview.get("type") == "public_rfp":
+        ov_ws = wb.create_sheet(title=_safe_sheet("개요", used))
+        _write_public_rfp_overview(ov_ws, overview)
+    elif overview and overview.get("type") == "summary_table":
+        title = overview.get("sheet_title") or "요구사항 총괄표"
+        ov_ws = wb.create_sheet(title=_safe_sheet(title, used))
+        _write_summary_table(ov_ws, overview)
+    elif overview:
         ov_ws = wb.create_sheet(title="개요")
         _write_overview(ov_ws, overview)
         used.add("개요")
-    for tab, items in by_tab.items():
+
+    ordered_tabs = list(by_tab.keys())
+    if tab_order:
+        rank = {t: i for i, t in enumerate(tab_order)}
+        ordered_tabs.sort(key=lambda t: (rank.get(t, 999 if t != "부록" else 1000), t))
+
+    for tab in ordered_tabs:
+        items = by_tab[tab]
         ws = wb.create_sheet(title=_safe_sheet(tab, used))
         _write_sheet(ws, items)
     if not by_tab and not overview:
         wb.create_sheet(title="요구사항")
     wb.save(path)
+
+
+def _write_summary_table(ws, overview: dict) -> None:
+    headers = overview.get("headers") or []
+    rows = overview.get("rows") or []
+    for ci, label in enumerate(headers, 1):
+        cell = ws.cell(1, ci, label)
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.alignment = _CENTER
+        cell.border = _BORDER
+        ws.column_dimensions[get_column_letter(ci)].width = 28 if ci == 1 else 22
+    ws.row_dimensions[1].height = 24
+    for ri, row in enumerate(rows, 2):
+        for ci, val in enumerate(row, 1):
+            cell = ws.cell(ri, ci, val)
+            cell.border = _BORDER
+            cell.font = _BODY_FONT
+            cell.alignment = _WRAP
+            if ri % 2 == 0:
+                cell.fill = _ZEBRA_FILL
+    ws.freeze_panes = "A2"
+    if rows:
+        ws.auto_filter.ref = f"A1:{get_column_letter(max(len(headers), 1))}{len(rows) + 1}"

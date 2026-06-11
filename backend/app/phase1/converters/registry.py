@@ -7,8 +7,9 @@ from app.core.config import Settings, get_settings
 from app.domain.enums import DocumentMime
 
 from .base import HtmlConverter
-from .chain import FallbackConverter
+from .chain import FallbackConverter, with_postprocess
 from .doc_via_docx import DocViaDocxConverter
+from .hwp_converter import HwpConverter
 from .hwpx_converter import HwpxConverter
 from .libreoffice_converter import LibreOfficeConverter
 from .mammoth_converter import MammothConverter
@@ -66,8 +67,12 @@ def _build_doc_converter(settings: Settings) -> HtmlConverter:
 
 
 def _build_legacy_hwp_converter(settings: Settings) -> HtmlConverter:
-    # 구형 .hwp — LibreOffice 필터 의존 (환경별 상이)
-    return LibreOfficeConverter()
+    # 구형 .hwp — pyhwp(hwp5html). macOS LibreOffice는 .hwp 로드 불가.
+    return HwpConverter()
+
+
+def _wrap_pdf(converter: HtmlConverter) -> HtmlConverter:
+    return with_postprocess(converter)
 
 
 def build_pdf_converter(settings: Settings) -> HtmlConverter:
@@ -85,29 +90,29 @@ def build_pdf_converter(settings: Settings) -> HtmlConverter:
     if name == "pymupdf":
         from .pymupdf_converter import PymupdfConverter
 
-        return PymupdfConverter()
+        return _wrap_pdf(PymupdfConverter())
     if name == "pdf2html":
         from .pdf2html_converter import Pdf2HtmlConverter
 
-        return Pdf2HtmlConverter()
+        return _wrap_pdf(Pdf2HtmlConverter())
     if name == "pdfplumber":
         from .pdfplumber_converter import PdfplumberConverter
 
-        return PdfplumberConverter()
+        return _wrap_pdf(PdfplumberConverter())
     if name == "docling":
         from .docling_converter import DoclingConverter
 
         logger.warning(
             "PDF_CONVERTER=docling — MPS/mac에서 실패·지연 가능. pymupdf 권장."
         )
-        return DoclingConverter()
+        return _wrap_pdf(DoclingConverter())
     raise ValueError(f"unknown pdf_converter: {name}")
 
 
 def build_default_registry() -> ConverterRegistry:
     reg = ConverterRegistry()
     reg.register(DocumentMime.PDF, build_pdf_converter)
-    reg.register(DocumentMime.HWPX, lambda _s: HwpxConverter())
+    reg.register(DocumentMime.HWPX, lambda _s: with_postprocess(HwpxConverter()))
     reg.register(DocumentMime.DOCX, _build_docx_converter)
     reg.register(DocumentMime.DOC, _build_doc_converter)
     reg.register(DocumentMime.HWP, _build_legacy_hwp_converter)

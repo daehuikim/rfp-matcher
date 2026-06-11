@@ -16,6 +16,7 @@ async def healthz(container: ContainerDep) -> dict[str, str]:
         "status": "ok",
         "app": s.app_name,
         "llm_provider": s.llm_provider,
+        "llm_model": container.active_llm_model(),
         "pdf_converter": s.pdf_converter,
         "pdf_converter_type": type(container.pdf_converter).__name__,
         "catalog_retriever": "bm25s",

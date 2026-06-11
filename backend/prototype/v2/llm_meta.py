@@ -1,102 +1,179 @@
 """
-메타데이터(계위 라벨) 생성 — 항목명/요구사항이 빈 행에 LLM 이 라벨만 부여.
+계위 라벨 생성 — LLM 이 항목명/요구사항을 **정답 조견표 형식**으로 부여.
 
-LLM 출력 = 라벨(짧음)뿐, 상세 내용은 건드리지 않는다 → 손실·할루시 없음.
-탭별로 상세 목록을 보여주고 각 행의 항목명(대분류)/요구사항(중분류)을 채우게 함.
-연속 유사 항목은 같은 라벨로 묶어 계위를 만든다. 큰 탭은 청크로 처리.
+- 도메인 그룹 첫 행만 항목명(top), 서브그룹 첫 행만 요구사항(mid)
+- 연속 bullet 은 top/mid 빈칸 (셀 병합 형태)
+- detail 은 절대 변경하지 않음
 """
 from __future__ import annotations
 
 import asyncio
+import re
 from collections import defaultdict
 
 from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.llm.base import Message
-from app.llm.openai_client import OpenAIClient
+from app.llm.factory import build_llm_client
 
 from .extract import Req
 from .text import norm
 
-CHUNK = 25
+CHUNK = 24
+_BULLET = re.compile(r"^\s*[-∙•·–—▪○●]")
+_HANGUL_TOP = re.compile(r"^\s*[가-힣]\.\s+")
+_NUM_MID = re.compile(r"^\s*\d+\)\s+")
 
 
 class _Label(BaseModel):
     index: int
-    top: str   # 항목명(대분류)
-    mid: str   # 요구사항(중분류)
+    top: str   # 항목명 — 연속행은 ""
+    mid: str   # 요구사항 — 연속행은 ""
 
 
 class _LabelResult(BaseModel):
     labels: list[_Label]
 
 
-def _prompt(tab: str, rows: list[tuple[int, str, str, str]]) -> str:
-    # rows: (index, 현재top, 현재mid, detail)
+def _row_kind(detail: str) -> str:
+    d = norm(detail)
+    if _HANGUL_TOP.match(d):
+        return "top_line"
+    if _NUM_MID.match(d):
+        return "mid_line"
+    if _BULLET.match(d):
+        return "bullet"
+    return "plain"
+
+
+def _prompt(tab: str, rows: list[tuple[int, str, str, str, str]], ctx: str = "") -> str:
     block = "\n".join(
-        f"[{i}] (항목명:{t or '?'} / 요구사항:{m or '?'}) {d[:90]}"
-        for i, t, m, d in rows
+        f"[{i}] kind={k} top={t or '-'} mid={m or '-'} | {d[:100]}"
+        for i, k, t, m, d in rows
     )
+    ctx_line = f"\n이전 청크 맥락:\n{ctx}\n" if ctx else ""
     return (
-        f"도메인 '{tab}'의 요구사항 상세 목록이다. 각 항목에 **항목명(대분류)**과 "
-        "**요구사항(중분류 제목)**을 부여해 계위를 만들어라.\n"
-        "- 이미 값이 있으면(? 아님) 그대로 두고, 빈 것(?)만 채운다.\n"
-        "- 연속된 유사 주제는 **같은 항목명/요구사항**으로 묶는다(병합 계위).\n"
-        "- 라벨은 상세 내용에서 뽑은 간결한 명사구. **상세 내용 자체는 바꾸지 말 것**.\n\n"
+        f"RFP 조견표 탭 '{tab}' 요구사항 목록. **정답 Excel 형식**으로 항목명·요구사항 라벨을 부여하라.\n"
+        f"{ctx_line}"
+        "규칙 (매우 중요):\n"
+        "1. **항목명(top)**: 큰 도메인 그룹의 **첫 행에만** 명사구. 같은 그룹 이어지는 행은 반드시 \"\".\n"
+        "2. **요구사항(mid)**: 서브그룹 **첫 행에만** 제목. 같은 서브그룹 bullet 연속행은 \"\".\n"
+        "3. kind=bullet 인 행은 직전 mid_line/bullet 그룹의 **연속**이면 top/mid 모두 \"\".\n"
+        "4. kind=top_line 은 보통 새 항목명(top) anchor.\n"
+        "5. kind=mid_line 은 보통 새 요구사항(mid) anchor.\n"
+        "6. 내용 **맥락**으로 도메인 판단. 탭명 참고.\n"
+        "7. detail 본문은 **절대 수정·요약 금지**. 라벨만 출력.\n"
+        "8. **모든 index** 에 대해 top/mid 명시 (빈칸은 \"\").\n\n"
         f"{block}\n\n"
-        '응답 JSON: {"labels": [{"index": <int>, "top": "<항목명>", "mid": "<요구사항>"}, ...]} '
-        "— 모든 index."
+        'JSON: {"labels": [{"index": <int>, "top": "<항목명 또는 \"\">", "mid": "<요구사항 또는 \"\">"}, ...]}'
     )
 
 
-async def _label_chunk(client: OpenAIClient, sem: asyncio.Semaphore, tab: str,
-                       rows: list[tuple[int, str, str, str]]) -> dict[int, tuple[str, str]]:
+async def _label_chunk(
+    client,
+    sem: asyncio.Semaphore,
+    tab: str,
+    rows: list[tuple[int, str, str, str, str]],
+    ctx: str,
+) -> dict[int, tuple[str, str]]:
     async with sem:
         try:
+            prompt = _prompt(tab, rows, ctx)
             out = await client.structured_output(
-                [Message(role="user", content=_prompt(tab, rows))], _LabelResult,
-                purpose="meta_label", max_tokens=4000)
+                [Message(role="user", content=prompt)],
+                _LabelResult,
+                purpose="hierarchy_label",
+                max_tokens=8000,
+            )
+            from app.services.pipeline_logger import record_llm_io
+
+            record_llm_io(
+                "hierarchy_label",
+                prompt=prompt,
+                response=out,
+                meta={"tab": tab, "rows": len(rows)},
+            )
         except Exception:
             return {}
-    return {lb.index: (norm(lb.top), norm(lb.mid)) for lb in out.labels}
+    out_map: dict[int, tuple[str, str]] = {}
+    for lb in out.labels:
+        out_map[lb.index] = (norm(lb.top), norm(lb.mid))
+    return out_map
 
 
-async def generate_metadata(reqs: list[Req], concurrency: int = 6) -> list[Req]:
-    # 항목명 또는 요구사항이 빈 행이 있는 탭만 처리
+def _apply_labels(reqs: list[Req], labels: dict[int, tuple[str, str]]) -> int:
+    n = 0
+    for i, (top, mid) in labels.items():
+        if top != reqs[i].top:
+            reqs[i].top = top
+            reqs[i].gen_top = True
+            n += 1
+        if mid != reqs[i].mid:
+            reqs[i].mid = mid
+            reqs[i].gen_mid = True
+            n += 1
+    return n
+
+
+async def assign_hierarchy_labels(reqs: list[Req], concurrency: int = 4) -> list[Req]:
+    """탭별 전체 행에 LLM 계위 라벨 (정답 조견표 빈칸 형식)."""
     by_tab: dict[str, list[int]] = defaultdict(list)
     for i, r in enumerate(reqs):
-        if not r.top.strip() or not r.mid.strip():
-            by_tab[r.tab].append(i)
+        if (r.tab or "").strip() in ("부록", "개요", ""):
+            continue
+        by_tab[r.tab].append(i)
     if not by_tab:
         return reqs
 
     s = Settings()
-    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+    if not s.openai_api_key:
+        return reqs
+
+    client = build_llm_client(s)
     sem = asyncio.Semaphore(concurrency)
 
-    tasks = []
-    chunk_meta: list[list[int]] = []
     for tab, idxs in by_tab.items():
-        # 해당 탭 전체 행(맥락) 중 빈 행 포함 구간을 청크로
+        ctx = ""
+        recent_details: list[str] = []
         for k in range(0, len(idxs), CHUNK):
-            chunk = idxs[k:k + CHUNK]
-            rows = [(i, reqs[i].top, reqs[i].mid, reqs[i].detail) for i in chunk]
-            tasks.append(_label_chunk(client, sem, tab, rows))
-            chunk_meta.append(chunk)
+            chunk = idxs[k : k + CHUNK]
+            rows = [
+                (i, _row_kind(reqs[i].detail), reqs[i].top, reqs[i].mid, reqs[i].detail)
+                for i in chunk
+            ]
+            labels = await _label_chunk(client, sem, tab, rows, ctx)
+            missing = [i for i in chunk if i not in labels]
+            if missing:
+                retry_rows = [
+                    (i, _row_kind(reqs[i].detail), reqs[i].top, reqs[i].mid, reqs[i].detail)
+                    for i in missing
+                ]
+                labels.update(await _label_chunk(client, sem, tab, retry_rows, ctx))
+            _apply_labels(reqs, labels)
 
-    results = await asyncio.gather(*tasks)
-    for res in results:
-        for i, (top, mid) in res.items():
-            if 0 <= i < len(reqs):
-                if not reqs[i].top.strip() and top:
-                    reqs[i].top = top
-                    reqs[i].gen_top = True   # LLM 생성 → 셀 색 구분
-                if not reqs[i].mid.strip() and mid:
-                    reqs[i].mid = mid
-                    reqs[i].gen_mid = True
+            if chunk:
+                last = reqs[chunk[-1]]
+                recent_details = [reqs[i].detail[:80] for i in chunk[-3:]]
+                ctx = (
+                    f"마지막 계위: top={last.top or '-'}, mid={last.mid or '-'}\n"
+                    + "최근 detail:\n"
+                    + "\n".join(f"  - {d}" for d in recent_details)
+                )
+
     return reqs
 
 
-def generate_metadata_sync(reqs: list[Req]) -> list[Req]:
-    return asyncio.run(generate_metadata(reqs))
+def assign_hierarchy_labels_sync(reqs: list[Req]) -> list[Req]:
+    from .async_run import run_coro
+    return run_coro(assign_hierarchy_labels(reqs))
+
+
+async def generate_metadata(
+    reqs: list[Req], concurrency: int = 6, *, top_only_if_both_empty: bool = False
+) -> list[Req]:
+    return await assign_hierarchy_labels(reqs, concurrency)
+
+
+def generate_metadata_sync(reqs: list[Req], *, top_only_if_both_empty: bool = False) -> list[Req]:
+    return assign_hierarchy_labels_sync(reqs)

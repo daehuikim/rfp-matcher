@@ -10,6 +10,41 @@ export type FormattedDetail = {
   bullets: string[];
 };
 
+export type PipeTable = {
+  headers: string[];
+  rows: string[][];
+};
+
+/** 마크다운 파이프 표(표안표) — 2행 이상 · '|' 구분 */
+export function isPipeTable(text: string): boolean {
+  const lines = text
+    .trim()
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter((l) => l.includes("|"));
+  return lines.length >= 2;
+}
+
+export function parsePipeTable(text: string): PipeTable | null {
+  const lines = text
+    .trim()
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter((l) => l.includes("|"));
+  if (lines.length < 2) return null;
+
+  const parseRow = (line: string) =>
+    line
+      .split("|")
+      .map((c) => c.trim())
+      .filter((c, i, arr) => !(i === 0 && c === "") && !(i === arr.length - 1 && c === ""));
+
+  const headers = parseRow(lines[0]);
+  const rows = lines.slice(1).map(parseRow).filter((r) => r.some(Boolean));
+  if (!headers.length || !rows.length) return null;
+  return { headers, rows };
+}
+
 /**
  * 인라인 `제목 • 항목1 • 항목2` 또는 줄 단위 `•` 불릿을 구조화.
  */

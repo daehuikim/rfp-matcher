@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.llm.base import Message
-from app.llm.openai_client import OpenAIClient
+from app.llm.factory import build_llm_client
 
 from .extract import Req
 from .grid import Grid
@@ -76,7 +76,7 @@ def _keep_text(value: str, src_sig: str) -> str:
     return ""  # 원문에 없음 → 창작으로 간주, 버림
 
 
-async def _structure_one(client: OpenAIClient, sem: asyncio.Semaphore,
+async def _structure_one(client, sem: asyncio.Semaphore,
                          grid: Grid, section: str) -> list[Req]:
     gtext = _grid_text(grid)
     src_sig = sig(" ".join(c for row in grid.cells for c in row))
@@ -89,7 +89,9 @@ async def _structure_one(client: OpenAIClient, sem: asyncio.Semaphore,
             return []
     if not out.is_requirement:
         return []
-    src = f"p.{grid.page} · 표#{grid.table_id}" if grid.page else f"표#{grid.table_id}"
+    from .extract import format_source
+
+    src = format_source(table_id=grid.table_id, page=grid.page, section=section)
     reqs: list[Req] = []
     for row in out.rows:
         detail = _keep_text(row.detail, src_sig)
@@ -108,7 +110,7 @@ async def structure_tables(candidates: list[tuple[Grid, str]],
     if not candidates:
         return []
     s = Settings()
-    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+    client = build_llm_client(s)
     sem = asyncio.Semaphore(concurrency)
     results = await asyncio.gather(
         *[_structure_one(client, sem, g, sec) for g, sec in candidates])

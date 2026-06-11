@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
+import { getStoredLlmProvider, LlmModelSelector } from "@/components/LlmModelSelector";
 import { SampleFile, uploadDocument } from "@/lib/api";
 import { useWorkspace } from "@/context/WorkspaceProvider";
 
@@ -88,7 +89,7 @@ function FlowWave() {
 
 function pickGridSamples(samples: SampleFile[]): SampleFile[] {
   const featured = samples.filter((s) => s.featured);
-  return (featured.length > 0 ? featured : samples).slice(0, 7);
+  return featured.length > 0 ? featured : samples;
 }
 
 const START_ERRORS: Record<string, string> = {
@@ -116,7 +117,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
     setBusy("upload");
     setErr("");
     try {
-      const { doc_id } = await uploadDocument(file);
+      const { doc_id } = await uploadDocument(file, getStoredLlmProvider());
       startTransition(() => {
         router.push(`/review/${doc_id}`);
       });
@@ -153,10 +154,15 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
       </section>
 
       <section className="panel mb-8 p-6">
-        <h2 className="text-sm font-semibold text-ink-900">RFP 파일 업로드</h2>
-        <p className="mt-1 text-xs text-neutral-500">
-          공공 RFP의 제안요청서·과업지시서·별첨 등을 업로드하세요
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-ink-900">RFP 파일 업로드</h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              공공 RFP의 제안요청서·과업지시서·별첨 등을 업로드하세요
+            </p>
+          </div>
+          <LlmModelSelector />
+        </div>
         <div
           role="button"
           tabIndex={0}
@@ -208,7 +214,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
         <div className="flex items-baseline justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-900">샘플로 시연</h2>
-            <p className="mt-1 text-xs text-slate-500">data/raw 폴더 · PoC RFP 6종</p>
+            <p className="mt-1 text-xs text-slate-500">공공·금융 RFP 4종 (법제처·금감원·하나·신한)</p>
           </div>
           {gridSamples.length > 0 && (
             <span className="text-[11px] text-slate-400">{gridSamples.length}개</span>

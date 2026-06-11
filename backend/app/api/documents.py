@@ -6,7 +6,7 @@ import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -50,6 +50,7 @@ class SampleFile(BaseModel):
 
 class FromSampleRequest(BaseModel):
     name: str
+    llm_provider: str | None = None
 
 
 class WorkspaceSessionSummary(BaseModel):
@@ -131,6 +132,8 @@ async def list_samples(container: ContainerDep) -> list[SampleFile]:
         ext = p.suffix.lower()
         if ext not in EXT_TO_MIME:
             continue
+        if featured_set and _nfc(p.name) not in featured_set:
+            continue
         found.append(
             SampleFile(
                 name=p.name,
@@ -142,7 +145,7 @@ async def list_samples(container: ContainerDep) -> list[SampleFile]:
         )
     by_name = {s.name: s for s in found}
     ordered_names = sort_sample_names(list(by_name.keys()), order)
-    return [by_name[n] for n in ordered_names]
+    return [by_name[n] for n in ordered_names if n in by_name]
 
 
 @router.get("/sessions", response_model=list[WorkspaceSessionSummary])
@@ -190,6 +193,21 @@ async def list_cached_projects(container: ContainerDep) -> list[CachedProjectSum
     return [CachedProjectSummary(**row) for row in rows]
 
 
+class WorkspaceResetResponse(BaseModel):
+    ok: bool = True
+    storage_entries_removed: int = 0
+    artifact_buckets_removed: int = 0
+
+
+@router.post("/workspace/reset", response_model=WorkspaceResetResponse)
+async def reset_workspace_endpoint(container: ContainerDep) -> WorkspaceResetResponse:
+    """모든 프로젝트·캐시·storage 산출물 초기화 — 테스트·재시작용."""
+    from app.services.workspace_reset import reset_workspace
+
+    stats = await reset_workspace(container)
+    return WorkspaceResetResponse(**stats)
+
+
 @router.post("/reopen-cache", response_model=UploadResponse)
 async def reopen_cache(body: ReopenCacheRequest, container: ContainerDep) -> UploadResponse:
     """아티팩트 캐시에서 프로젝트 재오픈 — 새 doc_id 발급 후 즉시 복원."""
@@ -209,6 +227,7 @@ async def create_from_sample(
     container: ContainerDep,
 ) -> UploadResponse:
     """data/raw/<name> 의 파일을 골라 처리 시작. 파일은 storage/incoming/로 복사한다."""
+    container.set_llm_provider(body.llm_provider)
     raw_dir = container.settings.raw_data_dir
     src = resolve_sample_path(raw_dir, body.name)
     if src is None:
@@ -241,9 +260,11 @@ async def upload_document(
     file: UploadFile,
     background: BackgroundTasks,
     container: ContainerDep,
+    llm_provider: str | None = Form(default=None),
 ) -> UploadResponse:
     if not file.filename:
         raise HTTPException(400, "filename 누락")
+    container.set_llm_provider(llm_provider)
     ext = Path(file.filename).suffix.lower()
     if ext not in EXT_TO_MIME:
         raise HTTPException(415, f"지원하지 않는 확장자: {ext}")
@@ -480,31 +501,61 @@ async def get_document_meta(doc_id: str, container: ContainerDep) -> DocumentMet
 
 @router.get("/{doc_id}/overview")
 async def get_document_overview(doc_id: str, container: ContainerDep) -> dict:
-    """V2 추출 시 생성한 RFP 개요(요약·핵심기술·리스크) — 웹 표시용. 없으면 빈 값."""
-    import pickle
+    """V2/V3 추출 개요 — 웹 표시용. 없으면 빈 값."""
+    from app.services.native_export import load_native_export
 
     if doc_id not in container.repo.documents:
         raise HTTPException(404, f"document 없음: {doc_id}")
     doc = container.repo.documents[doc_id]
-    candidates = [container.settings.storage_root / doc_id / "v2_export.pkl"]
-    if doc.content_hash:
-        candidates.append(
-            container.settings.artifact_cache_dir / doc.content_hash[:16] / "v2_export.pkl"
-        )
-    pkl = next((p for p in candidates if p.is_file()), None)
-    if pkl is None:
+    payload = load_native_export(container.settings, doc_id, doc)
+    if payload is None:
         return {"available": False}
-    try:
-        payload = pickle.loads(pkl.read_bytes())
-        ov = payload.get("overview") or {}
+    ov = payload.get("overview") or {}
+    if not ov:
+        return {"available": False}
+    if ov.get("type") == "public_rfp":
+        meta = ov.get("meta") or {}
         return {
-            "available": bool(ov),
-            "summary": ov.get("summary", ""),
-            "techs": [list(t) for t in (ov.get("techs") or [])],
-            "risks": [list(r) for r in (ov.get("risks") or [])],
+            "available": True,
+            "summary": meta.get("summary", ""),
+            "techs": [list(t) for t in (meta.get("techs") or [])],
+            "risks": [list(r) for r in (meta.get("risks") or [])],
+            "summary_table": {
+                "title": ov.get("sheet_title") or "요구사항 총괄표",
+                "headers": ov.get("headers") or [],
+                "rows": ov.get("rows") or [],
+            },
         }
-    except Exception:  # noqa: BLE001
-        return {"available": False}
+    return {
+        "available": True,
+        "summary": ov.get("summary", ""),
+        "techs": [list(t) for t in (ov.get("techs") or [])],
+        "risks": [list(r) for r in (ov.get("risks") or [])],
+    }
+
+
+@router.get("/{doc_id}/asset")
+async def get_requirement_asset(
+    doc_id: str,
+    container: ContainerDep,
+    path: str,
+) -> FileResponse:
+    """요건 상세에 첨부된 표·화면 PNG — prototype 추출 산출물."""
+    from app.services.native_export import resolve_asset_path
+
+    if doc_id not in container.repo.documents:
+        raise HTTPException(404, f"document 없음: {doc_id}")
+    doc = container.repo.documents[doc_id]
+    resolved = resolve_asset_path(container.settings, doc_id, doc, path)
+    if resolved is None:
+        raise HTTPException(404, "자산 없음")
+    media = "image/png" if resolved.suffix.lower() == ".png" else "application/octet-stream"
+    return FileResponse(
+        resolved,
+        media_type=media,
+        content_disposition_type="inline",
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
 
 
 @router.get("/{doc_id}/preview")

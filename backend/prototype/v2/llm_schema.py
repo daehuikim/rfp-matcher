@@ -17,10 +17,13 @@ from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.llm.base import Message
-from app.llm.openai_client import OpenAIClient
+from app.llm.factory import build_llm_client
 
-from .extract import Req, parse_cell_hierarchy
+from .blocks import _keep
+from .extract import Req, format_source, parse_cell_hierarchy
 from .grid import Grid
+from .row_filter import grid_looks_like_inventory, is_noise_detail, is_noise_row
+from .schema import section_has_requirement_context
 from .text import norm, sig
 
 ROLE_TOP, ROLE_MID, ROLE_DETAIL, ROLE_IGNORE = "항목명", "요구사항", "상세요건", "무시"
@@ -51,9 +54,9 @@ def _prompt(section: str, grid_text: str, ncols: int) -> str:
     return (
         f"다음은 RFP 문서의 표다(섹션: {section[:60]}). 이 표를 요구사항 조견표로 옮기기 "
         "위한 **스키마만 설계**하라. 행 내용은 절대 출력하지 말고 스키마만:\n"
-        "- is_requirement: 제안사가 구축·이행할 시스템/연구개발의 기능·기술 요구사항(연구목표·"
-        "목표성능·개발내용 등) 표면 true. **제안서 평가기준·평가항목·배점·심사, 참여인력 명단, "
-        "재무·신용평가, 일정·WBS, 목차·연락처·현황** 표면 false.\n"
+        "- is_requirement: 제안사가 구축·이행할 기능·기술 **요구사항** 표면 true. "
+        "false: **발주사 현황·H/W·서버 사양·장비목록(□K8S Worker/CPU/GPU/MEM), "
+        "제안평가·배점, 인력·재무, 일정·WBS, 목차·연락처, 체크리스트 스펙만 있는 표**.\n"
         "- header_rows: 맨 위 '컬럼명만 있는' 헤더 행 수(보통 1, 없으면 0).\n"
         "- domain: 이 표 내용의 도메인 명사구(예: 정보보호, 데이터, ICT 인프라, 기능).\n"
         f"- columns: c0..c{ncols - 1} 각 컬럼의 역할 — '{ROLE_TOP}'(대분류 그룹), "
@@ -95,9 +98,8 @@ def execute_schema(doc_name: str, grid: Grid, schema: TableSchema, section: str)
             continue
         top = row[top_c] if top_c is not None and top_c < len(row) and row[top_c] else ""
         mid = row[mid_c] if mid_c is not None and mid_c < len(row) and row[mid_c] else ""
-        # 결정적 carry-forward (병합셀/빈 계위 채움 — LLM 아님)
         if top:
-            last_top, last_mid = top, ""   # 대분류 바뀌면 중분류 carry 초기화
+            last_top, last_mid = top, ""
         else:
             top = last_top
         if mid:
@@ -105,36 +107,95 @@ def execute_schema(doc_name: str, grid: Grid, schema: TableSchema, section: str)
         else:
             mid = last_mid
         page = grid.page_of(r)
-        kind = "리스트" if grid.table_id < 0 else f"표#{grid.table_id}"
-        src = f"p.{page} · {kind}" if page else kind
-        # 셀 내부 □/∙/- 계위를 atomic 행으로 분할(셀 내 □ 그룹 carry-forward)
-        cell_group = ""
+        src = format_source(table_id=grid.table_id, page=page, section=section)
+        # □ 그룹 단위 1행; 같은 그룹/중분류의 ∙·- 자식은 detail 줄바꿈(과분할 방지)
+        buckets: list[tuple[str, list[str]]] = []
+        cur_mid = mid
+        cur_parts: list[str] = []
+
+        def flush() -> None:
+            nonlocal cur_parts, cur_mid
+            if not cur_parts:
+                return
+            buckets.append((cur_mid, cur_parts[:]))
+            cur_parts = []
+
         for group, sub in parse_cell_hierarchy(detail):
             if group:
-                cell_group = group
-            g = group or cell_group
-            if g:  # 셀 내부 □ 그룹 → 요구사항, 컬럼 요구사항은 항목명으로 흡수
-                rtop = f"{top} / {mid}".strip(" /") if mid else top
-                rmid = g
+                flush()
+                cur_mid = group
+                cur_parts = [sub]
             else:
-                rtop, rmid = top, mid
-            out.append(Req(
+                if not cur_parts:
+                    cur_mid = mid
+                cur_parts.append(sub)
+        flush()
+
+        for bmid, parts in buckets:
+            body = "\n".join(parts)
+            use_top = norm(top)
+            use_mid = norm(bmid) if bmid else norm(mid)
+            if use_mid and use_mid in use_top:
+                use_mid = norm(mid) or use_mid
+            nr = Req(
                 doc=doc_name, table_id=grid.table_id, page=page,
-                top=norm(rtop), mid=norm(rmid), detail=norm(sub),
+                top=use_top, mid=use_mid, detail=norm(body),
                 section_path=sp, source=src,
-            ))
+            )
+            if not is_noise_row(nr):
+                out.append(nr)
     return out
 
 
-async def _design_one(client: OpenAIClient, sem: asyncio.Semaphore,
+def execute_deferred_list_block(doc_name: str, grid: Grid, section: str) -> list[Req]:
+    """defer_tables 리스트 블록(1열, table_id<0) — 섹션 어휘로 요구 여부 판정 후 결정적 추출."""
+    if not section_has_requirement_context(section):
+        return []
+    sp = norm(section)
+    out: list[Req] = []
+    for r in range(grid.nrows):
+        detail = grid.cells[r][0] if grid.ncols else ""
+        if not _keep(detail) or is_noise_detail(detail):
+            continue
+        page = grid.page_of(r)
+        src = format_source(table_id=grid.table_id, page=page, section=section) + " · 리스트"
+        out.append(Req(
+            doc=doc_name,
+            table_id=grid.table_id,
+            page=page,
+            top="",
+            mid="",
+            detail=norm(detail),
+            section_path=sp,
+            source=src,
+        ))
+    return out
+
+
+async def _design_one(client, sem: asyncio.Semaphore,
                       grid: Grid, section: str) -> list[Req]:
+    if grid.ncols == 1 and grid.table_id < 0:
+        return execute_deferred_list_block("", grid, section)
+    if grid_looks_like_inventory(grid):
+        return []
     async with sem:
         try:
+            prompt = _prompt(section, _grid_text(grid), grid.ncols)
             schema = await client.structured_output(
-                [Message(role="user", content=_prompt(section, _grid_text(grid), grid.ncols))],
+                [Message(role="user", content=prompt)],
                 TableSchema, purpose="schema_design", max_tokens=2000)
+            from app.services.pipeline_logger import record_llm_io
+
+            record_llm_io(
+                "schema_design",
+                prompt=prompt,
+                response=schema,
+                meta={"section": section[:80], "table_id": grid.table_id, "ncols": grid.ncols},
+            )
         except Exception:
             return []
+    if not schema.is_requirement:
+        return []
     return execute_schema("", grid, schema, section)
 
 
@@ -143,7 +204,7 @@ async def schema_extract_tables(candidates: list[tuple[Grid, str]],
     if not candidates:
         return []
     s = Settings()
-    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+    client = build_llm_client(s)
     sem = asyncio.Semaphore(concurrency)
     results = await asyncio.gather(
         *[_design_one(client, sem, g, sec) for g, sec in candidates])
@@ -151,4 +212,5 @@ async def schema_extract_tables(candidates: list[tuple[Grid, str]],
 
 
 def schema_extract_tables_sync(candidates: list[tuple[Grid, str]]) -> list[Req]:
-    return asyncio.run(schema_extract_tables(candidates))
+    from .async_run import run_coro
+    return run_coro(schema_extract_tables(candidates))

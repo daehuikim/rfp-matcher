@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.llm.base import Message
-from app.llm.openai_client import OpenAIClient
+from app.llm.factory import build_llm_client
 
 from .extract import Req
 
@@ -74,7 +74,7 @@ async def cluster_tabs(reqs: list[Req], concurrency: int = 6) -> list[Req]:
             r.tab = r.tab or "요구사항"
         return reqs
     s = Settings()
-    client = OpenAIClient(api_key=s.openai_api_key, model=s.llm_model_openai)
+    client = build_llm_client(s)
 
     # 1) taxonomy: 전체를 넓게 샘플(최대 120)
     step = max(1, len(reqs) // 120)

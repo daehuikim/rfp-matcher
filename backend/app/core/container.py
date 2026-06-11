@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from app.core.config import Settings, get_settings
 from app.llm.base import AsyncLlmClient
-from app.llm.fake_client import FakeLlmClient
+from app.llm.factory import active_llm_model, apply_llm_provider, build_llm_client
 from app.llm.usage import LlmUsageTracker
 from app.phase1.converters.base import HtmlConverter
 from app.phase1.converters.pymupdf_converter import PymupdfConverter
@@ -40,51 +40,21 @@ class Container:
 
     def llm_tracker(self, doc_id: str) -> LlmUsageTracker:
         if doc_id not in self.llm_usage_by_doc:
-            model = (
-                self.settings.llm_model_openai
-                if self.settings.llm_provider == "openai"
-                else self.settings.llm_model_anthropic
-                if self.settings.llm_provider == "anthropic"
-                else "fake"
-            )
             self.llm_usage_by_doc[doc_id] = LlmUsageTracker(
                 provider=self.settings.llm_provider,
-                model=model,
+                model=active_llm_model(self.settings),
             )
         return self.llm_usage_by_doc[doc_id]
 
     def active_llm_model(self) -> str:
-        if self.settings.llm_provider == "openai":
-            return self.settings.llm_model_openai
-        if self.settings.llm_provider == "anthropic":
-            return self.settings.llm_model_anthropic
-        return "fake"
+        return active_llm_model(self.settings)
+
+    def set_llm_provider(self, provider: str | None) -> None:
+        apply_llm_provider(self, provider)
 
 
 def build_llm(settings: Settings) -> AsyncLlmClient:
-    if settings.llm_provider == "fake":
-        return FakeLlmClient()
-    if settings.llm_provider == "openai":
-        if not settings.openai_api_key:
-            logger.warning("OPENAI_API_KEY 미설정 — FakeLlmClient로 폴백")
-            return FakeLlmClient()
-        try:
-            from app.llm.openai_client import OpenAIClient
-        except ImportError as e:
-            logger.warning("openai SDK 미설치 (%s) — FakeLlmClient로 폴백", e)
-            return FakeLlmClient()
-        return OpenAIClient(settings.openai_api_key, settings.llm_model_openai)
-    if settings.llm_provider == "anthropic":
-        if not settings.anthropic_api_key:
-            logger.warning("ANTHROPIC_API_KEY 미설정 — FakeLlmClient로 폴백")
-            return FakeLlmClient()
-        try:
-            from app.llm.anthropic_client import AnthropicClient
-        except ImportError as e:
-            logger.warning("anthropic SDK 미설치 (%s) — FakeLlmClient로 폴백", e)
-            return FakeLlmClient()
-        return AnthropicClient(settings.anthropic_api_key, settings.llm_model_anthropic)
-    raise ValueError(f"unknown llm_provider: {settings.llm_provider}")
+    return build_llm_client(settings)
 
 
 async def build_container() -> Container:
