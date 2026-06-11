@@ -99,6 +99,17 @@ export function AiVerdictModal({
             <p className="leading-relaxed text-neutral-700">{rec?.ai_reason || "이유 미산출"}</p>
           </section>
 
+          {rec?.related_solution ? (
+            <section className="mb-4">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                연관 솔루션
+              </p>
+              <p className="whitespace-pre-line leading-relaxed text-neutral-700">
+                {rec.related_solution}
+              </p>
+            </section>
+          ) : null}
+
           {/* KT 보유 / 부족 기술 */}
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>

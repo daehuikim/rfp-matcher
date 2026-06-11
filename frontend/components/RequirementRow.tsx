@@ -164,7 +164,7 @@ export function RequirementRow({
         >
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">AI 검토</p>
           {aiPending && (
-            <p className="mt-1 text-[12px] text-ktteal-600">KT 솔루션 카탈로그 매칭·Rubric 점수 산출 중…</p>
+            <p className="mt-1 text-[12px] text-ktteal-600">내부 기술 문서 검색·AI 판정 산출 중…</p>
           )}
           {!aiPending && rec && (
             <>

@@ -138,6 +138,7 @@ class Recommendation(BaseModel):
     requirement_id: str
     ai_risk: Judgement
     ai_reason: str
+    related_solution: str = ""
     missing_tech: list[str] = Field(default_factory=list)
     consortium_need: str | None = None
     matched_solutions: list[str] = Field(default_factory=list)  # SKU 라벨 (하위 호환)

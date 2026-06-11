@@ -50,6 +50,7 @@ export type Recommendation = {
   requirement_id: string;
   ai_risk: Judgement;
   ai_reason: string;
+  related_solution?: string;
   missing_tech: string[];
   consortium_need: string | null;
   matched_solutions?: string[];

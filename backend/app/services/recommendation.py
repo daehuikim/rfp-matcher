@@ -5,8 +5,9 @@ import logging
 from app.core.container import Container
 from app.domain.enums import PipelineStage
 from app.domain.models import Recommendation, Requirement
-from app.phase2.recommender.recommender import DEFAULT_BATCH_SIZE, RequirementRecommender
+from app.phase2.recommender.recommender import DEFAULT_BATCH_SIZE
 from app.services.pipeline import Pipeline
+from app.services.recommendation_factory import build_batch_recommender
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,6 @@ class RecommendationService:
         self._c = container
         self._pipeline = Pipeline(container.event_bus)
         batch_size = getattr(container.settings, "recommend_batch_size", DEFAULT_BATCH_SIZE)
-        self._recommender = RequirementRecommender(
-            llm=container.llm,
-            catalog=container.catalog_retriever,
-            batch_size=batch_size,
-        )
         self._batch_size = batch_size
 
     async def recommend_document(self, doc_id: str) -> list[Recommendation]:
@@ -49,12 +45,7 @@ class RecommendationService:
         total = len(await self._c.repo.list_requirements(doc_id))
         done_before = len(existing_recs)
         tracker = self._c.llm_tracker(doc_id)
-        recommender = RequirementRecommender(
-            llm=self._c.llm,
-            catalog=self._c.catalog_retriever,
-            batch_size=self._batch_size,
-            tracker=tracker,
-        )
+        recommender = build_batch_recommender(self._c, tracker)
         await self._pipeline.emit(
             doc_id,
             PipelineStage.RECOMMENDING,
