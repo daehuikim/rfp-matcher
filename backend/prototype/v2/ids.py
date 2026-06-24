@@ -73,9 +73,14 @@ def id_prefix(r: Req) -> str:
 
 
 def assign_ids(reqs: list[Req]) -> list[Req]:
-    """도메인 sticky + 통합문서 전역 일련번호 — {prefix}_{NNN}."""
-    counters: dict[str, int] = {}
-    sticky_domain: dict[str, str] = {}
+    """**탭 기반** ID — 한 탭 = 한 접두사(탭명 slug), 탭별 일련번호. {prefix}_{NNN}.
+
+    한 시트 안에서 ID 접두사가 섞이면 안 된다는 요구 — 접두사를 항목명(top)이 아니라 **탭**에서 뽑는다.
+    탭이 곧 도메인이므로 시트 내 모든 행이 동일 접두사 + 연속 번호를 갖는다(부록은 표 단위).
+    """
+    counters: dict[str, int] = {}     # 접두사별 전역 카운터(중복 ID 방지)
+    tab_prefix: dict[str, str] = {}    # 탭 → 접두사(슬러그 충돌 시 탭별 유일화)
+    used_prefixes: set[str] = set()
     appendix_by_table: dict[int, str] = {}
     appendix_n = 0
 
@@ -92,12 +97,15 @@ def assign_ids(reqs: list[Req]) -> list[Req]:
             continue
 
         tab = (r.tab or "요구사항").strip()
-        top = (r.top or "").strip()
-        if top and top != "-":
-            sticky_domain[tab] = top
-
-        domain = sticky_domain.get(tab, top)
-        pfx = domain_slug(domain) if domain else id_prefix(r)
+        if tab not in tab_prefix:  # 탭마다 접두사 1개 확정(다른 탭과 슬러그 충돌 시 _2 등으로 유일화)
+            base = domain_slug(tab)
+            pfx, k = base, 2
+            while pfx in used_prefixes:
+                pfx = f"{base}{k}"
+                k += 1
+            used_prefixes.add(pfx)
+            tab_prefix[tab] = pfx
+        pfx = tab_prefix[tab]
         counters[pfx] = counters.get(pfx, 0) + 1
         r.rid = f"{pfx}_{counters[pfx]:03d}"
         r.gen_rid = True

@@ -77,8 +77,9 @@ def _merge_prompt(kept: list[tuple[str, int, str]]) -> str:
         "아래는 요구사항 섹션들이다. 각 섹션을 **도메인 단위 탭 이름**에 배정하라.\n"
         "- **같은 도메인의 하위 절들은 반드시 한 탭으로 합친다.** 예: '정보처리시스템 정보보호', "
         "'개인정보처리 정보보호', 'AI 활용 정보보호', 'AI 플랫폼 보안' → 모두 **'정보보호 요청사항'** 한 탭. "
-        "'프로젝트 업무 및 기술요건'·'ICT 인프라'는 서로 다른 도메인이면 별도.\n"
-        "- 탭 이름은 섹션 번호 없이 간결한 도메인 명사구. 전체 탭 수는 보통 4~8개.\n\n"
+        "서버/스토리지/네트워크/장비 요구 → '인프라 및 장비', 품질/일정/변경/이슈/인력/산출물 관리 → '프로젝트 관리' 처럼 묶는다.\n"
+        "- **행수(건)가 많은 큰 섹션(대략 100건 이상)은 독립 탭으로 둔다**(다른 섹션과 합치지 말 것).\n"
+        "- 탭 이름은 섹션 번호 없이 간결한 도메인 명사구. **전체 탭 수는 5~9개** 목표.\n\n"
         f"[섹션]\n{lines}\n\n"
         '응답 JSON: {"assignments": [{"index": <int>, "tab": "<탭이름>"}, ...]} — 모든 index.'
     )
@@ -131,14 +132,12 @@ _SEC_MARK_RX = _re.compile(r"^\s*(?:[IVXLCDM]+|\d+(?:\.\d+)*|[가-힣]|[①-⑳]
 
 
 def _section_tab_name(section_path: str) -> str:
-    """탭명 = 섹션경로의 **두번째 레벨** 세그먼트(번호 제거). 첫 세그먼트는 보통 장(章) 루트라
-    너무 거칠고, 마지막은 깊은 문서서 너무 잘게 쪼개짐. 두번째가 양쪽(평면 2단/중첩 3~4단)에
-    적정 — woori '2>다.제안요건'→제안요건, 신한 'II>2.ICT요청사항>2.4.업무'→ICT요청사항."""
+    """keep 단계 placeholder 탭명 = 말단(leaf) 섹션(번호 제거). 실제 탭 레벨링(부모 병합/큰섹션
+    분리)은 run_dynamic.finalize 가 한다 — 여기선 kept 여부 표시용으로 leaf 를 쓴다."""
     segs = [s.strip() for s in (section_path or "").split(">") if s.strip()]
     if not segs:
         return "요구사항"
-    seg = segs[1] if len(segs) >= 2 else segs[0]
-    return _SEC_MARK_RX.sub("", seg).strip() or "요구사항"
+    return _SEC_MARK_RX.sub("", segs[-1]).strip() or "요구사항"
 
 
 async def assign_section_tabs(reqs: list[Req]) -> list[Req]:
