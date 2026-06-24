@@ -135,7 +135,64 @@ def _embed_detail_images(ws, ri: int, paths: list[str], *, text_lines: int = 0) 
     ws.row_dimensions[ri].height = row_h
 
 
-def _write_sheet(ws, reqs: list[Req]) -> None:
+# ── AI 판정·사람 판정 칼럼 (조견표 오른쪽에 덧붙임) ──────────────────────────
+_AI_HEADERS = ["KT 보유 기술", "부족 기술", "AI 판정", "AI 설명", "컨소시엄 필요 사항", "Human 판정", "Human 메모"]
+_AI_WIDTHS = [26, 22, 9, 52, 24, 11, 28]
+_AI_CENTER = {2, 5}  # AI 판정, Human 판정 → 가운데 정렬
+_HUMAN_START = 5  # 이 인덱스부터 사람(Human) 칼럼 — 고유색
+_AI_HDR_FILL = PatternFill("solid", fgColor="ED7D31")     # AI 칼럼 헤더(주황 — AI가 한 것)
+_HUMAN_HDR_FILL = PatternFill("solid", fgColor="548235")  # 사람 칼럼 헤더(초록 — 사람이 입력)
+_HUMAN_BODY_FILL = PatternFill("solid", fgColor="E2EFDA")  # 사람 칼럼 본문(연초록)
+
+
+def _ai_row_values(rec, jud) -> list[str]:
+    """ai_by_rid 값 (rec, jud) → 7개 셀 문자열. rec/jud는 duck-typed."""
+
+    def _enum(v) -> str:
+        return str(getattr(v, "value", v) or "")
+
+    if rec is None:
+        kt = miss = risk = reason = consortium = ""
+    else:
+        kt = (getattr(rec, "related_solution", "") or "").strip()
+        if not kt:
+            kt = ", ".join(getattr(rec, "matched_solutions", []) or [])
+        miss = ", ".join(getattr(rec, "missing_tech", []) or [])
+        risk = _enum(getattr(rec, "ai_risk", ""))
+        reason = getattr(rec, "ai_reason", "") or ""
+        consortium = getattr(rec, "consortium_need", "") or ""
+    mark = _enum(getattr(jud, "mark", "")) if jud is not None else ""
+    note = (getattr(jud, "note", "") or "") if jud is not None else ""
+    return [kt, miss, risk, reason, consortium, mark, note]
+
+
+def append_ai_columns(ws, reqs, ai_by_rid, base_cols: int) -> None:
+    """조견표 시트 오른쪽에 AI/사람 판정 칼럼을 덧붙인다. ai_by_rid={rid:(rec,jud)}."""
+    if not ai_by_rid:
+        return
+    for j, label in enumerate(_AI_HEADERS):
+        ci = base_cols + 1 + j
+        cell = ws.cell(1, ci, label)
+        cell.fill = _HUMAN_HDR_FILL if j >= _HUMAN_START else _AI_HDR_FILL
+        cell.font = _HEADER_FONT
+        cell.alignment = _CENTER
+        cell.border = _BORDER
+        ws.column_dimensions[get_column_letter(ci)].width = _AI_WIDTHS[j]
+    for ri, r in enumerate(reqs, 2):
+        rec, jud = ai_by_rid.get(id(r), (None, None))  # 객체 id로 행 단위 매핑 (중복 rid 안전)
+        for j, val in enumerate(_ai_row_values(rec, jud)):
+            ci = base_cols + 1 + j
+            cell = ws.cell(ri, ci, val)
+            cell.border = _BORDER
+            cell.font = _BODY_FONT
+            cell.alignment = _CENTER if j in _AI_CENTER else _WRAP
+            # 칼럼 고유색: AI(주황) vs 사람(초록)으로 출처 구분
+            cell.fill = _HUMAN_BODY_FILL if j >= _HUMAN_START else _AI_FILL
+    if reqs:
+        ws.auto_filter.ref = f"A1:{get_column_letter(base_cols + len(_AI_HEADERS))}{len(reqs) + 1}"
+
+
+def _write_sheet(ws, reqs: list[Req], ai_by_rid: dict | None = None) -> None:
     reqs = _expand_image_rows(reqs)
     for ci, (label, _k, width, _c, _m) in enumerate(COLUMNS, 1):
         cell = ws.cell(1, ci, label)
@@ -182,6 +239,7 @@ def _write_sheet(ws, reqs: list[Req]) -> None:
     ws.freeze_panes = "A2"
     if reqs:
         ws.auto_filter.ref = f"A1:{get_column_letter(len(COLUMNS))}{len(reqs) + 1}"
+    append_ai_columns(ws, reqs, ai_by_rid, len(COLUMNS))
 
 
 _TITLE_FONT = Font(bold=True, size=14, color="305496")
@@ -360,6 +418,7 @@ def write_excel(
     path,
     overview: dict | None = None,
     tab_order: list[str] | None = None,
+    ai_by_rid: dict | None = None,
 ) -> None:
     by_tab: "OrderedDict[str, list[Req]]" = OrderedDict()
     for r in reqs:
@@ -388,7 +447,7 @@ def write_excel(
     for tab in ordered_tabs:
         items = by_tab[tab]
         ws = wb.create_sheet(title=_safe_sheet(tab, used))
-        _write_sheet(ws, items)
+        _write_sheet(ws, items, ai_by_rid)
     if not by_tab and not overview:
         wb.create_sheet(title="요구사항")
     wb.save(path)

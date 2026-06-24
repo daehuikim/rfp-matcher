@@ -22,8 +22,6 @@ from app.llm.factory import build_llm_client
 from .blocks import _keep
 from .extract import Req, format_source, parse_cell_hierarchy
 from .grid import Grid
-from .row_filter import grid_looks_like_inventory, is_noise_detail, is_noise_row
-from .schema import section_has_requirement_context
 from .text import norm, sig
 
 ROLE_TOP, ROLE_MID, ROLE_DETAIL, ROLE_IGNORE = "항목명", "요구사항", "상세요건", "무시"
@@ -69,9 +67,10 @@ def _prompt(section: str, grid_text: str, ncols: int) -> str:
 
 
 def execute_schema(doc_name: str, grid: Grid, schema: TableSchema, section: str) -> list[Req]:
-    """스키마대로 결정적으로 행을 만든다(내용은 원문 셀 그대로 이동, 누락·창작 없음)."""
-    if not schema.is_requirement:
-        return []
+    """스키마대로 결정적으로 행을 만든다(내용은 원문 셀 그대로 이동, 누락·창작 없음).
+
+    is_requirement=false 여도 추출한다(100% recall) — 요구/비요구 판정은 섹션단위 keep 이 담당.
+    """
     role_of = {c.index: c.role for c in schema.columns}
 
     def col(role: str) -> int | None:
@@ -142,20 +141,22 @@ def execute_schema(doc_name: str, grid: Grid, schema: TableSchema, section: str)
                 top=use_top, mid=use_mid, detail=norm(body),
                 section_path=sp, source=src,
             )
-            if not is_noise_row(nr):
-                out.append(nr)
+            out.append(nr)  # 100% recall — 행단위 노이즈 드롭 안 함(boilerplate는 섹션 keep이 섹션단위로)
     return out
 
 
 def execute_deferred_list_block(doc_name: str, grid: Grid, section: str) -> list[Req]:
-    """defer_tables 리스트 블록(1열, table_id<0) — 섹션 어휘로 요구 여부 판정 후 결정적 추출."""
-    if not section_has_requirement_context(section):
-        return []
+    """defer_tables 리스트 블록(1열, table_id<0) — 결정적 추출(100% recall).
+
+    섹션 키워드 게이트(section_has_requirement_context) 제거 — '기타사항'처럼 어휘에 없는
+    요구 섹션이 통째 누락되던 문제 방지. boilerplate(목차/배경/일정/입찰/서식) 섹션 제외는
+    다운스트림 LLM keep(llm_tabs.assign_tabs)이 섹션단위로 판단(키워드 하드코딩 대신 LLM).
+    """
     sp = norm(section)
     out: list[Req] = []
     for r in range(grid.nrows):
         detail = grid.cells[r][0] if grid.ncols else ""
-        if not _keep(detail) or is_noise_detail(detail):
+        if not _keep(detail):  # 빈/초단편만 거름. is_noise_detail(HW사양 등) 드롭 제거 — 100% recall
             continue
         page = grid.page_of(r)
         src = format_source(table_id=grid.table_id, page=page, section=section) + " · 리스트"
@@ -176,8 +177,8 @@ async def _design_one(client, sem: asyncio.Semaphore,
                       grid: Grid, section: str) -> list[Req]:
     if grid.ncols == 1 and grid.table_id < 0:
         return execute_deferred_list_block("", grid, section)
-    if grid_looks_like_inventory(grid):
-        return []
+    # grid_looks_like_inventory 드롭 제거 — '서버 요구 사항'(HW스펙) 같은 요구표가 inventory 로
+    # 오판돼 통째 누락되던 문제(100% recall). 발주사 현황 섹션은 섹션 keep 이 섹션단위로 제외.
     async with sem:
         try:
             prompt = _prompt(section, _grid_text(grid), grid.ncols)
@@ -194,9 +195,7 @@ async def _design_one(client, sem: asyncio.Semaphore,
             )
         except Exception:
             return []
-    if not schema.is_requirement:
-        return []
-    return execute_schema("", grid, schema, section)
+    return execute_schema("", grid, schema, section)  # is_requirement 무관 추출(섹션 keep이 판정)
 
 
 async def schema_extract_tables(candidates: list[tuple[Grid, str]],

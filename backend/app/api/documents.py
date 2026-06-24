@@ -296,6 +296,71 @@ class EnsurePipelineResponse(BaseModel):
     reason: str | None = None
 
 
+@router.post("/import-excel", response_model=UploadResponse)
+async def import_excel(
+    file: UploadFile,
+    container: ContainerDep,
+    llm_provider: str | None = Form(default=None),
+) -> UploadResponse:
+    """조견표 Excel(.xlsx) 업로드 → 역파싱해 프로젝트로 등록(편집본 재업로드/외부 조견표 불러오기).
+
+    추출 칼럼 + AI/Human 판정을 복원한다. 추천이 비어 있으면(외부 조견표) 배경으로 AI 매칭 수행.
+    """
+    if not file.filename:
+        raise HTTPException(400, "filename 누락")
+    if Path(file.filename).suffix.lower() not in (".xlsx", ".xlsm"):
+        raise HTTPException(415, "Excel(.xlsx) 파일만 업로드할 수 있습니다")
+    container.set_llm_provider(llm_provider)
+
+    from app.domain.enums import DocumentMime, PipelineStage
+    from app.domain.models import Document
+    from app.services.excel_import import parse_excel
+    from app.services.pipeline import Pipeline
+
+    doc_id = uuid.uuid4().hex
+    incoming_dir = container.settings.storage_root / "incoming"
+    incoming_dir.mkdir(parents=True, exist_ok=True)
+    dest = incoming_dir / f"{doc_id}.xlsx"
+    with dest.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    try:
+        reqs, recs, juds = await asyncio.to_thread(parse_excel, dest, doc_id)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(422, f"Excel 파싱 실패: {e}") from e
+    if not reqs:
+        raise HTTPException(422, "조견표 요구사항을 찾지 못했습니다(상세요건 칼럼 확인)")
+
+    original = Path(file.filename).name
+    document = Document(
+        id=doc_id, src_path=dest, mime=DocumentMime.PDF,  # 컨테이너용 placeholder(요건 이미 존재→재추출 안 함)
+        source_filename=original, display_name=Path(original).stem,
+    )
+    await container.repo.save_document(document)
+    for req in reqs:
+        await container.repo.append_requirement(doc_id, req)
+    for rec in recs.values():
+        await container.repo.upsert_recommendation(rec)
+    for jud in juds.values():
+        await container.repo.upsert_judgement(jud)
+
+    pipeline = Pipeline(container.event_bus)
+    await pipeline.emit(doc_id, PipelineStage.UPLOADED)
+    await pipeline.emit(
+        doc_id, PipelineStage.READY_FOR_REVIEW,
+        payload={"requirements": len(reqs), "snippet": f"Excel 불러오기 · {len(reqs)}줄",
+                 "imported": True},
+    )
+    if recs:
+        await pipeline.emit(doc_id, PipelineStage.RECOMMENDED, payload={"recommendations": len(recs)})
+    # 추천 없는 외부 조견표는 배경 AI 매칭
+    if len(recs) < len(reqs):
+        service = ExtractionService(container)
+        asyncio.create_task(service._recommend_background(doc_id, use_cache=False))
+
+    return UploadResponse(doc_id=doc_id, status="imported")
+
+
 @router.post("/{doc_id}/ensure-pipeline", response_model=EnsurePipelineResponse)
 async def ensure_pipeline(doc_id: str, container: ContainerDep) -> EnsurePipelineResponse:
     """리뷰 페이지 — 캐시 히트면 복원, 미스면 전체 파이프라인 재시작 (idempotent)."""

@@ -111,9 +111,8 @@ export function RequirementTable({
       if (!map.has(cat)) map.set(cat, []);
       map.get(cat)!.push(v);
     }
-    return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b, "ko"))
-      .map(([name, items]) => ({ name, items }));
+    // 추출(원문·페이지) 순서 = 엑셀 탭 순서. 알파벳 정렬하지 않고 첫 등장 순서를 유지한다.
+    return [...map.entries()].map(([name, items]) => ({ name, items }));
   }, [rows]);
 
   const [activeTab, setActiveTab] = useState<string>("__all__");
@@ -233,9 +232,9 @@ function SheetBox({
               {flags.missing && <th className="min-w-[7rem]">부족 기술</th>}
               <th className="w-[5.5rem]">AI 판정</th>
               {flags.aiReason && <th className="min-w-[13rem]">AI 설명</th>}
-              {flags.consortium && <th className="min-w-[8rem]">컨소시엄</th>}
-              <th className="w-[7rem]">판정</th>
-              <th className="min-w-[7rem]">메모</th>
+              {flags.consortium && <th className="min-w-[8rem]">컨소시엄 필요 사항</th>}
+              <th className="w-[7rem]">Human 판정</th>
+              <th className="min-w-[7rem]">Human 메모</th>
             </tr>
           </thead>
           <tbody>
@@ -436,9 +435,9 @@ function SheetRow({
             onClick={() => rec && setVerdictOpen(true)}
             disabled={!rec}
             className={`pill ${badge.cls} ${rec ? "cursor-pointer transition hover:brightness-95" : "cursor-default"}`}
-            title={rec ? "클릭 — 판정 근거·검색 내역 보기" : "AI 분석 대기"}
+            title={rec ? "클릭 — 판정 근거·검색 내역 보기" : "AI 검토 중"}
           >
-            {rec ? `${rec.ai_risk || "?"} ${badge.label}` : "대기"}
+            {rec ? `${rec.ai_risk || "?"} ${badge.label}` : "AI검토중"}
             {rec && <span className="ml-0.5 opacity-60">ⓘ</span>}
           </button>
           <AiVerdictModal

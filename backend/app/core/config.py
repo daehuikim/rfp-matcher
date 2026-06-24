@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # 추출 엔진: v2(prototype/v2 — results_final 산출 엔진) / legacy(기존 HTML 파이프라인)
     extraction_engine: Literal["v2", "legacy"] = "v2"
     v2_tab_mode: Literal["cluster", "ordered"] = "ordered"
+    # 추출·추천 캐시 read 비활성(테스트용). true면 매번 fresh 추출/추천.
+    extraction_disable_cache: bool = Field(default=False, alias="EXTRACTION_DISABLE_CACHE")
     llm_model_openai: str = "gpt-4o"
     llm_model_anthropic: str = "claude-opus-4-7"
     llm_model_gemma: str = Field(default="gemma-4-26B-4aB-it", alias="LLM_MODEL_GEMMA")
@@ -37,6 +39,12 @@ class Settings(BaseSettings):
         alias="GEMMA_BASE_URL",
     )
     gemma_verify_ssl: bool = Field(default=False, alias="GEMMA_VERIFY_SSL")
+    # 스캔 PDF OCR 용 Gemma VLM(vision) 서버 — 텍스트 LLM(10601)과 별도 포트(10629).
+    gemma_vlm_base_url: str = Field(
+        default="https://m2.geniemars.kt.co.kr:10629/v1",
+        alias="GEMMA_VLM_BASE_URL",
+    )
+    ocr_dpi: int = Field(default=200, alias="OCR_DPI")
     llm_concurrency: int = Field(default=16, alias="LLM_CONCURRENCY")
     recommend_batch_size: int = 5
 

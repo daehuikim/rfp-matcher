@@ -18,6 +18,7 @@ from prototype.v2.excel_writer import (
     _WRAP,
     _WRAP_TOP,
     _ZEBRA_FILL,
+    append_ai_columns,
     _merge_runs,
     _row_height,
     _safe_sheet,
@@ -33,7 +34,7 @@ FIN_COLUMNS = [
 ]
 
 
-def _write_financial_sheet(ws, reqs: list[Req]) -> None:
+def _write_financial_sheet(ws, reqs: list[Req], ai_by_rid: dict | None = None) -> None:
     for ci, (label, _k, width, _c, _m) in enumerate(FIN_COLUMNS, 1):
         cell = ws.cell(1, ci, label)
         cell.fill = _HEADER_FILL
@@ -66,6 +67,7 @@ def _write_financial_sheet(ws, reqs: list[Req]) -> None:
     ws.freeze_panes = "A2"
     if reqs:
         ws.auto_filter.ref = f"A1:D{len(reqs) + 1}"
+    append_ai_columns(ws, reqs, ai_by_rid, len(FIN_COLUMNS))
 
 
 def write_financial_excel(
@@ -73,6 +75,7 @@ def write_financial_excel(
     path,
     overview: dict | None = None,
     tab_order: list[str] | None = None,
+    ai_by_rid: dict | None = None,
 ) -> None:
     by_tab: OrderedDict[str, list[Req]] = OrderedDict()
     for r in reqs:
@@ -92,7 +95,7 @@ def write_financial_excel(
 
     for tab in ordered:
         ws = wb.create_sheet(title=_safe_sheet(tab, used))
-        _write_financial_sheet(ws, by_tab[tab])
+        _write_financial_sheet(ws, by_tab[tab], ai_by_rid)
     if not by_tab and not overview:
         wb.create_sheet(title="요구사항")
     wb.save(path)

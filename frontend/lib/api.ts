@@ -151,6 +151,28 @@ export async function uploadDocument(
   return r.json();
 }
 
+/** 조견표 Excel(.xlsx) 업로드 — 편집본 재업로드/외부 조견표 불러오기. */
+export async function importExcel(
+  file: File,
+  llmProvider?: string,
+): Promise<{ doc_id: string; status: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  if (llmProvider) fd.append("llm_provider", llmProvider);
+  const r = await fetch(`${apiBase()}/documents/import-excel`, { method: "POST", body: fd });
+  if (!r.ok) {
+    let msg = `import ${r.status}`;
+    try {
+      const j = await r.json();
+      if (j?.detail) msg = String(j.detail);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
 export type SampleFile = {
   name: string;
   size_bytes: number;

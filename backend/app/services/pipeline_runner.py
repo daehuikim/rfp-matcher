@@ -76,12 +76,16 @@ async def ensure_extraction_pipeline(container: Container, doc_id: str) -> dict[
     if _task_running(container, doc_id):
         return {"status": "running"}
 
+    disable_cache = container.settings.extraction_disable_cache
     cache_valid = _disk_cache_valid(container, doc)
     reqs, recs, _ = await container.repo.snapshot(doc_id)
     ev = container.event_bus.last_event(doc_id)
     stage = ev.stage.value if ev else PipelineStage.UPLOADED.value
 
-    if not cache_valid and (len(reqs) > 0 or stage in _TERMINAL_STAGES):
+    # 디스크 캐시가 비었는데 메모리에 추출 결과가 있으면 보통 "캐시 수동 삭제 → 재생성" 의도지만,
+    # 캐시 비활성 모드(EXTRACTION_DISABLE_CACHE)에선 캐시가 항상 비어 있어 이 분기를 타면
+    # 프로젝트로 복귀할 때마다 요건이 초기화·재추출된다. 캐시 비활성일 땐 메모리 결과를 그대로 쓴다.
+    if not disable_cache and not cache_valid and (len(reqs) > 0 or stage in _TERMINAL_STAGES):
         await reset_doc_extraction(container, doc_id)
         await schedule_extraction_run(container, doc)
         return {"status": "started", "reason": "cache_cleared"}

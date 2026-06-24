@@ -124,10 +124,14 @@ def extract_document(doc_name: str, doc: dict, mode: str = "fine",
         st["lb_id"] -= 1
 
     def _defer_text_block(el: dict) -> None:
-        """리스트·문단을 1열 candidate 로 누적 — section 어휘로 요구 맥락 판정."""
+        """리스트·문단을 1열 candidate 로 누적.
+
+        100% recall — 섹션 키워드 게이트(section_has_requirement_context) 제거.
+        '기타사항' 처럼 어휘에 없는 요구 섹션이 통째 누락되던 문제를 막는다. 요구사항영역 vs
+        boilerplate(목차/배경/일정/입찰/서식) 판정은 다운스트림 LLM keep(llm_tabs.assign_tabs)이
+        담당 — 키워드 하드코딩 대신 LLM이 섹션을 읽고 판단(원칙 준수).
+        """
         sp = _section_path(stack)
-        if not section_has_requirement_context(sp):
-            return
         if st.get("lb") and st.get("lb_section") and st["lb_section"] != sp:
             flush_listblock()
         page = el.get("page number")

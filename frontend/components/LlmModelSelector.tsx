@@ -39,6 +39,20 @@ export function useLlmModelSelection() {
     void refresh();
   }, [refresh]);
 
+  // 같은 탭 내 다른 셀렉터 인스턴스(상단바·업로드 패널)와 선택 동기화
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const p = (e as CustomEvent<string>).detail;
+      setSettings((prev) =>
+        prev && prev.provider !== p
+          ? { ...prev, provider: p, model: p === "gemma" ? "gemma-4-26B-4aB-it" : "gpt-4o" }
+          : prev,
+      );
+    };
+    window.addEventListener("rfp-llm-changed", onChanged);
+    return () => window.removeEventListener("rfp-llm-changed", onChanged);
+  }, []);
+
   const setProvider = useCallback(
     async (provider: string) => {
       if (busy || settings?.provider === provider) return;
@@ -47,6 +61,7 @@ export function useLlmModelSelection() {
         const next = await patchLlmSettings(provider);
         setSettings(next);
         window.localStorage.setItem(STORAGE_KEY, next.provider);
+        window.dispatchEvent(new CustomEvent("rfp-llm-changed", { detail: next.provider }));
       } catch {
         /* backend offline — local choice still used on upload */
         window.localStorage.setItem(STORAGE_KEY, provider);

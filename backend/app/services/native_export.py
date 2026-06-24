@@ -109,6 +109,10 @@ def write_native_excel(
     doc_id: str,
     doc: Document | None,
     out_path: Path,
+    *,
+    app_reqs: list[Requirement] | None = None,
+    recommendations: dict | None = None,
+    judgements: dict | None = None,
 ) -> bool:
     """prototype excel_writer — 표안표·이미지 포함 원문순서 조견표."""
     payload = load_native_export(settings, doc_id, doc)
@@ -120,12 +124,37 @@ def write_native_excel(
 
     reqs = payload["reqs"]
     overview = payload.get("overview")
-    sample_id = payload.get("sample_id") or ""
     strategy = payload.get("strategy") or ""
 
+    # 추천·사람판정 매핑. pkl 요건과 앱 요건은 1:1 동일 순서이므로 객체 id로 매핑한다.
+    # (rid는 같은 표에서 중복될 수 있어 rid 키로 매핑하면 판정이 덮어써짐 → id로 행 단위 정확 매칭)
+    ai_by_rid: dict | None = None
+    if app_reqs is not None and (recommendations or judgements):
+        recs = recommendations or {}
+        juds = judgements or {}
+        if len(app_reqs) == len(reqs):
+            ai_by_rid = {
+                id(v3r): (recs.get(ar.id), juds.get(ar.id))
+                for v3r, ar in zip(reqs, app_reqs)
+            }
+        else:  # 길이 불일치 폴백 — rid 첫 매칭(덜 정확)
+            by_rid: dict = {}
+            for ar in app_reqs:
+                by_rid.setdefault(ar.code, (recs.get(ar.id), juds.get(ar.id)))
+            ai_by_rid = {
+                id(v3r): by_rid.get(getattr(v3r, "rid", "") or "", (None, None))
+                for v3r in reqs
+            }
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    if sample_id == "001-하나은행":
-        write_financial_excel(reqs, out_path, overview=overview, tab_order=None)
+    # reqs 에 levels 가 채워져 있으면 동적 칼럼 writer(금융/비정형 공통 경로 — 섹션→계위, 고정칼럼 없음).
+    # 없으면 기존: 금융(table_faithful/cell_llm)→financial, 공공→기본 writer.
+    if any(getattr(r, "levels", None) for r in reqs):
+        from prototype.v3.dynamic_excel_writer import write_dynamic_excel
+
+        write_dynamic_excel(reqs, out_path, overview=overview, tab_order=None, ai_by_rid=ai_by_rid)
+    elif strategy in ("table_faithful", "cell_llm"):
+        write_financial_excel(reqs, out_path, overview=overview, tab_order=None, ai_by_rid=ai_by_rid)
     else:
-        write_excel(reqs, out_path, overview=overview, tab_order=None)
+        write_excel(reqs, out_path, overview=overview, tab_order=None, ai_by_rid=ai_by_rid)
     return True

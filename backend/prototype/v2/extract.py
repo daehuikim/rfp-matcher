@@ -61,6 +61,9 @@ class Req:
     gen_top: bool = False
     gen_mid: bool = False
     detail_images: list[str] = field(default_factory=list)
+    levels: list[str] = field(default_factory=list)        # N계위 값(외→내). 비면 [top, mid]로 폴백.
+    level_names: list[str] = field(default_factory=list)    # 각 계위 칼럼명(소스 헤더/도메인). 비면 기본명.
+    _group_anchor: str = ""  # 평면 리스트 문서의 마커기반 그룹(탭 시드). writer 미사용·임시.
 
 
 def _span_breadth(values: list[str]) -> float:

@@ -170,7 +170,7 @@ EXPORT_COLUMNS: dict[str, ExportColumn] = {
     ),
     "consortium": ExportColumn(
         key="consortium",
-        header="필요 컨소시엄",
+        header="컨소시엄 필요 사항",
         getter=lambda _r, rec, _jud: rec.consortium_need or "" if rec else "",
         group="ai",
     ),

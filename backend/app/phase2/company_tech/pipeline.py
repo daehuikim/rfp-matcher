@@ -5,6 +5,7 @@ from typing import Literal
 
 from app.core.config import Settings
 from app.llm.base import AsyncLlmClient
+from app.llm.factory import active_llm_model
 from app.phase2.company_tech.index import CompanyTechIndex
 from app.phase2.company_tech.models import InternalReviewResult, QueryRouting
 from app.phase2.company_tech.review import generate_technical_review
@@ -28,6 +29,12 @@ async def run_internal_review(
     if not query.strip():
         raise ValueError("검토할 요구사항 텍스트가 비어 있습니다.")
 
+    # 라우팅·검토 LLM 모델: openai면 설정값(gpt-4o-mini, 저비용), 그 외 provider는
+    # 현재 활성 모델을 사용 — gemma 등 KT 엔드포인트에 gpt-4o-mini를 보내 404 나는 문제 방지.
+    _openai = settings.llm_provider == "openai"
+    routing_model = settings.company_tech_routing_model if _openai else active_llm_model(settings)
+    review_model = settings.company_tech_review_model if _openai else active_llm_model(settings)
+
     all_sources = source_files or index.source_files()
     use_routing = (
         settings.company_tech_use_auto_routing if use_auto_routing is None else use_auto_routing
@@ -38,7 +45,7 @@ async def run_internal_review(
     if use_routing:
         routing = await classify_query_sources(
             llm=llm,
-            model=settings.company_tech_routing_model,
+            model=routing_model,
             query=query,
             source_files=all_sources,
         )
@@ -80,7 +87,7 @@ async def run_internal_review(
 
     review = await generate_technical_review(
         llm=llm,
-        model=settings.company_tech_review_model,
+        model=review_model,
         query=query,
         selected_sources=selected_sources,
         evidence_results=evidence_results,

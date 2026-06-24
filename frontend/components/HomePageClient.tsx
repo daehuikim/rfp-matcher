@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getStoredLlmProvider, LlmModelSelector } from "@/components/LlmModelSelector";
-import { SampleFile, uploadDocument } from "@/lib/api";
+import { SampleFile, uploadDocument, importExcel } from "@/lib/api";
 import { useWorkspace } from "@/context/WorkspaceProvider";
 
 function bytesHuman(n: number): string {
@@ -112,6 +112,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
   const [err, setErr] = useState(startError ? START_ERRORS[startError] ?? "시연 시작 실패" : "");
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const excelRef = useRef<HTMLInputElement | null>(null);
 
   async function onUpload(file: File) {
     setBusy("upload");
@@ -127,6 +128,20 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
     }
   }
 
+  async function onImportExcel(file: File) {
+    setBusy("excel");
+    setErr("");
+    try {
+      const { doc_id } = await importExcel(file, getStoredLlmProvider());
+      startTransition(() => {
+        router.push(`/review/${doc_id}`);
+      });
+    } catch (e) {
+      setErr(`Excel 불러오기 실패: ${String(e)}`);
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl">
       <section className="panel flow-hero mb-8 p-8 md:p-10">
@@ -137,7 +152,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
           </p>
           <h1 className="mt-2 text-3xl font-bold leading-tight tracking-tight text-ink-900 md:text-4xl">
             RFP를 올리면{" "}
-            <span className="text-ktred-600">조견표가 한 줄씩</span> 정리됩니다
+            <span className="text-ktred-600">조견표가 자동으로</span> 정리됩니다
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-600">
             PDF·DOC·HWPX에서 요구사항 표를 추출하고, KT AI 솔루션과 매칭해 O/△/X 리스크를
@@ -206,6 +221,33 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void onUpload(f);
+          }}
+        />
+
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-neutral-100 bg-neutral-50/60 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-ink-900">조견표 Excel 불러오기</p>
+            <p className="mt-0.5 text-[11px] text-neutral-500">
+              내려받아 편집한 조견표(.xlsx)를 다시 올리거나, 외부 조견표를 불러와 AI 매칭합니다
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={!!busy}
+            onClick={() => !busy && excelRef.current?.click()}
+            className="shrink-0 rounded-lg border border-ktteal-300 bg-white px-3 py-1.5 text-xs font-medium text-ktteal-700 shadow-sm transition hover:border-ktteal-400 hover:bg-ktteal-50 disabled:opacity-60"
+          >
+            {busy === "excel" ? "불러오는 중…" : "Excel 업로드"}
+          </button>
+        </div>
+        <input
+          ref={excelRef}
+          type="file"
+          accept=".xlsx,.xlsm"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void onImportExcel(f);
           }}
         />
       </section>

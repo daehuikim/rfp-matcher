@@ -205,7 +205,7 @@ export function RequirementRow({
             </>
           )}
           {!aiPending && !rec && (
-            <p className="mt-1 text-[12px] text-slate-500">AI 분석 대기 중</p>
+            <p className="mt-1 text-[12px] text-slate-500">AI 검토 중</p>
           )}
         </div>
       </div>

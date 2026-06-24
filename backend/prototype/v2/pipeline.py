@@ -69,7 +69,7 @@ def _ordered_tabs(reqs: list[Req]) -> list[Req]:
 def run(input_path: str | Path, gold_xlsx: str | None = None,
         work_root: Path = WORK_ROOT, mode: str = "fine",
         tab_mode: str = "cluster", korean_hwp: bool = False,
-        log_session=None) -> dict:
+        log_session=None, post_process: bool = True) -> dict:
     src = Path(input_path)
     name = src.stem
     workdir = work_root / _slug(name)
@@ -260,6 +260,28 @@ def run(input_path: str | Path, gold_xlsx: str | None = None,
             steps.append(f"extract({extract_mode}): tables({len(grids)}) → {len(reqs)} rows")
     else:
         raise ValueError(f"지원하지 않는 입력 타입: {ext}")
+
+    # 동적 경로(run_dynamic): 후처리(탭 배정/노이즈 드롭/계위/정렬/ids/excel)는 finalize 가 담당.
+    # 여기선 **추출 원본 reqs**(드롭 없음 — 100% recall) + 개요만 만들어 반환.
+    if not post_process:
+        if mode == "llm" and overview_src is not None:
+            overview = build_overview_sync(overview_src, reqs)
+            if overview:
+                steps.append(
+                    f"개요 생성: 요약 + 기술 {len(overview['techs'])} + 리스크 {len(overview['risks'])}"
+                )
+        from .async_run import reset_loop
+
+        m = {
+            "source": str(src), "name": name, "input_type": ext, "steps": steps,
+            "artifacts": artifacts, "report": {"extracted_rows": len(reqs)},
+            "_reqs": reqs, "_overview": overview, "_workdir": str(workdir),
+        }
+        try:
+            reset_loop()
+        except RuntimeError:
+            pass
+        return m
 
     # 한글 form 경로는 탭·부록이 이미 배정됨 — LLM 탭/메타 단계 생략
     korean_form_done = korean_hwp and any(

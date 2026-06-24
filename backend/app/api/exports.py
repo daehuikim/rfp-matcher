@@ -80,11 +80,20 @@ async def export_excel(
 
     # V3/V2 prototype 조견표 — 표안표·이미지 포함 원문순서 Excel (백엔드 파이프라인과 동일)
     native_path = out_dir / "requirements_native.xlsx"
-    if write_native_excel(container.settings, doc_id, doc, native_path):
+    if write_native_excel(
+        container.settings,
+        doc_id,
+        doc,
+        native_path,
+        app_reqs=reqs,
+        recommendations=recs,
+        judgements=judges,
+    ):
         return FileResponse(
             path=native_path,
             filename=_download_name(filename, native_path),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Cache-Control": "no-store"},
         )
 
     layout_key = "ordered" if layout == "ordered" else "cluster"
@@ -113,6 +122,7 @@ async def export_excel(
         path=out_path,
         filename=_download_name(filename, out_path),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Cache-Control": "no-store"},
     )
 
 

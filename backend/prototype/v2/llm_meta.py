@@ -49,24 +49,27 @@ def _row_kind(detail: str) -> str:
 
 def _prompt(tab: str, rows: list[tuple[int, str, str, str, str]], ctx: str = "") -> str:
     block = "\n".join(
-        f"[{i}] kind={k} top={t or '-'} mid={m or '-'} | {d[:100]}"
+        f"[{i}] kind={k} 현재(top={t or '-'}, mid={m or '-'}) | {d[:110]}"
         for i, k, t, m, d in rows
     )
-    ctx_line = f"\n이전 청크 맥락:\n{ctx}\n" if ctx else ""
+    ctx_line = f"\n[이전 청크 맥락]\n{ctx}\n" if ctx else ""
     return (
-        f"RFP 조견표 탭 '{tab}' 요구사항 목록. **정답 Excel 형식**으로 항목명·요구사항 라벨을 부여하라.\n"
-        f"{ctx_line}"
-        "규칙 (매우 중요):\n"
-        "1. **항목명(top)**: 큰 도메인 그룹의 **첫 행에만** 명사구. 같은 그룹 이어지는 행은 반드시 \"\".\n"
-        "2. **요구사항(mid)**: 서브그룹 **첫 행에만** 제목. 같은 서브그룹 bullet 연속행은 \"\".\n"
-        "3. kind=bullet 인 행은 직전 mid_line/bullet 그룹의 **연속**이면 top/mid 모두 \"\".\n"
-        "4. kind=top_line 은 보통 새 항목명(top) anchor.\n"
-        "5. kind=mid_line 은 보통 새 요구사항(mid) anchor.\n"
-        "6. 내용 **맥락**으로 도메인 판단. 탭명 참고.\n"
-        "7. detail 본문은 **절대 수정·요약 금지**. 라벨만 출력.\n"
-        "8. **모든 index** 에 대해 top/mid 명시 (빈칸은 \"\").\n\n"
-        f"{block}\n\n"
-        'JSON: {"labels": [{"index": <int>, "top": "<항목명 또는 \"\">", "mid": "<요구사항 또는 \"\">"}, ...]}'
+        f"RFP 조견표 탭 '{tab}'. 각 상세요건(detail) 행에 **계위 라벨**(항목명 top / 요구사항 mid)만 부여한다.\n"
+        "상세요건 본문은 절대 바꾸지 않는다(여기선 출력도 안 함). 너의 임무는 **짧은 분류 라벨 생성**뿐.\n\n"
+        "■ 라벨 규칙\n"
+        "- 항목명·요구사항은 detail 문장을 **그대로 베끼지 말 것**. 핵심 주제만 뽑은 **짧은 명사구**"
+        "(대략 3~15자, 완전한 문장·동사 종결 금지).\n"
+        "- '현재' 값이 짧고 적절하면 유지, 문장처럼 길면 짧은 명사구로 교체. 애매하면 비운다(detail 복사 금지).\n"
+        "- 같은 그룹이 이어지는 행은 top/mid를 \"\"(빈칸) — 정답 조견표의 셀 병합 형태.\n"
+        "- 새 항목명 그룹 첫 행에만 top, 새 요구사항(서브그룹) 첫 행에만 mid. "
+        "kind=top_line→새 top, kind=mid_line→새 mid, kind=bullet 연속→둘 다 \"\".\n\n"
+        "■ 예시(detail → 라벨)\n"
+        "'- 지식저장소, 그룹웨어, 웹하드 등 산재된 정보 수집을 위한 파이프라인 구축' → top='지식베이스 구축', mid='데이터 수집 파이프라인'\n"
+        "'- 전처리, 파싱, 청킹, 임베딩 등 데이터 처리 파이프라인 구성' → top='', mid='데이터 처리 파이프라인'\n"
+        "'- 신규 구축 대상 시스템 웹/앱 서버 구축 및 이중화' → top='시스템 일반', mid='서버구성 방안'\n"
+        f"{ctx_line}\n"
+        f"[행]\n{block}\n\n"
+        'JSON: {"labels":[{"index":<int>,"top":"<짧은 명사구 또는 \\"\\">","mid":"<짧은 명사구 또는 \\"\\">"}, ...]} — 모든 index 포함.'
     )
 
 
@@ -127,10 +130,11 @@ async def assign_hierarchy_labels(reqs: list[Req], concurrency: int = 4) -> list
         return reqs
 
     s = Settings()
-    if not s.openai_api_key:
-        return reqs
-
     client = build_llm_client(s)
+    from app.llm.fake_client import FakeLlmClient
+
+    if isinstance(client, FakeLlmClient):  # provider 키 없음 → 라벨링 스킵
+        return reqs
     sem = asyncio.Semaphore(concurrency)
 
     for tab, idxs in by_tab.items():
