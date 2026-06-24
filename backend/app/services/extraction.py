@@ -50,8 +50,16 @@ class ExtractionService:
     async def run(self, document: Document) -> str:
         """이미 등록된 Document에 대해 변환→탐지→분해→Requirement 저장 파이프라인 수행."""
 
+        disable_cache = self._c.settings.extraction_disable_cache
         cache = ArtifactCache(self._c.settings.artifact_cache_dir)
-        if cache.has_extraction(document.content_hash):
+
+        # 이미 추출된 doc(메모리에 요건 존재) — 재추출하지 않고 추천만 이어서 진행.
+        # 프로젝트 복귀 시 처음부터 재추출되는 문제 방지 (첫 추출은 요건이 없어 그대로 진행).
+        if await self._c.repo.list_requirements(document.id):
+            asyncio.create_task(self._recommend_background(document.id, use_cache=not disable_cache))
+            return document.id
+
+        if not disable_cache and cache.has_extraction(document.content_hash):
             try:
                 await cache.restore_extraction(self._c, document, fast=True)
                 restored_recs = await cache.restore_recommendations(self._c, document, fast=True)
@@ -62,9 +70,16 @@ class ExtractionService:
             except Exception:
                 logger.warning("캐시 복원 실패 — 전체 파이프라인 재실행", exc_info=True)
 
-        # V2 엔진(results_final 산출) — opendataloader→LLM 스키마 추출
+        # 알려진 4종 — 큐레이션 엔트리(gold·HWPX 우선)로 v3 실행
+        final_entry = self._resolve_final_sample(document)
+        if final_entry is not None:
+            return await self._run_v3_final(document, final_entry, disable_cache=disable_cache)
+
+        # 그 외 모든 문서 — 콘텐츠 도메인 라우팅으로 v3 엔진 실행
+        # '요구사항 총괄표' 포함 → 공공(public_form), 없으면 → 금융(table_faithful)
         if self._c.settings.extraction_engine == "v2":
-            return await self._run_v2(document)
+            strategy = await self._detect_domain_strategy(document)
+            return await self._run_v3_domain(document, strategy)
 
         try:
             tracker = self._c.llm_tracker(document.id)
@@ -198,7 +213,7 @@ class ExtractionService:
 
         return document.id
 
-    async def _v2_input_path(self, document: Document) -> str:
+    async def _v2_input_path(self, document: Document, log_session=None) -> str:
         """V2 엔진 입력 경로.
 
         V2 `run()`은 .pdf(opendataloader)·.html 만 받는다. HWPX/DOC/DOCX 는
@@ -208,6 +223,8 @@ class ExtractionService:
         """
         import shutil
 
+        from app.phase1.converters.html_postprocess import raw_html_sibling
+
         src = Path(document.src_path)
         ext = src.suffix.lower()
         if ext in (".pdf", ".html", ".htm"):
@@ -215,13 +232,317 @@ class ExtractionService:
         out_dir = self._c.settings.storage_root / document.id / "v2_convert"
         out_dir.mkdir(parents=True, exist_ok=True)
         converter = select_converter(document.mime, self._c.settings)
+        converter_name = type(converter).__name__
         html_doc = await converter.convert(document, out_dir)
         # V2가 의미있는 doc 이름을 쓰도록 원본 stem 으로 복사
         stem = Path(document.source_filename).stem if document.source_filename else document.id
         nice = out_dir / f"{stem}.html"
         if Path(html_doc.html_path) != nice:
             shutil.copyfile(html_doc.html_path, nice)
+            raw_src = raw_html_sibling(Path(html_doc.html_path))
+            if raw_src.is_file():
+                shutil.copyfile(raw_src, raw_html_sibling(nice))
+        if log_session is not None:
+            raw_path = raw_html_sibling(nice)
+            log_session.record_convert_raw(
+                converter=converter_name,
+                raw_html=raw_path if raw_path.is_file() else None,
+                input_ref=src,
+            )
+            log_session.record_convert_postprocessed(
+                post_html=nice,
+                raw_html=raw_path if raw_path.is_file() else None,
+                converter=converter_name,
+            )
         return str(nice)
+
+    def _resolve_final_sample(self, document: Document):
+        from app.core.config import PROJECT_ROOT
+        from app.services.final_sample import resolve_final_sample
+
+        name = document.source_filename or Path(document.src_path).name
+        return resolve_final_sample(
+            sample_name=name,
+            manifest_path=self._c.settings.final_manifest_path,
+            repo_root=PROJECT_ROOT,
+        )
+
+    async def _run_v3_final(
+        self, document: Document, entry: dict, *, disable_cache: bool = False
+    ) -> str:
+        """prototype/v3-final — 공공·금융 4종 시연 파이프라인."""
+        import pickle
+
+        try:
+            llm_meta = {
+                "llm_provider": self._c.settings.llm_provider,
+                "llm_model": self._c.active_llm_model(),
+            }
+            await self._pipeline.emit(document.id, PipelineStage.CONVERTING, payload=llm_meta)
+
+            sample_id = entry["id"]
+            strategy = entry["strategy"]
+            sample_dir = entry["artifacts_dir"]
+            pkl_path = sample_dir / "v3_export.pkl"
+            manifest = None
+
+            if not disable_cache and pkl_path.is_file():
+                payload = pickle.loads(pkl_path.read_bytes())
+                v2_reqs = payload.get("reqs") or []
+                overview = payload.get("overview")
+                steps = [f"cache: {sample_id}/v3_export.pkl ({len(v2_reqs)} rows)"]
+            else:
+                source = Path(entry["source"])
+                if not source.is_file():
+                    source = Path(document.src_path)
+                gold = entry.get("gold_xlsx")
+                gold_path = Path(gold) if gold else None
+                gold_arg = gold_path if gold_path and gold_path.is_file() else None
+                if strategy == "public_form":
+                    from prototype.v3.pipeline_final import run_sample
+
+                    manifest = await asyncio.to_thread(
+                        run_sample,
+                        sample_id=sample_id,
+                        source=source,
+                        strategy=strategy,
+                        label=entry.get("label") or sample_id,
+                        out_root=self._c.settings.artifacts_final_dir,
+                        gold_xlsx=gold_arg,
+                    )
+                    v2_reqs = manifest.get("_reqs") or []
+                    overview = manifest.get("_overview")
+                    steps = manifest.get("steps") or []
+                else:  # 금융/비정형 — 동적 칼럼 공통 경로
+                    from prototype.v2.run_dynamic import run_dynamic
+
+                    result = await asyncio.to_thread(run_dynamic, source, gold_arg)
+                    v2_reqs = result["reqs"]
+                    overview = result["overview"]
+                    steps = result["steps"]
+
+            await self._pipeline.emit(
+                document.id,
+                PipelineStage.ATOMIZED,
+                payload={
+                    "atoms": len(v2_reqs),
+                    "strategy": strategy,
+                    "engine": "v3_final",
+                    **llm_meta,
+                },
+            )
+
+            requirements = [self._v2_to_requirement(document.id, r) for r in v2_reqs]
+            await self._c.repo.save_document(document)
+            total = len(requirements)
+            for i, req in enumerate(requirements):
+                await self._c.repo.append_requirement(document.id, req)
+                await self._pipeline.emit(
+                    document.id,
+                    PipelineStage.ATOMIZING,
+                    payload={
+                        "done": i + 1,
+                        "total": total,
+                        "requirement_id": req.id,
+                        "snippet": f"v3-final {i + 1}/{total} · {(req.name or req.detail)[:48]}…",
+                    },
+                )
+
+            export_payload = {
+                "reqs": v2_reqs,
+                "overview": overview,
+                "strategy": strategy,
+                "sample_id": sample_id,
+            }
+            blob = pickle.dumps(export_payload)
+            doc_dir = self._c.settings.storage_root / document.id
+            doc_dir.mkdir(parents=True, exist_ok=True)
+            (doc_dir / "v3_export.pkl").write_bytes(blob)
+            if document.content_hash:
+                bucket = self._c.settings.artifact_cache_dir / document.content_hash[:16]
+                bucket.mkdir(parents=True, exist_ok=True)
+                (bucket / "v3_export.pkl").write_bytes(blob)
+
+            html_src = None
+            if manifest:
+                html_src = (manifest.get("artifacts") or {}).get("html_postprocessed")
+            if not html_src and sample_dir.is_dir():
+                mf = sample_dir / "manifest.json"
+                if mf.is_file():
+                    import json
+
+                    art = json.loads(mf.read_text(encoding="utf-8")).get("artifacts") or {}
+                    html_src = art.get("html_postprocessed")
+            try:
+                if html_src and Path(html_src).is_file():
+                    cache = ArtifactCache(self._c.settings.artifact_cache_dir)
+                    cache.save_extraction(
+                        document=document,
+                        requirements=requirements,
+                        html_path=Path(html_src),
+                        extraction_meta=None,
+                        event_bus=self._c.event_bus,
+                    )
+            except Exception:  # noqa: BLE001
+                logger.warning("v3-final 추출 캐시 저장 실패(무시)", exc_info=True)
+
+            await self._pipeline.emit(
+                document.id,
+                PipelineStage.READY_FOR_REVIEW,
+                payload={
+                    "requirements": total,
+                    "snippet": f"v3-final {strategy} · {total}줄 — {entry.get('label', sample_id)}",
+                    "pipeline_steps": steps[-3:],
+                    **llm_meta,
+                },
+            )
+        except Exception as e:  # noqa: BLE001
+            await self._pipeline.emit_failed(document.id, PipelineStage.READY_FOR_REVIEW, str(e))
+            raise
+
+        asyncio.create_task(self._recommend_background(document.id, use_cache=False))
+        return document.id
+
+    async def _detect_domain_strategy(self, document: Document) -> str:
+        """도메인 라우팅 — '요구사항 총괄표' 포함 → 공공(public_form), 없으면 → 금융(table_faithful)."""
+        try:
+            text = await self._detection_text(document)
+        except Exception:  # noqa: BLE001
+            logger.warning("도메인 감지 실패 — table_faithful 기본값", exc_info=True)
+            return "table_faithful"
+        has_summary = "요구사항총괄표" in "".join(text.split())
+        strategy = "public_form" if has_summary else "table_faithful"
+        logger.info(
+            "도메인 라우팅 doc=%s → %s (요구사항총괄표=%s)",
+            document.id,
+            strategy,
+            has_summary,
+        )
+        return strategy
+
+    async def _detection_text(self, document: Document) -> str:
+        """라우팅 판정용 평문 추출 — PDF는 pymupdf, 그 외는 앱 컨버터 HTML."""
+        src = Path(document.src_path)
+        if document.mime == DocumentMime.PDF or src.suffix.lower() == ".pdf":
+
+            def _read() -> str:
+                import fitz
+
+                with fitz.open(src) as d:
+                    return "".join(p.get_text() for p in d)
+
+            return await asyncio.to_thread(_read)
+
+        import re
+
+        out_dir = self._c.settings.storage_root / document.id / "detect"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        converter = select_converter(document.mime, self._c.settings)
+        html_doc = await converter.convert(document, out_dir)
+        html = Path(html_doc.html_path).read_text(encoding="utf-8", errors="replace")
+        return re.sub(r"<[^>]+>", " ", html)
+
+    async def _run_v3_domain(self, document: Document, strategy: str) -> str:
+        """콘텐츠 도메인 라우팅 — v3 엔진(run_sample)으로 fresh 추출 (임의 업로드 지원)."""
+        import pickle
+
+        try:
+            llm_meta = {
+                "llm_provider": self._c.settings.llm_provider,
+                "llm_model": self._c.active_llm_model(),
+            }
+            await self._pipeline.emit(
+                document.id,
+                PipelineStage.CONVERTING,
+                payload={**llm_meta, "strategy": strategy},
+            )
+
+            sample_id = (document.content_hash or document.id)[:16]
+            label = document.source_filename or Path(document.src_path).stem
+            if strategy == "public_form":
+                # 공공(요구사항 총괄표) — 기존 경로 유지(잘 동작)
+                from prototype.v3.pipeline_final import run_sample
+
+                manifest = await asyncio.to_thread(
+                    run_sample,
+                    sample_id=sample_id,
+                    source=Path(document.src_path),
+                    strategy=strategy,
+                    label=label,
+                    out_root=self._c.settings.artifacts_final_dir,
+                    gold_xlsx=None,
+                    llm_concurrency=self._c.settings.llm_concurrency,
+                )
+                v2_reqs = manifest.get("_reqs") or []
+                overview = manifest.get("_overview")
+                steps = manifest.get("steps") or []
+            else:
+                # 금융/비정형 — 동적 칼럼 공통 경로(섹션→계위, 고정칼럼 없음)
+                src = Path(document.src_path)
+                from prototype.v2.ocr_pipeline import has_text_layer
+
+                if src.suffix.lower() == ".pdf" and not has_text_layer(src):
+                    # 스캔 이미지 PDF(텍스트 레이어 0) — Gemma VLM OCR 후 동적 경로
+                    from prototype.v2.ocr_pipeline import run_ocr_dynamic
+
+                    result = await asyncio.to_thread(run_ocr_dynamic, src, None)
+                else:
+                    from prototype.v2.run_dynamic import run_dynamic
+
+                    result = await asyncio.to_thread(run_dynamic, src, None)
+                v2_reqs = result["reqs"]
+                overview = result["overview"]
+                steps = result["steps"]
+            await self._pipeline.emit(
+                document.id,
+                PipelineStage.ATOMIZED,
+                payload={"atoms": len(v2_reqs), "strategy": strategy, "engine": "v3_domain", **llm_meta},
+            )
+
+            requirements = [self._v2_to_requirement(document.id, r) for r in v2_reqs]
+            await self._c.repo.save_document(document)
+            total = len(requirements)
+            for i, req in enumerate(requirements):
+                await self._c.repo.append_requirement(document.id, req)
+                await self._pipeline.emit(
+                    document.id,
+                    PipelineStage.ATOMIZING,
+                    payload={
+                        "done": i + 1,
+                        "total": total,
+                        "requirement_id": req.id,
+                        "snippet": f"v3 {strategy} {i + 1}/{total} · {(req.name or req.detail)[:48]}…",
+                    },
+                )
+
+            # export용 v3_export.pkl 저장 (strategy 포함 — financial/public writer 선택)
+            export_payload = {
+                "reqs": v2_reqs,
+                "overview": overview,
+                "strategy": strategy,
+                "sample_id": sample_id,
+            }
+            blob = pickle.dumps(export_payload)
+            doc_dir = self._c.settings.storage_root / document.id
+            doc_dir.mkdir(parents=True, exist_ok=True)
+            (doc_dir / "v3_export.pkl").write_bytes(blob)
+
+            await self._pipeline.emit(
+                document.id,
+                PipelineStage.READY_FOR_REVIEW,
+                payload={
+                    "requirements": total,
+                    "snippet": f"v3 {strategy} · {total}줄 추출 완료 — Excel·검토 가능",
+                    "pipeline_steps": steps[-3:],
+                    **llm_meta,
+                },
+            )
+        except Exception as e:  # noqa: BLE001
+            await self._pipeline.emit_failed(document.id, PipelineStage.READY_FOR_REVIEW, str(e))
+            raise
+
+        asyncio.create_task(self._recommend_background(document.id, use_cache=False))
+        return document.id
 
     async def _run_v2(self, document: Document) -> str:
         """prototype/v2 엔진으로 추출 — results_final 산출 파이프라인."""
@@ -236,14 +557,34 @@ class ExtractionService:
             await self._pipeline.emit(document.id, PipelineStage.CONVERTING, payload=llm_meta)
 
             from prototype.v2.pipeline import run as v2_run
+            from app.domain.enums import DocumentMime
+            from app.services.pipeline_logger import PipelineLogSession
 
             tab_mode = self._c.settings.v2_tab_mode
-            # PDF/HTML은 그대로, HWPX/DOC/DOCX는 앱 컨버터로 HTML 변환 후 V2에 투입
-            v2_input = await self._v2_input_path(document)
-            # V2는 동기·블로킹(opendataloader + LLM) → 스레드에서 실행
-            manifest = await asyncio.to_thread(
-                v2_run, v2_input, None, mode="llm", tab_mode=tab_mode
+            run_id = (document.content_hash or document.id)[:16]
+            log_session = PipelineLogSession(
+                self._c.settings.pipeline_logs_dir,
+                run_id=run_id,
+                source_path=Path(document.src_path),
+                source_name=document.source_filename or Path(document.src_path).name,
+                content_hash=document.content_hash,
+                engine="v2",
             )
+            # PDF/HTML은 그대로, HWPX/DOC/DOCX는 앱 컨버터로 HTML 변환 후 V2에 투입
+            v2_input = await self._v2_input_path(document, log_session=log_session)
+            korean_hwp = document.mime in (DocumentMime.HWP, DocumentMime.HWPX)
+            manifest = await asyncio.to_thread(
+                v2_run,
+                v2_input,
+                None,
+                mode="llm",
+                tab_mode=tab_mode,
+                korean_hwp=korean_hwp,
+                log_session=log_session,
+            )
+            if document.content_hash:
+                bucket = self._c.settings.artifact_cache_dir / document.content_hash[:16]
+                log_session.mirror_to(bucket)
             v2_reqs = manifest.get("_reqs") or []
             overview = manifest.get("_overview")
             await self._pipeline.emit(
@@ -327,11 +668,13 @@ class ExtractionService:
             gen_fields.add("name")
         if getattr(r, "gen_mid", False) and mid:
             gen_fields.update({"subcategory", "definition"})
+        from app.services.native_export import rel_asset_path
+
         return Requirement(
             id=uuid.uuid4().hex,
             doc_id=doc_id,
             category=cat,
-            subcategory=mid or None,
+            subcategory=None,
             category_source=CategorySource.DOCUMENT_TABLE,
             subcategory_source=None,
             code=getattr(r, "rid", "") or "",
@@ -342,6 +685,10 @@ class ExtractionService:
             source_page=getattr(r, "page", None),
             source_section=(getattr(r, "section_path", "") or None),
             source_table_index=getattr(r, "table_id", None),
+            source_ref=(getattr(r, "source", "") or None),
+            detail_images=[
+                rel_asset_path(p) for p in (getattr(r, "detail_images", None) or [])
+            ],
             ai_generated_fields=gen_fields,
         )
 

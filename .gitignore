@@ -27,9 +27,11 @@ npm-debug.log*
 Thumbs.db
 
 # Data — 원본 RFP는 민감할 수 있음
+data/database/
 data/raw/
 data/storage/
 data/vectorstore/
+data/chroma_db/
 data/app.sqlite*
 data/processed/~$*
 evaluator/reports/

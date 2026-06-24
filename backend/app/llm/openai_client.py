@@ -15,8 +15,22 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class OpenAIClient(AsyncLlmClient):
-    def __init__(self, api_key: str, model: str) -> None:
-        self._client = AsyncOpenAI(api_key=api_key)
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        base_url: str | None = None,
+        verify_ssl: bool = True,
+    ) -> None:
+        client_kwargs: dict[str, object] = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        if not verify_ssl:
+            import httpx
+
+            client_kwargs["http_client"] = httpx.AsyncClient(verify=False)
+        self._client = AsyncOpenAI(**client_kwargs)
         self._model = model
 
     async def chat(self, messages: list[Message], **kwargs: Any) -> str:

@@ -4,15 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { exportUrl, fetchExportColumns, type ExportColumnInfo } from "@/lib/api";
 
 const PRESET_LABELS: Record<string, string> = {
+  조견표: "조견표",
   original: "원본만",
   standard: "표준",
   full: "전체",
 };
-
-const LAYOUTS: { id: "cluster" | "ordered"; label: string; desc: string }[] = [
-  { id: "cluster", label: "기술·분류별", desc: "분류(카테고리)별 시트로 묶어 정리" },
-  { id: "ordered", label: "RFP 원문 순서", desc: "원문 페이지 순서대로 한 시트에" },
-];
 
 function baseFromName(name?: string | null): string {
   if (!name) return "조견표";
@@ -30,22 +26,18 @@ export function ExportPanel({
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"human" | "ai" | "both">("both");
-  const [layout, setLayout] = useState<"cluster" | "ordered">("cluster");
-  const [preset, setPreset] = useState("standard");
+  const [preset, setPreset] = useState("조견표");
   const [applicable, setApplicable] = useState<ExportColumnInfo[]>([]);
   const [cols, setCols] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [filename, setFilename] = useState("");
   const [filenameTouched, setFilenameTouched] = useState(false);
 
-  // 기본 파일명: {원본}_rfp분석_{구성}_{대상}
   const defaultName = useMemo(() => {
-    const layoutTag = layout === "ordered" ? "원문순서" : "기술별";
     const modeTag = mode === "ai" ? "AI" : mode === "human" ? "사람" : "전체";
-    return `${baseFromName(sourceName)}_rfp분석_${layoutTag}_${modeTag}`;
-  }, [sourceName, layout, mode]);
+    return `${baseFromName(sourceName)}_rfp분석_원문순서_${modeTag}`;
+  }, [sourceName, mode]);
 
-  // 사용자가 직접 수정 전까지는 옵션 변경에 따라 기본명 자동 갱신
   const effectiveName = filenameTouched ? filename : defaultName;
 
   useEffect(() => {
@@ -73,8 +65,8 @@ export function ExportPanel({
     () =>
       disabled || cols.length === 0
         ? "#"
-        : exportUrl(docId, mode, cols, layout, effectiveName),
-    [docId, mode, cols, layout, effectiveName, disabled],
+        : exportUrl(docId, mode, cols, effectiveName),
+    [docId, mode, cols, effectiveName, disabled],
   );
 
   function toggleCol(key: string) {
@@ -95,39 +87,15 @@ export function ExportPanel({
       {open && !disabled && (
         <div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
           <p className="text-xs font-semibold text-slate-700">다운로드 옵션</p>
-
-          <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
-            구성 방식
+          <p className="mt-1 text-[10px] text-slate-500">
+            RFP 원문 순서 조견표 (표안표·이미지 포함, 백엔드와 동일 형식)
           </p>
-          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-            {LAYOUTS.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                onClick={() => setLayout(l.id)}
-                className={`rounded-lg border px-2.5 py-2 text-left transition ${
-                  layout === l.id
-                    ? "border-ink-900 bg-ink-900 text-white"
-                    : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
-                }`}
-              >
-                <div className="text-[12px] font-medium">{l.label}</div>
-                <div
-                  className={`mt-0.5 text-[10px] leading-tight ${
-                    layout === l.id ? "text-white/70" : "text-neutral-400"
-                  }`}
-                >
-                  {l.desc}
-                </div>
-              </button>
-            ))}
-          </div>
 
           <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
             칼럼 구성
           </p>
           <p className="mt-1 text-[10px] text-slate-500">
-            이 문서에 값이 있는 칼럼만 표시됩니다 (JB·하나 등 형식 자동 반영).
+            레거시 문서에만 적용됩니다. V3 샘플은 원문 조견표가 우선 출력됩니다.
           </p>
 
           <div className="mt-3 flex flex-wrap gap-1">
@@ -217,7 +185,7 @@ export function ExportPanel({
             onClick={() => setOpen(false)}
             className="btn-secondary mt-3 w-full text-center"
           >
-            {cols.length}개 칼럼 · 다운로드
+            다운로드
           </a>
         </div>
       )}

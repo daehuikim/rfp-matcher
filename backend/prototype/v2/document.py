@@ -14,9 +14,9 @@ import re
 
 from .blocks import _contents, _keep
 from .classify import classify, detect_header_row, is_requirement_table
-from .extract import Req, atomize_detail, clean_heading, level_table
+from .extract import Req, atomize_detail, clean_heading, format_source, level_table
 from .grid import Grid, from_opendataloader_table
-from .schema import is_requirement_section
+from .schema import is_requirement_section, section_has_requirement_context
 from .text import norm, sig
 
 _ROMAN = re.compile(r"^\(?[IVXLCDM]+[.)]\s")
@@ -81,7 +81,8 @@ def extract_document(doc_name: str, doc: dict, mode: str = "fine",
             merged = Grid(cells=[row[:] for row in grid.cells],
                           table_id=grid.table_id, page=grid.page, next_id=grid.next_id,
                           row_pages=list(grid.row_pages))
-            candidates.append((merged, nearest))
+            sp = _section_path(stack) or nearest
+            candidates.append((merged, sp))
             st["cand"], st["next"] = merged, grid.next_id
             return
 
@@ -122,15 +123,29 @@ def extract_document(doc_name: str, doc: dict, mode: str = "fine",
         st["lb_section"] = ""
         st["lb_id"] -= 1
 
-    def handle_list_defer(el: dict) -> None:
-        # lexicon 게이트 없이 항목 누적 → 나중에 LLM 이 요구사항 여부 판정(하드코딩 제거)
+    def _defer_text_block(el: dict) -> None:
+        """리스트·문단을 1열 candidate 로 누적.
+
+        100% recall — 섹션 키워드 게이트(section_has_requirement_context) 제거.
+        '기타사항' 처럼 어휘에 없는 요구 섹션이 통째 누락되던 문제를 막는다. 요구사항영역 vs
+        boilerplate(목차/배경/일정/입찰/서식) 판정은 다운스트림 LLM keep(llm_tabs.assign_tabs)이
+        담당 — 키워드 하드코딩 대신 LLM이 섹션을 읽고 판단(원칙 준수).
+        """
         sp = _section_path(stack)
+        if st.get("lb") and st.get("lb_section") and st["lb_section"] != sp:
+            flush_listblock()
         page = el.get("page number")
         if not st.get("lb_section"):
             st["lb_section"] = sp
         for text in _contents(el):
             if _keep(text):
                 st.setdefault("lb", []).append((text, page))
+
+    def handle_list_defer(el: dict) -> None:
+        _defer_text_block(el)
+
+    def handle_paragraph_defer(el: dict) -> None:
+        _defer_text_block(el)
 
     def handle_list(el: dict) -> None:
         if not stack:
@@ -140,7 +155,7 @@ def extract_document(doc_name: str, doc: dict, mode: str = "fine",
             return
         sp = _section_path(stack)
         page = el.get("page number")
-        src = f"p.{page} · 리스트" if page else "리스트"
+        src = format_source(table_id=-1, page=page, section=sp)
         ch = clean_heading(nearest)
         top = ch if (ch and len(ch) <= 20) else ""
         for text in _contents(el):
@@ -179,6 +194,8 @@ def extract_document(doc_name: str, doc: dict, mode: str = "fine",
                     handle_list_defer(el)
                 else:
                     handle_list(el)
+            elif t == "paragraph" and defer_tables:
+                handle_paragraph_defer(el)
             else:
                 kids = el.get("kids")
                 if isinstance(kids, list):

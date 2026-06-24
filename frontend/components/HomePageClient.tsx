@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRef, useState, startTransition } from "react";
 import { useRouter } from "next/navigation";
-import { SampleFile, uploadDocument } from "@/lib/api";
+import { getStoredLlmProvider, LlmModelSelector } from "@/components/LlmModelSelector";
+import { SampleFile, uploadDocument, importExcel } from "@/lib/api";
 import { useWorkspace } from "@/context/WorkspaceProvider";
 
 function bytesHuman(n: number): string {
@@ -88,7 +89,7 @@ function FlowWave() {
 
 function pickGridSamples(samples: SampleFile[]): SampleFile[] {
   const featured = samples.filter((s) => s.featured);
-  return (featured.length > 0 ? featured : samples).slice(0, 7);
+  return featured.length > 0 ? featured : samples;
 }
 
 const START_ERRORS: Record<string, string> = {
@@ -111,17 +112,32 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
   const [err, setErr] = useState(startError ? START_ERRORS[startError] ?? "시연 시작 실패" : "");
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const excelRef = useRef<HTMLInputElement | null>(null);
 
   async function onUpload(file: File) {
     setBusy("upload");
     setErr("");
     try {
-      const { doc_id } = await uploadDocument(file);
+      const { doc_id } = await uploadDocument(file, getStoredLlmProvider());
       startTransition(() => {
         router.push(`/review/${doc_id}`);
       });
     } catch (e) {
       setErr(`업로드 실패: ${String(e)}`);
+      setBusy(null);
+    }
+  }
+
+  async function onImportExcel(file: File) {
+    setBusy("excel");
+    setErr("");
+    try {
+      const { doc_id } = await importExcel(file, getStoredLlmProvider());
+      startTransition(() => {
+        router.push(`/review/${doc_id}`);
+      });
+    } catch (e) {
+      setErr(`Excel 불러오기 실패: ${String(e)}`);
       setBusy(null);
     }
   }
@@ -136,7 +152,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
           </p>
           <h1 className="mt-2 text-3xl font-bold leading-tight tracking-tight text-ink-900 md:text-4xl">
             RFP를 올리면{" "}
-            <span className="text-ktred-600">조견표가 한 줄씩</span> 정리됩니다
+            <span className="text-ktred-600">조견표가 자동으로</span> 정리됩니다
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-600">
             PDF·DOC·HWPX에서 요구사항 표를 추출하고, KT AI 솔루션과 매칭해 O/△/X 리스크를
@@ -153,10 +169,15 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
       </section>
 
       <section className="panel mb-8 p-6">
-        <h2 className="text-sm font-semibold text-ink-900">RFP 파일 업로드</h2>
-        <p className="mt-1 text-xs text-neutral-500">
-          공공 RFP의 제안요청서·과업지시서·별첨 등을 업로드하세요
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-ink-900">RFP 파일 업로드</h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              공공 RFP의 제안요청서·과업지시서·별첨 등을 업로드하세요
+            </p>
+          </div>
+          <LlmModelSelector />
+        </div>
         <div
           role="button"
           tabIndex={0}
@@ -202,13 +223,40 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
             if (f) void onUpload(f);
           }}
         />
+
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-neutral-100 bg-neutral-50/60 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-ink-900">조견표 Excel 불러오기</p>
+            <p className="mt-0.5 text-[11px] text-neutral-500">
+              내려받아 편집한 조견표(.xlsx)를 다시 올리거나, 외부 조견표를 불러와 AI 매칭합니다
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={!!busy}
+            onClick={() => !busy && excelRef.current?.click()}
+            className="shrink-0 rounded-lg border border-ktteal-300 bg-white px-3 py-1.5 text-xs font-medium text-ktteal-700 shadow-sm transition hover:border-ktteal-400 hover:bg-ktteal-50 disabled:opacity-60"
+          >
+            {busy === "excel" ? "불러오는 중…" : "Excel 업로드"}
+          </button>
+        </div>
+        <input
+          ref={excelRef}
+          type="file"
+          accept=".xlsx,.xlsm"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void onImportExcel(f);
+          }}
+        />
       </section>
 
       <section className="panel p-6">
         <div className="flex items-baseline justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-900">샘플로 시연</h2>
-            <p className="mt-1 text-xs text-slate-500">data/raw 폴더 · PoC RFP 6종</p>
+            <p className="mt-1 text-xs text-slate-500">공공·금융 RFP 4종 (법제처·금감원·하나·신한)</p>
           </div>
           {gridSamples.length > 0 && (
             <span className="text-[11px] text-slate-400">{gridSamples.length}개</span>

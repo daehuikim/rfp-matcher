@@ -17,7 +17,7 @@ os.environ.setdefault("TRANSFORMERS_CACHE", str(_s.hf_cache_dir))
 
 from fastapi import FastAPI  # noqa: E402
 
-from app.api import documents, events, exports, health, recommendations, requirements  # noqa: E402
+from app.api import documents, events, exports, health, recommendations, requirements, settings  # noqa: E402
 from app.core.container import build_container, teardown_container  # noqa: E402
 from app.core.logging import configure_logging  # noqa: E402
 
@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="rfp-matcher", lifespan=lifespan)
     app.include_router(health.router)
+    app.include_router(settings.router)
     app.include_router(events.router)
     app.include_router(documents.router)
     app.include_router(requirements.router)

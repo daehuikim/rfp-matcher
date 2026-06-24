@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.api.deps import ContainerDep
 from app.domain.enums import Judgement, PipelineStage
 from app.domain.models import HumanJudgement, PipelineEvent, Recommendation, Requirement
+from app.services.native_export import enrich_requirements
 
 router = APIRouter(tags=["requirements"])
 
@@ -19,13 +20,15 @@ class RequirementView(BaseModel):
 @router.get("/documents/{doc_id}/requirements", response_model=list[RequirementView])
 async def list_requirements(doc_id: str, container: ContainerDep) -> list[RequirementView]:
     reqs, recs, judges = await container.repo.snapshot(doc_id)
+    doc = container.repo.documents.get(doc_id)
+    enriched = enrich_requirements(container.settings, doc_id, doc, reqs)
     return [
         RequirementView(
             requirement=r,
             recommendation=recs.get(r.id),
             judgement=judges.get(r.id),
         )
-        for r in reqs
+        for r in enriched
     ]
 
 

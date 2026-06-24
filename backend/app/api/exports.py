@@ -14,6 +14,7 @@ from app.phase1.writers.export_columns import (
     resolve_export_columns,
 )
 from app.phase1.writers.sheet_writer import RequirementSheetWriter
+from app.services.native_export import write_native_excel
 
 router = APIRouter(prefix="/documents", tags=["exports"])
 
@@ -42,7 +43,7 @@ async def list_export_columns(
     if doc_id not in container.repo.documents:
         raise HTTPException(404, f"document 없음: {doc_id}")
     reqs, recs, judges = await container.repo.snapshot(doc_id)
-    preset_key = preset if preset in EXPORT_PRESETS else "standard"
+    preset_key = preset if preset in EXPORT_PRESETS else "조견표"
     selected = resolve_export_columns(reqs, recs, judges, mode, EXPORT_PRESETS[preset_key])
     applicable_keys = list_applicable_columns(reqs, recs, judges, mode)
     return ExportColumnsResponse(
@@ -64,7 +65,7 @@ async def export_excel(
     mode: ExportMode = ExportMode.BOTH,
     cols: str | None = None,
     adaptive: bool = True,
-    layout: str = "cluster",
+    layout: str = "ordered",
     filename: str | None = None,
 ) -> FileResponse:
     if doc_id not in container.repo.documents:
@@ -73,10 +74,31 @@ async def export_excel(
     if not reqs:
         raise HTTPException(409, "추출된 요구사항 없음")
 
+    doc = container.repo.documents.get(doc_id)
+    out_dir = container.settings.storage_root / doc_id / "exports"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # V3/V2 prototype 조견표 — 표안표·이미지 포함 원문순서 Excel (백엔드 파이프라인과 동일)
+    native_path = out_dir / "requirements_native.xlsx"
+    if write_native_excel(
+        container.settings,
+        doc_id,
+        doc,
+        native_path,
+        app_reqs=reqs,
+        recommendations=recs,
+        judgements=judges,
+    ):
+        return FileResponse(
+            path=native_path,
+            filename=_download_name(filename, native_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Cache-Control": "no-store"},
+        )
+
     layout_key = "ordered" if layout == "ordered" else "cluster"
     column_keys = [c.strip() for c in cols.split(",")] if cols else None
 
-    out_dir = container.settings.storage_root / doc_id / "exports"
     col_tag = cols.replace(",", "-")[:40] if cols else "adaptive"
     out_path = out_dir / f"requirements_{mode.value}_{layout_key}_{col_tag}.xlsx"
 
@@ -100,6 +122,7 @@ async def export_excel(
         path=out_path,
         filename=_download_name(filename, out_path),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -116,12 +139,14 @@ def _load_v2_overview(container, doc_id: str):
     import pickle
     from pathlib import Path
 
-    candidates = [container.settings.storage_root / doc_id / "v2_export.pkl"]
+    candidates = [
+        container.settings.storage_root / doc_id / "v3_export.pkl",
+        container.settings.storage_root / doc_id / "v2_export.pkl",
+    ]
     doc = container.repo.documents.get(doc_id)
     if doc is not None and getattr(doc, "content_hash", None):
-        candidates.append(
-            container.settings.artifact_cache_dir / doc.content_hash[:16] / "v2_export.pkl"
-        )
+        bucket = container.settings.artifact_cache_dir / doc.content_hash[:16]
+        candidates.extend([bucket / "v3_export.pkl", bucket / "v2_export.pkl"])
     pkl = next((p for p in candidates if Path(p).is_file()), None)
     if pkl is None:
         return None

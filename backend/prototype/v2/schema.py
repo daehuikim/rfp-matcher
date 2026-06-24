@@ -70,6 +70,10 @@ SECTION_LEXICON: tuple[str, ...] = (
     "요청 사항", "요청사항", "요구사항", "요구 사항", "요건", "요구", "기능 요건",
     "기능 요구", "기술 요건", "상세 요건", "고려사항", "구축 범위", "제공 기능",
     "프로젝트 범위", "사업 범위", "과업 범위", "구축 대상", "구축 내용",
+    # 연구개발·국방 RFP 등
+    "연구개발", "개발 내용", "개발내용", "개발 범위", "개발범위", "과업 내용", "과업내용",
+    "기술개발", "수행 내용", "수행내용", "세부 요구", "세부요구", "상세 요구", "상세요구",
+    "제안 요구", "제안요구",
 )
 
 
@@ -78,3 +82,11 @@ def is_requirement_section(heading: str) -> bool:
     hs = sig(heading).lower()
     raw = norm(heading).lower()
     return any(sig(t).lower() in hs or t in raw for t in SECTION_LEXICON)
+
+
+def section_has_requirement_context(section_path: str) -> bool:
+    """section_path 어느 세그먼트라도 요구사항 섹션 어휘에 해당하면 True."""
+    parts = [p.strip() for p in (section_path or "").split(" > ") if p.strip()]
+    if not parts:
+        return True
+    return any(is_requirement_section(p) for p in parts)

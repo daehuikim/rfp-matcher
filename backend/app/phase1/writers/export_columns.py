@@ -91,28 +91,34 @@ EXPORT_COLUMNS: dict[str, ExportColumn] = {
     ),
     "code": ExportColumn(
         key="code",
-        header="코드",
+        header="요구사항 ID",
         getter=lambda r, _rec, _jud: r.code,
         group="requirement",
     ),
     "name": ExportColumn(
         key="name",
-        header="명칭",
+        header="항목명",
         getter=lambda r, _rec, _jud: r.name,
         group="requirement",
     ),
     "definition": ExportColumn(
         key="definition",
-        header="정의",
+        header="요구사항",
         getter=lambda r, _rec, _jud: r.definition or "",
         group="requirement",
     ),
     "detail": ExportColumn(
         key="detail",
-        header="세부내용",
+        header="상세요건",
         getter=lambda r, _rec, _jud: r.detail,
         group="requirement",
         always=True,
+    ),
+    "source_ref": ExportColumn(
+        key="source_ref",
+        header="출처",
+        getter=lambda r, _rec, _jud: r.source_ref or "",
+        group="requirement",
     ),
     "source_page": ExportColumn(
         key="source_page",
@@ -164,7 +170,7 @@ EXPORT_COLUMNS: dict[str, ExportColumn] = {
     ),
     "consortium": ExportColumn(
         key="consortium",
-        header="필요 컨소시엄",
+        header="컨소시엄 필요 사항",
         getter=lambda _r, rec, _jud: rec.consortium_need or "" if rec else "",
         group="ai",
     ),
@@ -190,6 +196,7 @@ EXPORT_COLUMNS: dict[str, ExportColumn] = {
 
 # 프리셋 = 후보 키 순서. adaptive 해석 시 데이터 없는 칼럼은 자동 제외.
 EXPORT_PRESETS: dict[str, list[str]] = {
+    "조견표": ["code", "name", "definition", "detail", "source_ref"],
     "original": ["category", "subcategory", "name", "detail"],
     "standard": [
         "category",
@@ -211,7 +218,7 @@ EXPORT_PRESETS: dict[str, list[str]] = {
     "full": list(EXPORT_COLUMNS.keys()),
 }
 
-DEFAULT_PRESET = "standard"
+DEFAULT_PRESET = "조견표"
 
 
 def expand_column_keys(requested: Sequence[str] | None) -> list[str]:

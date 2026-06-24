@@ -234,6 +234,9 @@ class ArtifactCache:
             manifest["extraction_meta"] = extraction_meta.model_dump(mode="json")
         if event_bus is not None:
             manifest["pipeline_snapshot"] = capture_pipeline_snapshot(event_bus, document.id)
+        log_manifest = d / "logs" / "pipeline.json"
+        if log_manifest.is_file():
+            manifest["pipeline_log"] = str(log_manifest)
         (d / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2),
             encoding="utf-8",

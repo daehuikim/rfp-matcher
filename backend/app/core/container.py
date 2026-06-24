@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from app.core.config import Settings, get_settings
 from app.llm.base import AsyncLlmClient
-from app.llm.fake_client import FakeLlmClient
+from app.llm.factory import active_llm_model, apply_llm_provider, build_llm_client
 from app.llm.usage import LlmUsageTracker
 from app.phase1.converters.base import HtmlConverter
 from app.phase1.converters.pymupdf_converter import PymupdfConverter
@@ -16,6 +16,7 @@ from app.phase2.retrieval.bm25_catalog import Bm25CatalogRetriever
 from app.storage.repo import InMemoryRepo
 
 if TYPE_CHECKING:
+    from app.phase2.company_tech.index import CompanyTechIndex
     from app.services.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -34,57 +35,28 @@ class Container:
     event_bus: EventBus
     repo: InMemoryRepo
     catalog_retriever: Bm25CatalogRetriever
+    company_tech_index: CompanyTechIndex | None = None
     pdf_converter: HtmlConverter = field(default_factory=PymupdfConverter)
     llm_usage_by_doc: dict[str, LlmUsageTracker] = field(default_factory=dict)
     pipeline_tasks: dict[str, asyncio.Task[None]] = field(default_factory=dict)
 
     def llm_tracker(self, doc_id: str) -> LlmUsageTracker:
         if doc_id not in self.llm_usage_by_doc:
-            model = (
-                self.settings.llm_model_openai
-                if self.settings.llm_provider == "openai"
-                else self.settings.llm_model_anthropic
-                if self.settings.llm_provider == "anthropic"
-                else "fake"
-            )
             self.llm_usage_by_doc[doc_id] = LlmUsageTracker(
                 provider=self.settings.llm_provider,
-                model=model,
+                model=active_llm_model(self.settings),
             )
         return self.llm_usage_by_doc[doc_id]
 
     def active_llm_model(self) -> str:
-        if self.settings.llm_provider == "openai":
-            return self.settings.llm_model_openai
-        if self.settings.llm_provider == "anthropic":
-            return self.settings.llm_model_anthropic
-        return "fake"
+        return active_llm_model(self.settings)
+
+    def set_llm_provider(self, provider: str | None) -> None:
+        apply_llm_provider(self, provider)
 
 
 def build_llm(settings: Settings) -> AsyncLlmClient:
-    if settings.llm_provider == "fake":
-        return FakeLlmClient()
-    if settings.llm_provider == "openai":
-        if not settings.openai_api_key:
-            logger.warning("OPENAI_API_KEY 미설정 — FakeLlmClient로 폴백")
-            return FakeLlmClient()
-        try:
-            from app.llm.openai_client import OpenAIClient
-        except ImportError as e:
-            logger.warning("openai SDK 미설치 (%s) — FakeLlmClient로 폴백", e)
-            return FakeLlmClient()
-        return OpenAIClient(settings.openai_api_key, settings.llm_model_openai)
-    if settings.llm_provider == "anthropic":
-        if not settings.anthropic_api_key:
-            logger.warning("ANTHROPIC_API_KEY 미설정 — FakeLlmClient로 폴백")
-            return FakeLlmClient()
-        try:
-            from app.llm.anthropic_client import AnthropicClient
-        except ImportError as e:
-            logger.warning("anthropic SDK 미설치 (%s) — FakeLlmClient로 폴백", e)
-            return FakeLlmClient()
-        return AnthropicClient(settings.anthropic_api_key, settings.llm_model_anthropic)
-    raise ValueError(f"unknown llm_provider: {settings.llm_provider}")
+    return build_llm_client(settings)
 
 
 async def build_container() -> Container:
@@ -114,8 +86,19 @@ async def build_container() -> Container:
                 "brew install openjdk 또는 PDF_CONVERTER=pymupdf 권장"
             )
 
+    company_tech_index = None
+    if settings.recommend_engine == "company_tech":
+        from app.phase2.company_tech.index import CompanyTechIndex
+
+        company_tech_index = await CompanyTechIndex.load(settings)
+        if company_tech_index is None:
+            logger.warning(
+                "company_tech 인덱스 미준비 — data/chroma_db 빌드 필요 "
+                "(python -m app.preprocessing.build_vectordb)"
+            )
+
     # BM25 인덱스 — 카탈로그 JSON에서 lifespan 시 1회 빌드 (수백 건 → ms)
-    if not catalog_retriever.indexed:
+    if settings.recommend_engine == "catalog" and not catalog_retriever.indexed:
         if settings.catalog_path.exists():
             cat_store = CatalogStore.load(settings.catalog_path)
         else:
@@ -147,10 +130,13 @@ async def build_container() -> Container:
         else:
             logger.warning("카탈로그 비어 있음 — AI 매칭 검색 불가")
 
+    tech_chunks = company_tech_index.chunk_count if company_tech_index else 0
     logger.info(
-        "Container 초기화 완료 (llm=%s, catalog_bm25=%d entries, pdf=%s)",
+        "Container 초기화 완료 (llm=%s, engine=%s, catalog_bm25=%d, tech_chunks=%d, pdf=%s)",
         settings.llm_provider,
+        settings.recommend_engine,
         await catalog_retriever.count(),
+        tech_chunks,
         settings.pdf_converter,
     )
     return Container(
@@ -159,6 +145,7 @@ async def build_container() -> Container:
         event_bus=event_bus,
         repo=repo,
         catalog_retriever=catalog_retriever,
+        company_tech_index=company_tech_index,
         pdf_converter=pdf_converter,
     )
 

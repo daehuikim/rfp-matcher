@@ -21,7 +21,11 @@ BODY_FONT = Font(size=10)
 _THIN = Side(style="thin", color="BFBFBF")
 BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 WRAP = Alignment(wrap_text=True, vertical="center")
+WRAP_TOP = Alignment(wrap_text=True, vertical="top")
 CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+# processed 조견표 스타일 — 항목명(대분류)·요구사항(중분류) 세로 병합
+_MERGE_COLUMN_KEYS = ("name", "definition")
 
 # export 컬럼 key -> (너비, 가운데정렬 여부)
 COLUMN_STYLE: dict[str, tuple[int, bool]] = {
@@ -31,6 +35,7 @@ COLUMN_STYLE: dict[str, tuple[int, bool]] = {
     "name": (24, False),
     "definition": (50, False),
     "detail": (80, False),
+    "source_ref": (16, True),
     "source_page": (9, True),
     "source_section": (20, False),
     "deliverables": (40, False),
@@ -110,6 +115,60 @@ def style_data_sheet(
         ws.auto_filter.ref = f"A1:{get_column_letter(len(col_keys))}{n_rows + 1}"
 
 
+def merge_hierarchy_columns(
+    ws: Worksheet,
+    col_keys: list[str],
+    n_rows: int,
+    *,
+    names: list[str] | None = None,
+    definitions: list[str] | None = None,
+) -> None:
+    """연속 동일 항목명·요구사항(중분류) 셀 병합 — V2 excel_writer 와 동일 원칙."""
+    if n_rows < 2:
+        return
+
+    key_to_col = {k: i + 1 for i, k in enumerate(col_keys)}
+    name_vals = names or []
+    def_vals = definitions or []
+
+    def merge_col(col_idx: int, key_fn) -> None:
+        start = 0
+        while start < n_rows:
+            end = start
+            base = key_fn(start)
+            while (
+                end + 1 < n_rows
+                and key_fn(end + 1) == base
+                and base
+            ):
+                end += 1
+            if end > start:
+                ws.merge_cells(
+                    start_row=start + 2,
+                    end_row=end + 2,
+                    start_column=col_idx,
+                    end_column=col_idx,
+                )
+                ws.cell(start + 2, col_idx).alignment = WRAP_TOP
+            start = end + 1
+
+    if "name" in key_to_col and len(name_vals) == n_rows:
+        ci = key_to_col["name"]
+        merge_col(ci, lambda i: name_vals[i].strip())
+
+    if (
+        "definition" in key_to_col
+        and "name" in key_to_col
+        and len(name_vals) == n_rows
+        and len(def_vals) == n_rows
+    ):
+        ci = key_to_col["definition"]
+        merge_col(
+            ci,
+            lambda i: (name_vals[i].strip(), def_vals[i].strip()),
+        )
+
+
 def style_summary_sheet(ws: Worksheet) -> None:
     """총괄표: 너비·제목 강조만 가볍게."""
     ws.column_dimensions["A"].width = 28
@@ -128,11 +187,35 @@ _OV_ID_FILL = PatternFill("solid", fgColor="FCE4D6")
 _RISK_LABEL = {"O": "가능", "△": "조건부", "X": "리스크"}
 
 
+def _write_summary_overview_sheet(ws, overview: dict) -> None:
+    """한글 공공 RFP — 요구사항 총괄표를 첫 시트에 그대로."""
+    headers = overview.get("headers") or []
+    rows = overview.get("rows") or []
+    for ci, label in enumerate(headers, 1):
+        cell = ws.cell(1, ci, label)
+        cell.font = _OV_HEAD_FONT
+        cell.fill = _OV_SEC_FILL
+        cell.border = BORDER
+        ws.column_dimensions[get_column_letter(ci)].width = 30 if ci == 1 else 20
+    for ri, row in enumerate(rows, 2):
+        for ci, val in enumerate(row, 1):
+            cell = ws.cell(ri, ci, val)
+            cell.alignment = WRAP
+            cell.border = BORDER
+    ws.freeze_panes = "A2"
+    style_summary_sheet(ws)
+
+
 def write_overview_sheet(ws, requirements, recommendations, by_cat, category_spec, v2_overview=None):
     """RFP 개요 — 전체 요약 + 핵심 기술(보유/부족) + 핵심 RISK.
 
-    v2_overview(LLM 생성: summary/techs/risks)가 있으면 그 서술형 요약·기술을 우선 사용.
+    v2_overview 가 summary_table(요구사항 총괄표)이면 그 표를 그대로 출력.
+    LLM 개요(summary/techs/risks)가 있으면 서술형 요약·기술을 우선 사용.
     """
+    if v2_overview and v2_overview.get("type") == "summary_table":
+        _write_summary_overview_sheet(ws, v2_overview)
+        return
+
     from collections import Counter
 
     recs = recommendations or {}

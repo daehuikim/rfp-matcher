@@ -12,6 +12,12 @@ _CODEISH = re.compile(r"^[A-Za-z0-9가-힣]{0,6}[_\-/.]?\d{1,4}$")
 _BROKEN = {"à": "→", "": "→", "": "→"}
 
 
+def norm_lines(s) -> str:
+    """줄바꿈 유지 정규화 — 셀 내 불릿·표안표 구조 보존."""
+    lines = [norm(ln) for ln in str(s or "").split("\n")]
+    return "\n".join(ln for ln in lines if ln)
+
+
 def norm(s) -> str:
     t = str(s or "")
     for bad, good in _BROKEN.items():

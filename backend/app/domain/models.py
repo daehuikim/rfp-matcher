@@ -102,6 +102,8 @@ class Requirement(BaseModel):
     source_page: int | None = None  # PDF 원본 페이지 (1-based)
     source_section: str | None = None  # 섹션 제목 (예: 2.2 제안 요구사항 상세)
     source_table_index: int | None = None  # HTML table 순번
+    source_ref: str | None = None  # V2 출처 (예: p.18 · 표#633)
+    detail_images: list[str] = Field(default_factory=list)  # [표]·화면(안) PNG — repo 상대 경로
     # 원문 추출이 아니라 LLM 이 생성한 값을 가진 export 칼럼 key 집합
     # (예: {"code","name","subcategory"}) — Excel 에서 주황색 셀로 구분 표시.
     ai_generated_fields: set[str] = Field(default_factory=set)
@@ -138,6 +140,7 @@ class Recommendation(BaseModel):
     requirement_id: str
     ai_risk: Judgement
     ai_reason: str
+    related_solution: str = ""
     missing_tech: list[str] = Field(default_factory=list)
     consortium_need: str | None = None
     matched_solutions: list[str] = Field(default_factory=list)  # SKU 라벨 (하위 호환)

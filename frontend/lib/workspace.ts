@@ -96,6 +96,12 @@ export function replaceWorkspaceDocId(
 }
 
 /** 서버·artifacts에 없는 localStorage-only 유령 세션 제거 */
+export function clearWorkspace(): WorkspaceState {
+  const out: WorkspaceState = { sessions: [], version: 1 };
+  saveWorkspace(out);
+  return out;
+}
+
 export function pruneStaleWorkspaceSessions(
   sessions: WorkspaceSessionEntry[],
   liveDocIds: string[],

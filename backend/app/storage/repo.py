@@ -80,3 +80,12 @@ class InMemoryRepo:
                 self.requirements.pop(req_id, None)
                 self.recommendations.pop(req_id, None)
                 self.judgements.pop(req_id, None)
+
+    async def clear_all(self) -> None:
+        """모든 문서·요건·판정·추천 제거 — 워크스페이스 초기화."""
+        async with self._lock:
+            self.documents.clear()
+            self.requirements.clear()
+            self.requirements_by_doc.clear()
+            self.judgements.clear()
+            self.recommendations.clear()

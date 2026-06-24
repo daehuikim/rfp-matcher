@@ -16,10 +16,13 @@ import {
   fetchWorkspaceSessions,
   createFromSample,
   reopenFromCache,
+  resetWorkspace,
   type CachedProjectSummary,
   type WorkspaceSessionSummary,
 } from "@/lib/api";
+import { getStoredLlmProvider } from "@/components/LlmModelSelector";
 import {
+  clearWorkspace,
   loadWorkspace,
   pruneStaleWorkspaceSessions,
   replaceWorkspaceDocId,
@@ -57,6 +60,7 @@ type WorkspaceContextValue = {
   registerSession: (docId: string, title: string, contentHash?: string, sourceFilename?: string) => void;
   refreshServerSessions: () => Promise<void>;
   openProject: (item: WorkspaceNavItem) => Promise<void>;
+  resetAllProjects: () => Promise<void>;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -204,6 +208,22 @@ export function WorkspaceProvider({
     [],
   );
 
+  const resetAllProjects = useCallback(async () => {
+    try {
+      await resetWorkspace();
+      setBackendReachable(true);
+    } catch {
+      setBackendReachable(false);
+      throw new Error("워크스페이스 초기화 실패 — 백엔드(8000) 확인");
+    }
+    clearWorkspace();
+    setSessions([]);
+    setServerSessions([]);
+    setCachedProjects([]);
+    setNavReady(true);
+    router.push("/");
+  }, [router]);
+
   const openProject = useCallback(
     async (item: WorkspaceNavItem) => {
       const live =
@@ -250,7 +270,7 @@ export function WorkspaceProvider({
       }
 
       if (item.sourceFilename) {
-        const { doc_id } = await createFromSample(item.sourceFilename);
+        const { doc_id } = await createFromSample(item.sourceFilename, getStoredLlmProvider());
         setSessions(
           replaceWorkspaceDocId(item.docId, doc_id, {
             title: item.title,
@@ -396,8 +416,19 @@ export function WorkspaceProvider({
       registerSession,
       refreshServerSessions,
       openProject,
+      resetAllProjects,
     }),
-    [sessions, serverSessions, cachedProjects, navReady, backendReachable, registerSession, refreshServerSessions, openProject],
+    [
+      sessions,
+      serverSessions,
+      cachedProjects,
+      navReady,
+      backendReachable,
+      registerSession,
+      refreshServerSessions,
+      openProject,
+      resetAllProjects,
+    ],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .classify import classify, column_stats, detect_header_row, is_requirement_table
 from .grid import Grid
@@ -15,6 +15,19 @@ from .text import norm, sig
 
 _NUMBERING = re.compile(r"^\s*(?:[IVXLCDM]+|\d+(?:\.\d+)*|[가-힣]|[①-⑩])[.)]\s*")
 _TRAIL = re.compile(r"\s*(?:관련\s*)?(?:요구사항|요청사항|요건|사항)\s*$")
+
+
+def format_source(*, table_id: int, page: int | None = None, section: str = "") -> str:
+    """출처 칼럼 — 페이지 우선, 없으면 문서 섹션 + 표 번호 (표#N 단독 표기 지양)."""
+    kind = "리스트" if table_id < 0 else f"표#{table_id}"
+    if page is not None:
+        return f"p.{page} · {kind}"
+    sec = (section or "").strip()
+    if sec:
+        seg = sec.split(" > ")[-1].strip()
+        if seg and not seg.startswith("표") and "표 내용" not in seg:
+            return f"{seg} · {kind}"
+    return kind
 
 
 def clean_heading(h: str) -> str:
@@ -41,10 +54,16 @@ class Req:
     section_path: str = ""  # 문서 heading 계층 경로 (탭 묶기 입력)
     tab: str = ""           # LLM 이 배정한 시트(탭) 이름
     source: str = ""        # 출처 한 칼럼: "p.18 · 표#633" / "p.20 · 리스트"
+    deliverable: str = ""   # 산출정보 (한글 form)
+    related_req: str = ""   # 관련요구사항 (한글 form)
     # 필드별 AI 생성 여부(원문 추출이 아니라 LLM 이 만든 값 → 셀 색 구분)
     gen_rid: bool = False
     gen_top: bool = False
     gen_mid: bool = False
+    detail_images: list[str] = field(default_factory=list)
+    levels: list[str] = field(default_factory=list)        # N계위 값(외→내). 비면 [top, mid]로 폴백.
+    level_names: list[str] = field(default_factory=list)    # 각 계위 칼럼명(소스 헤더/도메인). 비면 기본명.
+    _group_anchor: str = ""  # 평면 리스트 문서의 마커기반 그룹(탭 시드). writer 미사용·임시.
 
 
 def _span_breadth(values: list[str]) -> float:
@@ -162,13 +181,16 @@ def level_table(doc_name: str, grid: Grid, roles: dict[str, int], header_row: in
     mid_col = groups[0] if len(groups) == 1 else (groups[1] if len(groups) >= 2 else None)
     section_top = clean_heading(section_heading)
 
-    src = f"p.{grid.page} · 표#{grid.table_id}" if grid.page else f"표#{grid.table_id}"
     out: list[Req] = []
     for r in range(header_row + 1, grid.nrows):
         row = grid.cells[r]
         detail = row[det] if det < len(row) else ""
         if not detail or len(sig(detail)) < 2:
             continue
+        page = grid.page_of(r)
+        src = format_source(
+            table_id=grid.table_id, page=page, section=section_heading or ""
+        )
         top = row[top_col] if top_col is not None and top_col < len(row) else section_top
         mid = row[mid_col] if mid_col is not None and mid_col < len(row) else ""
         if not top:
@@ -177,8 +199,9 @@ def level_table(doc_name: str, grid: Grid, roles: dict[str, int], header_row: in
             if len(sig(piece)) < 2:
                 continue
             out.append(Req(
-                doc=doc_name, table_id=grid.table_id, page=grid.page,
+                doc=doc_name, table_id=grid.table_id, page=page,
                 top=norm(top), mid=norm(mid), detail=piece, source=src,
+                section_path=norm(section_heading) if section_heading else "",
             ))
     return out
 

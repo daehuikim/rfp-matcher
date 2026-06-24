@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Judgement, RequirementView, categorySourceLabel, patchJudgement } from "@/lib/api";
-import { formatRequirementDetail } from "@/lib/formatDetail";
+import { RequirementDetailContent } from "./RequirementDetailContent";
 import { CatalogAuditPanel } from "./CatalogAuditPanel";
 import { JudgementToggle } from "./JudgementToggle";
 
@@ -20,6 +20,7 @@ function riskColor(r: Judgement): { dot: string; pill: string; label: string } {
 }
 
 export function RequirementRow({
+  docId,
   view,
   editorId,
   remoteUpdate,
@@ -27,6 +28,7 @@ export function RequirementRow({
   onOpenPage,
   onOpenTable,
 }: {
+  docId: string;
   view: RequirementView;
   editorId: string;
   remoteUpdate: { mark: Judgement; note: string; editor_id: string } | null;
@@ -61,7 +63,6 @@ export function RequirementRow({
   }
 
   const risk = rec ? riskColor(rec.ai_risk) : riskColor("");
-  const body = formatRequirementDetail(r.detail || r.name);
   const rawPage = r.source_page;
   const pageNum =
     rawPage == null
@@ -140,17 +141,7 @@ export function RequirementRow({
         </div>
 
         <div className="mt-2 text-[14px] leading-relaxed text-neutral-900">
-          <p className="font-medium">{body.title}</p>
-          {body.bullets.length > 0 && (
-            <ul className="mt-1.5 list-none space-y-1 pl-0">
-              {body.bullets.map((b, i) => (
-                <li key={i} className="flex gap-1.5 text-[13px] text-neutral-800">
-                  <span className="shrink-0 text-neutral-400">•</span>
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <RequirementDetailContent docId={docId} requirement={r} />
         </div>
 
         <div
@@ -164,7 +155,7 @@ export function RequirementRow({
         >
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">AI 검토</p>
           {aiPending && (
-            <p className="mt-1 text-[12px] text-ktteal-600">KT 솔루션 카탈로그 매칭·Rubric 점수 산출 중…</p>
+            <p className="mt-1 text-[12px] text-ktteal-600">내부 기술 문서 검색·AI 판정 산출 중…</p>
           )}
           {!aiPending && rec && (
             <>
@@ -214,7 +205,7 @@ export function RequirementRow({
             </>
           )}
           {!aiPending && !rec && (
-            <p className="mt-1 text-[12px] text-slate-500">AI 분석 대기 중</p>
+            <p className="mt-1 text-[12px] text-slate-500">AI 검토 중</p>
           )}
         </div>
       </div>

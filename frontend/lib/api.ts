@@ -21,6 +21,8 @@ export type Requirement = {
   source_section?: string | null;
   source_atomic_id?: string | null;
   source_table_index?: number | null;
+  source_ref?: string | null;
+  detail_images?: string[];
 };
 
 export type CatalogCandidateAudit = {
@@ -50,6 +52,7 @@ export type Recommendation = {
   requirement_id: string;
   ai_risk: Judgement;
   ai_reason: string;
+  related_solution?: string;
   missing_tech: string[];
   consortium_need: string | null;
   matched_solutions?: string[];
@@ -136,11 +139,37 @@ export type JudgementUpdatedPayload = {
   ts: string;
 };
 
-export async function uploadDocument(file: File): Promise<{ doc_id: string; status: string }> {
+export async function uploadDocument(
+  file: File,
+  llmProvider?: string,
+): Promise<{ doc_id: string; status: string }> {
   const fd = new FormData();
   fd.append("file", file);
+  if (llmProvider) fd.append("llm_provider", llmProvider);
   const r = await fetch(`${apiBase()}/documents`, { method: "POST", body: fd });
   if (!r.ok) throw new Error(`upload ${r.status}`);
+  return r.json();
+}
+
+/** 조견표 Excel(.xlsx) 업로드 — 편집본 재업로드/외부 조견표 불러오기. */
+export async function importExcel(
+  file: File,
+  llmProvider?: string,
+): Promise<{ doc_id: string; status: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  if (llmProvider) fd.append("llm_provider", llmProvider);
+  const r = await fetch(`${apiBase()}/documents/import-excel`, { method: "POST", body: fd });
+  if (!r.ok) {
+    let msg = `import ${r.status}`;
+    try {
+      const j = await r.json();
+      if (j?.detail) msg = String(j.detail);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
   return r.json();
 }
 
@@ -158,13 +187,45 @@ export async function listSamples(): Promise<SampleFile[]> {
   return r.json();
 }
 
-export async function createFromSample(name: string): Promise<{ doc_id: string; status: string }> {
+export async function createFromSample(
+  name: string,
+  llmProvider?: string,
+): Promise<{ doc_id: string; status: string }> {
   const r = await fetch(`${apiBase()}/documents/from-sample`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, llm_provider: llmProvider ?? null }),
   });
   if (!r.ok) throw new Error(`from-sample ${r.status}`);
+  return r.json();
+}
+
+export type LlmOption = {
+  id: string;
+  label: string;
+  provider: string;
+  model: string;
+};
+
+export type LlmSettings = {
+  provider: string;
+  model: string;
+  options: LlmOption[];
+};
+
+export async function fetchLlmSettings(): Promise<LlmSettings> {
+  const r = await fetch(`${apiBase()}/settings/llm`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`llm-settings ${r.status}`);
+  return r.json();
+}
+
+export async function patchLlmSettings(provider: string): Promise<LlmSettings> {
+  const r = await fetch(`${apiBase()}/settings/llm`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ provider }),
+  });
+  if (!r.ok) throw new Error(`llm-settings patch ${r.status}`);
   return r.json();
 }
 
@@ -172,14 +233,19 @@ export function exportUrl(
   docId: string,
   mode: "ai" | "human" | "both",
   cols?: string[],
-  layout: "cluster" | "ordered" = "cluster",
   filename?: string,
 ): string {
-  const params = new URLSearchParams({ mode, layout });
+  const params = new URLSearchParams({ mode, layout: "ordered" });
   if (cols?.length) params.set("cols", cols.join(","));
   else params.set("adaptive", "true");
   if (filename && filename.trim()) params.set("filename", filename.trim());
   return `${apiBase()}/documents/${docId}/export?${params.toString()}`;
+}
+
+/** 요건 첨부 PNG — [표]·관련 화면(안) */
+export function assetUrl(docId: string, relPath: string): string {
+  const params = new URLSearchParams({ path: relPath });
+  return `${apiBase()}/documents/${docId}/asset?${params.toString()}`;
 }
 
 export type ExportColumnInfo = {
@@ -321,6 +387,16 @@ export async function fetchWorkspaceSessions(): Promise<WorkspaceSessionSummary[
 export async function fetchCachedProjects(): Promise<CachedProjectSummary[]> {
   const r = await fetch(`${apiBase()}/documents/cached-projects`, { cache: "no-store" });
   if (!r.ok) return [];
+  return r.json();
+}
+
+export async function resetWorkspace(): Promise<{
+  ok: boolean;
+  storage_entries_removed: number;
+  artifact_buckets_removed: number;
+}> {
+  const r = await fetch(`${apiBase()}/documents/workspace/reset`, { method: "POST" });
+  if (!r.ok) throw new Error(`workspace reset ${r.status}`);
   return r.json();
 }
 

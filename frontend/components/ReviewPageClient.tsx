@@ -135,7 +135,7 @@ export default function ReviewPageClient({
   const [viewerTable, setViewerTable] = useState<number | null>(null);
   const [viewerAnchor, setViewerAnchor] = useState<string | null>(null);
   const [jumpNonce, setJumpNonce] = useState(0);
-  const autoOpened = useRef(false);
+  const viewerRef = useRef<HTMLDivElement | null>(null);
 
   // 미리보기 형태: PDF(페이지 점프) | HTML(표 인덱스 앵커 스크롤)
   const previewKind = (docMeta?.preview_kind ?? "none") as "pdf" | "html" | "none";
@@ -167,14 +167,22 @@ export default function ReviewPageClient({
     setViewerCollapsed(false);
   }, []);
 
-  useEffect(() => {
-    if (!autoOpened.current && canViewSource) {
-      autoOpened.current = true;
-      setViewerOpen(true);
-    }
-  }, [canViewSource]);
-
+  // 뷰어는 사용자가 '원문 보기' 토글을 눌러야 열림 (자동 오픈 제거 — 토글 첫 클릭이 항상 동작)
   const showViewer = viewerOpen && canViewSource;
+
+  // 뷰어가 펼쳐지면 화면으로 스크롤 — 긴 페이지(수백 요건)·폴링 re-render에 끊기지 않도록
+  // smooth 대신 behavior:"auto"(즉시)로 절대 위치를 직접 지정한다.
+  useEffect(() => {
+    if (showViewer && !viewerCollapsed) {
+      const t = setTimeout(() => {
+        const el = viewerRef.current;
+        if (!el) return;
+        const top = el.getBoundingClientRect().top + window.scrollY - 72;
+        window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+      }, 150);
+      return () => clearTimeout(t);
+    }
+  }, [showViewer, viewerCollapsed, jumpNonce]);
   const [remoteByReqId, setRemoteByReqId] = useState<
     Record<string, { mark: Judgement; note: string; editor_id: string }>
   >({});
@@ -288,18 +296,63 @@ export default function ReviewPageClient({
               <button
                 type="button"
                 onClick={() => {
-                  setViewerOpen((v) => !v);
-                  setViewerCollapsed(false);
+                  // 보이고 펼쳐진 상태 → 닫기, 그 외(숨김·접힘) → 펼쳐서 표시
+                  if (showViewer && !viewerCollapsed) {
+                    setViewerOpen(false);
+                  } else {
+                    setViewerOpen(true);
+                    setViewerCollapsed(false);
+                  }
                 }}
-                className={`pill ml-auto ${showViewer ? "pill-active" : "pill-idle"}`}
+                className={`pill ml-auto ${showViewer && !viewerCollapsed ? "pill-active" : "pill-idle"}`}
                 title="상단에 문서 뷰어 표시 — 표에서 클릭 시 해당 위치로 이동"
               >
-                📄 문서 viewer
+                📄 원문 보기
               </button>
             )}
           </div>
         )}
       </section>
+
+      {/* 원문 뷰어 — 토글하면 컨트롤 바로 아래(개요 위)에 펼쳐지고 화면으로 스크롤된다 */}
+      {hasRequirements && showViewer && (
+        <div ref={viewerRef} className="panel mb-4 overflow-hidden scroll-mt-16">
+          {viewerCollapsed ? (
+            <button
+              type="button"
+              onClick={() => setViewerCollapsed(false)}
+              className="flex w-full items-center justify-between px-4 py-2 text-left transition hover:bg-neutral-50"
+            >
+              <span className="flex items-center gap-2 text-xs">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                  원문 뷰어
+                </span>
+                <span className="text-neutral-500">
+                  {sourceFilename ?? "미리보기"}
+                </span>
+                {viewerPage != null && (
+                  <span className="pill border-ktred-200 bg-ktred-50 text-ktred-700">p.{viewerPage}</span>
+                )}
+              </span>
+              <span className="text-[11px] font-medium text-neutral-500">펼치기 ▾</span>
+            </button>
+          ) : (
+            <div className="h-[80vh] min-h-[460px]">
+              <PdfViewerPane
+                docId={docId}
+                kind={previewKind === "html" ? "html" : "pdf"}
+                page={viewerPage}
+                tableIndex={viewerTable}
+                anchorText={viewerAnchor}
+                jumpNonce={jumpNonce}
+                sourceFilename={sourceFilename}
+                onCollapse={() => setViewerCollapsed(true)}
+                onClose={() => setViewerOpen(false)}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {hasRequirements && <OverviewPanel docId={docId} />}
 
@@ -332,7 +385,7 @@ export default function ReviewPageClient({
             </p>
           )}
           <p className="mt-2 text-xs text-slate-500">
-            추출이 끝나면 표가 표시되고, AI 검토가 한 줄씩 진행됩니다.
+            추출이 끝나면 표가 표시되고, AI 검토가 진행됩니다.
           </p>
         </div>
       )}
@@ -360,48 +413,9 @@ export default function ReviewPageClient({
         </div>
       )}
 
-      {/* 상단 원본 뷰어 — 표에서 클릭 시 이 패널로 뷰 이동 (스티키 X, 겹침 방지) */}
-      {hasRequirements && showViewer && (
-        <div className="panel mb-4 overflow-hidden">
-          {viewerCollapsed ? (
-            <button
-              type="button"
-              onClick={() => setViewerCollapsed(false)}
-              className="flex w-full items-center justify-between px-4 py-2 text-left transition hover:bg-neutral-50"
-            >
-              <span className="flex items-center gap-2 text-xs">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
-                  원본 뷰어
-                </span>
-                <span className="text-neutral-500">
-                  {sourceFilename ?? "미리보기"}
-                </span>
-                {viewerPage != null && (
-                  <span className="pill border-ktred-200 bg-ktred-50 text-ktred-700">p.{viewerPage}</span>
-                )}
-              </span>
-              <span className="text-[11px] font-medium text-neutral-500">펼치기 ▾</span>
-            </button>
-          ) : (
-            <div className="h-[80vh] min-h-[460px]">
-              <PdfViewerPane
-                docId={docId}
-                kind={previewKind === "html" ? "html" : "pdf"}
-                page={viewerPage}
-                tableIndex={viewerTable}
-                anchorText={viewerAnchor}
-                jumpNonce={jumpNonce}
-                sourceFilename={sourceFilename}
-                onCollapse={() => setViewerCollapsed(true)}
-                onClose={() => setViewerOpen(false)}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       {hasRequirements && filtered.length > 0 && (
         <RequirementTable
+          docId={docId}
           rows={filtered}
           editorId={editorId}
           remoteByReqId={remoteByReqId}

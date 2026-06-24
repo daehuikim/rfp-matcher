@@ -7,6 +7,8 @@ from pathlib import Path
 from app.domain.enums import DocumentMime
 from app.domain.models import Document
 
+from .sniff import resolve_mime
+
 # 확장자 → MIME (간단 매핑, 실제 sniff은 magic bytes로 보강 가능)
 EXT_TO_MIME: dict[str, DocumentMime] = {
     ".pdf": DocumentMime.PDF,
@@ -37,7 +39,5 @@ class GenericLoader(DocumentLoader):
 
 
 def select_loader(src_path: Path) -> DocumentLoader:
-    mime = EXT_TO_MIME.get(src_path.suffix.lower())
-    if mime is None:
-        raise ValueError(f"지원하지 않는 확장자: {src_path.suffix}")
+    mime = resolve_mime(src_path)
     return GenericLoader(mime)

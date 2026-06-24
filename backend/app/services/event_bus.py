@@ -107,6 +107,13 @@ class EventBus:
         self._timings.pop(doc_id, None)
         self._history.pop(doc_id, None)
 
+    def clear_all(self) -> None:
+        """모든 문서 이벤트·구독자 제거 — 워크스페이스 초기화."""
+        self._subscribers.clear()
+        self._last.clear()
+        self._timings.clear()
+        self._history.clear()
+
     def record_emit(
         self,
         doc_id: str,

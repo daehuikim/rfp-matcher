@@ -11,6 +11,7 @@ import {
   useWorkspaceNavItems,
   type WorkspaceNavItem,
 } from "@/context/WorkspaceProvider";
+import { LlmModelSelector } from "@/components/LlmModelSelector";
 import { formatDuration } from "@/lib/pipeline";
 import { STAGE_LABEL } from "@/lib/pipeline";
 
@@ -83,8 +84,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const activeDocId = useActiveProjectKey(pathname);
   const activeProject = useActiveProjectNavItem();
-  const { navReady, backendReachable } = useWorkspace();
+  const { navReady, backendReachable, resetAllProjects } = useWorkspace();
   const projects = useWorkspaceNavItems();
+  const [resetting, setResetting] = useState(false);
 
   // 사이드바는 기본 접힘 — 조견표가 메인이 되도록
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -127,10 +129,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           )}
         </div>
-        <span className="status-pill shrink-0">
-          <span className="status-dot" />
-          Live
-        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <LlmModelSelector compact />
+          <span className="status-pill shrink-0">
+            <span className="status-dot" />
+            Live
+          </span>
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -194,6 +199,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 })}
               </ul>
             )}
+
+            <div className="mt-4 border-t border-neutral-100 pt-3">
+              <button
+                type="button"
+                disabled={resetting || !backendReachable}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      "모든 프로젝트·캐시·추출 결과를 삭제합니다.\n테스트용 초기화이며 되돌릴 수 없습니다. 계속할까요?",
+                    )
+                  ) {
+                    return;
+                  }
+                  setResetting(true);
+                  void resetAllProjects()
+                    .catch(() => {
+                      window.alert("초기화 실패 — 백엔드(8000) 실행 여부를 확인하세요.");
+                    })
+                    .finally(() => setResetting(false));
+                }}
+                className="w-full rounded-lg border border-neutral-200 px-2.5 py-2 text-left text-[12px] text-neutral-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
+              >
+                {resetting ? "초기화 중…" : "프로젝트 전체 초기화"}
+              </button>
+              <p className="mt-1.5 px-1 text-[10px] leading-relaxed text-neutral-400">
+                storage·캐시·사이드바 목록 삭제 (샘플 재테스트용)
+              </p>
+            </div>
           </nav>
         </aside>
 
