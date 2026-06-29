@@ -27,6 +27,8 @@ _LARGE_SECTION = 120  # 이 행수 이상인 단일 섹션은 병합 안 하고 
 _SEC_MARK = re.compile(r"^\s*(?:[IVXLCDM]+|\d+(?:\.\d+)*|[가-힣]|[①-⑳])[.)]\s*")
 _LEAD_BRACKET = re.compile(r"^\s*[\[(（【][^\])）】]{0,40}[\])）】]\s*")  # 머리 프로젝트명 대괄호
 _TOC_LEADER = re.compile(r"\s*(?:·\s*){3,}.*$|\s*\.{4,}.*$|\s*…+.*$")  # TOC 점선 리더(··/…/....) 이후 제거
+# 머리 불릿/기호(□/■/❍/\uf06d 등) 제거 — 한글은 \w 라 보존, 비-단어 머리기호만 제거
+_LEAD_SYMBOL = re.compile(r"^[^\w(（\[【]+")
 
 
 def _page_key(r):
@@ -38,6 +40,7 @@ def _seg(section_path: str, idx: int) -> str:
     if not segs:
         return ""
     seg = segs[idx] if -len(segs) <= idx < len(segs) else segs[0]
+    seg = _LEAD_SYMBOL.sub("", seg).strip()     # 머리 불릿/기호(□/❍/ 등) 제거 — 번호/한글은 보존
     seg = _TOC_LEADER.sub("", seg).strip()      # TOC 점선 리더(··/…/....) 이후 제거
     seg = _SEC_MARK.sub("", seg).strip()       # 머리 번호(2./가./II.) 제거
     seg = _LEAD_BRACKET.sub("", seg).strip()    # 머리 프로젝트명 대괄호 제거

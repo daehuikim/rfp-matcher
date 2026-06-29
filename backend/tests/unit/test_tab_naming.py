@@ -61,7 +61,9 @@ def test_sanitize_hierarchy_label() -> None:
     assert sanitize_hierarchy_label("시스템 일반") == "시스템 일반"
 
 
-def test_assign_ids_uses_top() -> None:
+def test_assign_ids_per_tab_consistent() -> None:
+    # 한 탭 = 한 접두사(탭명 slug) + 탭별 연속번호. top 이 달라도 같은 탭이면 동일 접두사
+    # (사용자 요구: 한 탭 안에서 요구사항 ID 접두사가 달라지면 안 됨).
     reqs = [
         Req(
             doc="t",
@@ -77,14 +79,17 @@ def test_assign_ids_uses_top() -> None:
             table_id=1,
             page=1,
             tab="프로젝트 업무 및 기술 요건",
-            top="시스템 일반",
+            top="네트워크",
             mid="",
             detail="세부",
         ),
     ]
     assign_ids(reqs)
-    assert reqs[0].rid == "시스템_001"
-    assert reqs[1].rid == "시스템_002"
+    p0 = reqs[0].rid.rsplit("_", 1)[0]
+    p1 = reqs[1].rid.rsplit("_", 1)[0]
+    assert p0 == p1 == "프로젝트업무및기술요건"  # 탭명 공백 제거 slug
+    assert reqs[0].rid.endswith("_001")
+    assert reqs[1].rid.endswith("_002")
 
 
 def test_id_prefix_not_tab_slug() -> None:
