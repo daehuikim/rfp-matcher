@@ -35,15 +35,59 @@ def _judg(v) -> Judgement:
     return _JUDG.get(_s(v), Judgement.UNSET)
 
 
+def _parse_overview(wb) -> dict | None:
+    """'개요' 시트 → overview dict (재export 라운드트립). _write_overview 역연산.
+
+    레이아웃: 'RFP 개요' / '전체 요약'→summary / '핵심 기술'→[기술,요구,ID] 행 /
+    '핵심 RISK (독소조항)'→[ID, 리스크/독소조항] 행(writer 가 ID먼저·내용나중으로 씀).
+    """
+    if "개요" not in wb.sheetnames:
+        return None
+    ws = wb["개요"]
+    summary = ""
+    techs: list[tuple[str, str, str]] = []
+    risks: list[tuple[str, str]] = []
+    section: str | None = None
+    for row in ws.iter_rows(values_only=True):
+        a = _s(row[0]) if len(row) > 0 else ""
+        b = _s(row[1]) if len(row) > 1 else ""
+        c = _s(row[2]) if len(row) > 2 else ""
+        if a == "전체 요약":
+            section = "summary"; continue
+        if a == "핵심 기술":
+            section = "techs"; continue
+        if a.startswith("핵심 RISK"):
+            section = "risks"; continue
+        if not (a or b or c):
+            continue
+        if section == "summary" and a and a != "RFP 개요":
+            summary = a
+        elif section == "techs":
+            if a == "기술" and b == "요구":   # 헤더행 스킵
+                continue
+            if a or b:
+                techs.append((a, b, c))       # (기술, 요구, 관련ID)
+        elif section == "risks":
+            if a == "관련 요구사항 ID" or a == "(식별된 독소조항 없음)":
+                continue
+            if a or b:
+                risks.append((b, a))          # 시트 [ID, 내용] → overview (clause, ids)
+    if not (summary or techs or risks):
+        return None
+    return {"summary": summary, "techs": techs, "risks": risks}
+
+
 def parse_excel(path: str | Path, doc_id: str) -> tuple[
-    list[Requirement], dict[str, Recommendation], dict[str, HumanJudgement], list[V2Req]
+    list[Requirement], dict[str, Recommendation], dict[str, HumanJudgement], list[V2Req], dict | None
 ]:
-    """반환: (앱 Requirement, 추천, 사람판정, **v2 Req 리스트**).
+    """반환: (앱 Requirement, 추천, 사람판정, **v2 Req 리스트**, **overview dict**).
 
     v2 Req 는 reqs 와 1:1 동일 순서 — import 후 v3_export.pkl 로 저장하면 재export 가
     write_dynamic_excel(동적칼럼·AI칼럼)을 타서 **라운드트립 무손실**(탭순서·계위·AI칼럼 보존).
+    overview 는 '개요' 시트를 역파싱 — 재export 시 개요 시트까지 복원(완전 라운드트립).
     """
     wb = openpyxl.load_workbook(path, data_only=True)
+    overview = _parse_overview(wb)
     reqs: list[Requirement] = []
     recs: dict[str, Recommendation] = {}
     juds: dict[str, HumanJudgement] = {}
@@ -127,4 +171,4 @@ def parse_excel(path: str | Path, doc_id: str) -> tuple[
                     juds[req.id] = HumanJudgement(
                         requirement_id=req.id, mark=hmark, note=hnote,
                     )
-    return reqs, recs, juds, v2reqs
+    return reqs, recs, juds, v2reqs, overview

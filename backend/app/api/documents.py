@@ -325,7 +325,7 @@ async def import_excel(
         shutil.copyfileobj(file.file, f)
 
     try:
-        reqs, recs, juds, v2reqs = await asyncio.to_thread(parse_excel, dest, doc_id)
+        reqs, recs, juds, v2reqs, overview = await asyncio.to_thread(parse_excel, dest, doc_id)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(422, f"Excel 파싱 실패: {e}") from e
     if not reqs:
@@ -338,7 +338,7 @@ async def import_excel(
     doc_dir = container.settings.storage_root / doc_id
     doc_dir.mkdir(parents=True, exist_ok=True)
     (doc_dir / "v3_export.pkl").write_bytes(
-        pickle.dumps({"reqs": v2reqs, "overview": None, "strategy": "imported"})
+        pickle.dumps({"reqs": v2reqs, "overview": overview, "strategy": "imported"})
     )
 
     original = Path(file.filename).name
