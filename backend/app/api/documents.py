@@ -325,11 +325,21 @@ async def import_excel(
         shutil.copyfileobj(file.file, f)
 
     try:
-        reqs, recs, juds = await asyncio.to_thread(parse_excel, dest, doc_id)
+        reqs, recs, juds, v2reqs = await asyncio.to_thread(parse_excel, dest, doc_id)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(422, f"Excel 파싱 실패: {e}") from e
     if not reqs:
         raise HTTPException(422, "조견표 요구사항을 찾지 못했습니다(상세요건 칼럼 확인)")
+
+    # 재export 무손실 — v2 Req(levels 포함)를 v3_export.pkl 로 저장하면 export 가
+    # write_dynamic_excel(동적칼럼·AI칼럼·페이지순)을 타서 업로드한 조견표가 그대로 복원된다.
+    import pickle
+
+    doc_dir = container.settings.storage_root / doc_id
+    doc_dir.mkdir(parents=True, exist_ok=True)
+    (doc_dir / "v3_export.pkl").write_bytes(
+        pickle.dumps({"reqs": v2reqs, "overview": None, "strategy": "imported"})
+    )
 
     original = Path(file.filename).name
     document = Document(

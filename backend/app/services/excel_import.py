@@ -9,6 +9,7 @@ export(write_dynamic_excel/write_excel) 포맷을 되읽는다:
 """
 from __future__ import annotations
 
+import re
 import uuid
 from pathlib import Path
 
@@ -16,6 +17,7 @@ import openpyxl
 
 from app.domain.enums import CategorySource, Judgement
 from app.domain.models import HumanJudgement, Recommendation, Requirement
+from prototype.v2.extract import Req as V2Req
 
 _AI_HEADERS = {
     "KT 보유 기술", "부족 기술", "AI 판정", "AI 설명",
@@ -34,12 +36,18 @@ def _judg(v) -> Judgement:
 
 
 def parse_excel(path: str | Path, doc_id: str) -> tuple[
-    list[Requirement], dict[str, Recommendation], dict[str, HumanJudgement]
+    list[Requirement], dict[str, Recommendation], dict[str, HumanJudgement], list[V2Req]
 ]:
+    """반환: (앱 Requirement, 추천, 사람판정, **v2 Req 리스트**).
+
+    v2 Req 는 reqs 와 1:1 동일 순서 — import 후 v3_export.pkl 로 저장하면 재export 가
+    write_dynamic_excel(동적칼럼·AI칼럼)을 타서 **라운드트립 무손실**(탭순서·계위·AI칼럼 보존).
+    """
     wb = openpyxl.load_workbook(path, data_only=True)
     reqs: list[Requirement] = []
     recs: dict[str, Recommendation] = {}
     juds: dict[str, HumanJudgement] = {}
+    v2reqs: list[V2Req] = []
 
     for name in wb.sheetnames:
         if name in ("개요", "요구사항 총괄표"):
@@ -52,6 +60,7 @@ def parse_excel(path: str | Path, doc_id: str) -> tuple[
         if "상세요건" not in idx:  # 조견표 시트가 아님(개요/서식 등) → 스킵
             continue
         level_cols = [i for i, h in enumerate(hdr) if h and h not in _FIXED]
+        level_names = [hdr[i] for i in level_cols]  # 계위 칼럼 헤더(대분류/항목명/요구사항…) 재현용
         det_i, src_i, id_i = idx.get("상세요건"), idx.get("출처"), idx.get("요구사항 ID")
         has_ai = bool(_AI_HEADERS & set(idx))
 
@@ -75,18 +84,29 @@ def parse_excel(path: str | Path, doc_id: str) -> tuple[
             mid_v = nonempty[-1] if len(nonempty) >= 2 else ""
             rid = _s(cells[id_i]) if id_i is not None else ""
 
+            rid = rid or f"{name[:4]}-{len(reqs) + 1:03d}"
+            source = _s(cells[src_i]) if src_i is not None else ""
             req = Requirement(
                 id=uuid.uuid4().hex,
                 doc_id=doc_id,
                 category=name,
-                code=rid or f"{name[:4]}-{len(reqs) + 1:03d}",
+                code=rid,
                 name=name_v or detail[:30],
                 definition=mid_v or None,
                 detail=detail,
-                source_ref=_s(cells[src_i]) if src_i is not None else None,
+                source_ref=source or None,
                 category_source=CategorySource.DOCUMENT_TABLE,
             )
             reqs.append(req)
+
+            # 재export 무손실용 v2 Req(levels/level_names/tab/source 보존) — reqs 와 동일 순서
+            pm = re.search(r"p\.(\d+)", source)
+            v2reqs.append(V2Req(
+                doc=name, table_id=(int(pm.group(1)) if pm else -1),
+                page=(int(pm.group(1)) if pm else None),
+                rid=rid, top=name_v, mid=mid_v, detail=detail, tab=name,
+                source=source, levels=list(levels), level_names=list(level_names),
+            ))
 
             if has_ai:
                 kt = _s(cells[idx["KT 보유 기술"]]) if "KT 보유 기술" in idx else ""
@@ -107,4 +127,4 @@ def parse_excel(path: str | Path, doc_id: str) -> tuple[
                     juds[req.id] = HumanJudgement(
                         requirement_id=req.id, mark=hmark, note=hnote,
                     )
-    return reqs, recs, juds
+    return reqs, recs, juds, v2reqs
