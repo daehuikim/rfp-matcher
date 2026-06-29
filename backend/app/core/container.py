@@ -39,6 +39,7 @@ class Container:
     pdf_converter: HtmlConverter = field(default_factory=PymupdfConverter)
     llm_usage_by_doc: dict[str, LlmUsageTracker] = field(default_factory=dict)
     pipeline_tasks: dict[str, asyncio.Task[None]] = field(default_factory=dict)
+    engine_by_doc: dict[str, str] = field(default_factory=dict)  # doc별 추출엔진 선택(v2/v_rule)
 
     def llm_tracker(self, doc_id: str) -> LlmUsageTracker:
         if doc_id not in self.llm_usage_by_doc:
@@ -53,6 +54,14 @@ class Container:
 
     def set_llm_provider(self, provider: str | None) -> None:
         apply_llm_provider(self, provider)
+
+    def set_engine(self, doc_id: str, engine: str | None) -> None:
+        """doc별 추출엔진 지정 — 'v_rule' 이면 룰 엔진. 동시 업로드 경쟁 방지(doc 키)."""
+        if engine in ("v_rule", "v2"):
+            self.engine_by_doc[doc_id] = engine
+
+    def engine_for(self, doc_id: str) -> str | None:
+        return self.engine_by_doc.get(doc_id)
 
 
 def build_llm(settings: Settings) -> AsyncLlmClient:

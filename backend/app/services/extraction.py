@@ -53,6 +53,11 @@ class ExtractionService:
         disable_cache = self._c.settings.extraction_disable_cache
         cache = ArtifactCache(self._c.settings.artifact_cache_dir)
 
+        # 엔진 선택(doc별) — 'v_rule' 이면 캐시 무시하고 룰 엔진으로 강제 fresh 추출
+        # (공정 비교: 동일 문서를 v2 캐시로 복원하지 않고 v_rule 로 새로 뽑아야 함). 캐시 체크보다 앞.
+        if self._c.engine_for(document.id) == "v_rule" and not await self._c.repo.list_requirements(document.id):
+            return await self._run_v3_domain(document, "v_rule")
+
         # 이미 추출된 doc(메모리에 요건 존재) — 재추출하지 않고 추천만 이어서 진행.
         # 프로젝트 복귀 시 처음부터 재추출되는 문제 방지 (첫 추출은 요건이 없어 그대로 진행).
         if await self._c.repo.list_requirements(document.id):
@@ -459,7 +464,15 @@ class ExtractionService:
 
             sample_id = (document.content_hash or document.id)[:16]
             label = document.source_filename or Path(document.src_path).stem
-            if strategy == "public_form":
+            if strategy == "v_rule":
+                # 룰 전용 엔진 — PDF/HWP/HWPX → v_rule 룰 추출 → v2 Req(어댑터)
+                from prototype.v_rule.adapter import run_v_rule_reqs
+
+                workdir = self._c.settings.storage_root / document.id / "v_rule"
+                v2_reqs = await asyncio.to_thread(run_v_rule_reqs, Path(document.src_path), workdir)
+                overview = None
+                steps = [f"v_rule(룰 엔진): {len(v2_reqs)} rows"]
+            elif strategy == "public_form":
                 # 공공(요구사항 총괄표) — 기존 경로 유지(잘 동작)
                 from prototype.v3.pipeline_final import run_sample
 

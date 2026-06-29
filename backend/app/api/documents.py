@@ -261,6 +261,7 @@ async def upload_document(
     background: BackgroundTasks,
     container: ContainerDep,
     llm_provider: str | None = Form(default=None),
+    engine: str | None = Form(default=None),
 ) -> UploadResponse:
     if not file.filename:
         raise HTTPException(400, "filename 누락")
@@ -278,6 +279,7 @@ async def upload_document(
 
     service = ExtractionService(container)
     document = await service.prepare(dest)
+    container.set_engine(document.id, engine)  # 'v_rule' 이면 룰 엔진(미지정=기본 v2). doc별 키로 안전.
     original_name = Path(file.filename).name
     document = document.model_copy(
         update={
