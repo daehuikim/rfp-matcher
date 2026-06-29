@@ -113,12 +113,19 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const excelRef = useRef<HTMLInputElement | null>(null);
+  const [engine, setEngine] = useState<string>(() =>
+    typeof window === "undefined" ? "v2" : window.localStorage.getItem("rfp-engine") || "v2",
+  );
+  function chooseEngine(e: string) {
+    setEngine(e);
+    if (typeof window !== "undefined") window.localStorage.setItem("rfp-engine", e);
+  }
 
   async function onUpload(file: File) {
     setBusy("upload");
     setErr("");
     try {
-      const { doc_id } = await uploadDocument(file, getStoredLlmProvider());
+      const { doc_id } = await uploadDocument(file, getStoredLlmProvider(), engine);
       startTransition(() => {
         router.push(`/review/${doc_id}`);
       });
@@ -176,7 +183,26 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
               공공 RFP의 제안요청서·과업지시서·별첨 등을 업로드하세요
             </p>
           </div>
-          <LlmModelSelector />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-lg border border-neutral-200 p-0.5 text-xs" title="추출 엔진 선택">
+              {[
+                { id: "v2", label: "v2 (LLM)" },
+                { id: "v_rule", label: "v_rule (룰)" },
+              ].map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => chooseEngine(e.id)}
+                  className={`rounded-md px-2 py-1 font-medium transition ${
+                    engine === e.id ? "bg-ktred-600 text-white" : "text-neutral-600 hover:bg-neutral-100"
+                  }`}
+                >
+                  {e.label}
+                </button>
+              ))}
+            </div>
+            <LlmModelSelector />
+          </div>
         </div>
         <div
           role="button"

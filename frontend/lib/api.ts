@@ -142,10 +142,12 @@ export type JudgementUpdatedPayload = {
 export async function uploadDocument(
   file: File,
   llmProvider?: string,
+  engine?: string,
 ): Promise<{ doc_id: string; status: string }> {
   const fd = new FormData();
   fd.append("file", file);
   if (llmProvider) fd.append("llm_provider", llmProvider);
+  if (engine) fd.append("engine", engine); // 'v_rule' 이면 룰 엔진, 미지정=기본 v2
   const r = await fetch(`${apiBase()}/documents`, { method: "POST", body: fd });
   if (!r.ok) throw new Error(`upload ${r.status}`);
   return r.json();
