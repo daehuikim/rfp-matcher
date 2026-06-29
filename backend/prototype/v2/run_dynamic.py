@@ -68,6 +68,17 @@ def _regroup_tabs(reqs: list) -> None:
             chapter = _seg(sp, 0)  # 최상위 章 으로 그룹(페이지 연속 → 파편화 없음)
             r.tab = chapter or leaf or (r.tab or "요구사항")
 
+    # 변환기 글자간 공백차로 같은 章이 둘로 쪼개진 탭 통합('정보보호 시스템 구축'↔'정보보호시스템 구축').
+    # 공백제거 형태가 같으면 한 탭으로(시멘틱 병합 아님 — 동일명 정규화, 페이지순 유지). 대표명=최다 행수.
+    norm_groups: dict[str, Counter] = {}
+    for r in reqs:
+        norm_groups.setdefault(re.sub(r"\s+", "", r.tab or ""), Counter())[r.tab] += 1
+    canon = {k: c.most_common(1)[0][0] for k, c in norm_groups.items() if len(c) > 1}
+    for r in reqs:
+        rep = canon.get(re.sub(r"\s+", "", r.tab or ""))
+        if rep:
+            r.tab = rep
+
 
 def finalize(reqs: list, overview: Any, steps: list[str]) -> dict[str, Any]:
     """추출 후처리 — 페이지순 정렬 → 섹션 keep → 상위章 그룹 → 계위 라벨 → 섹션계위 → ID.
