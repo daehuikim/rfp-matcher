@@ -19,6 +19,47 @@ from app.services.native_export import write_native_excel
 router = APIRouter(prefix="/documents", tags=["exports"])
 
 
+async def _restore_reqs_from_disk(container, doc_id: str) -> bool:
+    """repo 가 비었을 때(워크스페이스 reset·재시작) 디스크 v3_export.pkl 에서 문서+요건+추천 복원.
+
+    추출은 storage_root/<doc>/v3_export.pkl 에 영속되므로, export 시 repo 에 없으면 되살린다.
+    (다운로드가 reset/재시작에 견디게 — write_native_excel 은 pkl reqs 로 표를 만들고,
+    복원된 app 요건+캐시 추천으로 AI 칼럼까지 병합). 반환: 복원 성공 여부.
+    """
+    import pickle
+    from app.domain.enums import DocumentMime
+    from app.domain.models import Document
+    from app.services.artifact_cache import ArtifactCache
+    from app.services.extraction import ExtractionService
+
+    pkl = container.settings.storage_root / doc_id / "v3_export.pkl"
+    if not pkl.is_file():
+        return False
+    try:
+        payload = pickle.loads(pkl.read_bytes())
+    except Exception:
+        return False
+    v2_reqs = payload.get("reqs") or []
+    if not v2_reqs:
+        return False
+    # 문서 레코드가 없으면(재시작) 최소 placeholder 등록 — export 에 doc_id 만 있으면 충분
+    if doc_id not in container.repo.documents:
+        incoming = container.settings.storage_root / "incoming"
+        src = next(iter(incoming.glob(f"{doc_id}.*")), pkl)
+        await container.repo.save_document(Document(id=doc_id, src_path=src, mime=DocumentMime.PDF))
+    app_reqs = [ExtractionService._v2_to_requirement(doc_id, r) for r in v2_reqs]
+    await container.repo.save_requirements(doc_id, app_reqs)
+    doc = container.repo.documents.get(doc_id)
+    if doc is not None:
+        try:
+            await ArtifactCache(container.settings.artifact_cache_dir).restore_recommendations(
+                container, doc, fast=True
+            )
+        except Exception:
+            pass
+    return True
+
+
 class ExportColumnInfo(BaseModel):
     key: str
     header: str
@@ -68,6 +109,9 @@ async def export_excel(
     layout: str = "ordered",
     filename: str | None = None,
 ) -> FileResponse:
+    # repo 가 비었으면(reset·재시작·추천 중 reset) 디스크 v3_export.pkl 에서 문서+요건 복원
+    if doc_id not in container.repo.documents or not await container.repo.list_requirements(doc_id):
+        await _restore_reqs_from_disk(container, doc_id)
     if doc_id not in container.repo.documents:
         raise HTTPException(404, f"document 없음: {doc_id}")
     reqs, recs, judges = await container.repo.snapshot(doc_id)
