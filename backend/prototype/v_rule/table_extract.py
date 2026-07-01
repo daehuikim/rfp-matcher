@@ -62,10 +62,8 @@ def is_junk_table(grid: list[list[str]]) -> bool:
     # 서술 셀(15자↑)이 전혀 없으면 요구 본문 없음(라벨/도표)
     if max((s["maxlen"] for s in stats), default=0) < 15:
         return True
-    # 집계/수량표: 한 열이 대부분 소수(요구사항 '수'·수량 카운트) → 총괄표/장비목록 (요구 아님)
-    for s in stats:
-        if s["n"] >= 3 and s["numratio"] > 0.75 and s["avglen"] <= 5:
-            return True
+    # (집계/수량표 규칙 제거: 순번(No) 열 있는 진짜 요구표까지 드롭돼 recall 손실.
+    #  총괄표/집계표는 gemma keep 이 제목 기반으로 처리)
     return False
 
 
