@@ -499,6 +499,25 @@ export function exportFixedUrl(docId: string): string {
   return `${apiBase()}/documents/${docId}/export-fixed`;
 }
 
+/** 분해 — 상세내용을 사용자 지정 기호로 여러 행으로 쪼갬(병합의 반대). */
+export async function splitRequirement(
+  docId: string,
+  reqId: string,
+  delimiter: string,
+): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/${reqId}/split`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ delimiter }),
+  });
+  if (!r.ok) {
+    let m = `split ${r.status}`;
+    try { const j = await r.json(); if (j?.detail) m = String(j.detail); } catch { /* */ }
+    throw new Error(m);
+  }
+  return r.json();
+}
+
 /** 카드 병합 / ID 일괄지정 — 지정 행들에 같은 탭(카드)·같은 ID 접두사 적용. */
 export async function regroupRequirements(
   docId: string,

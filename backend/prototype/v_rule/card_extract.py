@@ -97,9 +97,10 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
             for j, u in enumerate(chunk)
         )
         prompt = (
-            "RFP 카드 유닛들이다. 각 유닛이 **제안사가 이행·수행·준수할 요구사항**이면 keep=true, "
-            "표지·목차·배경설명·일정·입찰안내·평가배점·제출양식·발주처 현황 등 비요구면 keep=false.\n"
-            "애매하면 keep=true(과포함이 누락보다 낫다).\n\n"
+            "RFP 카드 유닛들이다. **제안사가 실제로 이행·구축·개발·제공·준수할 요구/제안 사항**만 keep=true.\n"
+            "다음은 전부 keep=false(엄격): 표지·목차·배경/추진목적·일정·입찰/계약 안내·평가배점·제출/작성 양식·"
+            "연락처·발주처 현황(AS-IS)·산출물 목록·조직/인력 현황·서약서·일반 안내.\n"
+            "**애매하거나 요구/제안 성격이 뚜렷하지 않으면 keep=false**(핵심 요구사항 카드만 남긴다).\n\n"
             f"[유닛]\n{block}\n\n"
             'JSON: {"items":[{"index":<int>,"keep":<bool>}, ...]} — 모든 index.'
         )

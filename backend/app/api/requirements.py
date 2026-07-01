@@ -164,6 +164,39 @@ async def regroup_requirements(doc_id: str, body: RegroupBody, container: Contai
     return await list_requirements(doc_id, container)
 
 
+class SplitBody(BaseModel):
+    delimiter: str   # 사용자 지정 기호(예: ●, -, 1)) — 이 기호 기준으로 상세내용 분해
+
+
+@router.post("/documents/{doc_id}/requirements/{req_id}/split", response_model=list[RequirementView])
+async def split_requirement(doc_id: str, req_id: str, body: SplitBody, container: ContainerDep) -> list[RequirementView]:
+    """분해 — 상세내용을 사용자 지정 기호로 여러 행으로 쪼갬(병합의 반대). ID/명/계위는 원본 복제.
+
+    예) '● A ● B ● C' + delimiter '●' → 3행. 조각은 그 기호로 시작하도록 복원.
+    """
+    import uuid as _uuid
+    r = container.repo.requirements.get(req_id)
+    if r is None:
+        raise HTTPException(404, f"requirement 없음: {req_id}")
+    delim = body.delimiter.strip()
+    if not delim:
+        raise HTTPException(400, "delimiter 비어있음")
+    parts = [p.strip() for p in r.detail.split(delim)]
+    parts = [f"{delim} {p}" if p else "" for p in parts]
+    parts = [p for p in parts if p and p != delim]
+    if len(parts) <= 1:
+        raise HTTPException(422, f"'{delim}' 로 분해할 조각이 없습니다")
+    await container.repo.update_requirement(req_id, {"detail": parts[0]})
+    new_reqs = [
+        r.model_copy(update={"id": _uuid.uuid4().hex, "detail": p}) for p in parts[1:]
+    ]
+    await container.repo.insert_requirements_after(doc_id, req_id, new_reqs)
+    await _apply_renumber(container, doc_id)
+    await container.event_bus.publish(PipelineEvent(
+        doc_id=doc_id, stage=PipelineStage.REQUIREMENTS_CHANGED, payload={"op": "split", "n": len(parts)}))
+    return await list_requirements(doc_id, container)
+
+
 class MergeBody(BaseModel):
     with_id: str   # 아랫줄 id — 윗줄(req_id)에 병합
 

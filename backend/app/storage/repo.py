@@ -70,6 +70,15 @@ class InMemoryRepo:
         async with self._lock:
             self.requirements_by_doc[doc_id] = [i for i in ordered_ids if i in self.requirements]
 
+    async def insert_requirements_after(self, doc_id: str, after_id: str, reqs: list[Requirement]) -> None:
+        """분해(split) — 원본 행 바로 뒤에 새 행들을 삽입."""
+        async with self._lock:
+            for r in reqs:
+                self.requirements[r.id] = r
+            ids = self.requirements_by_doc.setdefault(doc_id, [])
+            pos = ids.index(after_id) + 1 if after_id in ids else len(ids)
+            ids[pos:pos] = [r.id for r in reqs]
+
     async def upsert_judgement(self, jud: HumanJudgement) -> None:
         async with self._lock:
             self.judgements[jud.requirement_id] = jud
