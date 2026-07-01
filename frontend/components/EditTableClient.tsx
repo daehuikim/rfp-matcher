@@ -12,6 +12,7 @@ import {
   regroupRequirements,
   exportFixedUrl,
   eventStreamUrl,
+  ensurePipeline,
 } from "@/lib/api";
 
 type ColKey = "code" | "name" | "level" | "action";
@@ -36,7 +37,24 @@ export default function EditTableClient({ docId }: { docId: string }) {
     catch (e) { setMsg(`불러오기 실패: ${String(e)}`); }
     finally { setLoading(false); }
   }, [docId]);
-  useEffect(() => { void load(); }, [load]);
+
+  // 마운트 시 추출 파이프라인 보장(옛 리뷰 페이지가 하던 역할 — /edit 통합) + 첫 로드.
+  useEffect(() => {
+    void ensurePipeline(docId).catch(() => { /* 이미 실행중/완료면 무시 */ });
+    void load();
+  }, [docId, load]);
+
+  // 추출 진행 중(아직 요건 0건)이면 완료를 잡기 위해 폴링 — 요건이 생기면 자동 중단.
+  useEffect(() => {
+    if (rows.length > 0) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      tries += 1;
+      if (tries > 60) { clearInterval(t); return; }   // ~3분 상한
+      void load();
+    }, 3000);
+    return () => clearInterval(t);
+  }, [rows.length, load]);
 
   useEffect(() => {
     const src = new EventSource(eventStreamUrl(docId));

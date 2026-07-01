@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from pathlib import Path
 
@@ -24,6 +25,11 @@ from app.services.artifact_cache import ArtifactCache
 from app.services.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
+
+# 병렬 업로드 시 추출 스레드(네이티브: pymupdf OCR/텍스트레이어 검사 등)의 동시 실행 상한.
+# OpenDataLoader 는 java subprocess 라 프로세스 격리로 안전하지만, in-process 네이티브가
+# 여러 스레드에서 동시에 돌면 세그폴트 위험이 있어 상한을 둔다(진짜 병렬은 유지, 폭주만 방지).
+_EXTRACT_SEM = asyncio.Semaphore(int(os.getenv("EXTRACT_CONCURRENCY", "3")))
 
 
 class ExtractionService:
@@ -469,7 +475,8 @@ class ExtractionService:
                 from prototype.v_rule.adapter import run_v_rule_reqs
 
                 workdir = self._c.settings.storage_root / document.id / "v_rule"
-                v2_reqs = await asyncio.to_thread(run_v_rule_reqs, Path(document.src_path), workdir)
+                async with _EXTRACT_SEM:   # 병렬 추출 동시성 상한(세그폴트 방지)
+                    v2_reqs = await asyncio.to_thread(run_v_rule_reqs, Path(document.src_path), workdir)
                 overview = None
                 steps = [f"v_rule(룰 엔진): {len(v2_reqs)} rows"]
             elif strategy == "public_form":
@@ -706,6 +713,12 @@ class ExtractionService:
         )
 
     async def _recommend_background(self, doc_id: str, *, use_cache: bool) -> None:
+        # 운영 플래그: EXTRACT_ONLY=1 이면 AI 추천(임베딩·BM25S) 단계를 건너뛴다(기본 off).
+        # 다건 동시 업로드 시 추천 파이프라인의 네이티브(BM25S 멀티프로세싱·임베딩) 동시 실행으로
+        # 인한 세그폴트를 피하고, 추출 카드만 빠르게 확인하려는 용도. 카드/편집 뷰엔 영향 없음.
+        if os.getenv("EXTRACT_ONLY", "").lower() in ("1", "true", "yes"):
+            logger.info("EXTRACT_ONLY — AI 추천 스킵 doc=%s", doc_id)
+            return
         from app.services.recommendation import RecommendationService
 
         try:

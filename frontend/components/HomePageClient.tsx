@@ -127,7 +127,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
     try {
       const { doc_id } = await uploadDocument(file, getStoredLlmProvider(), engine);
       startTransition(() => {
-        router.push(`/review/${doc_id}`);
+        router.push(`/edit/${doc_id}`);
       });
     } catch (e) {
       setErr(`업로드 실패: ${String(e)}`);
@@ -141,7 +141,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
     try {
       const { doc_id } = await importExcel(file, getStoredLlmProvider());
       startTransition(() => {
-        router.push(`/review/${doc_id}`);
+        router.push(`/edit/${doc_id}`);
       });
     } catch (e) {
       setErr(`Excel 불러오기 실패: ${String(e)}`);
