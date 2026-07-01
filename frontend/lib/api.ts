@@ -498,3 +498,18 @@ export async function mergeRequirements(
 export function exportFixedUrl(docId: string): string {
   return `${apiBase()}/documents/${docId}/export-fixed`;
 }
+
+/** 카드 병합 / ID 일괄지정 — 지정 행들에 같은 탭(카드)·같은 ID 접두사 적용. */
+export async function regroupRequirements(
+  docId: string,
+  reqIds: string[],
+  opts: { prefix?: string; category?: string },
+): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/regroup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ req_ids: reqIds, prefix: opts.prefix ?? null, category: opts.category ?? null }),
+  });
+  if (!r.ok) throw new Error(`regroup ${r.status}`);
+  return r.json();
+}

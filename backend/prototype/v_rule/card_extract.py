@@ -115,8 +115,23 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
     return out
 
 
+_JUNK_DETAIL = re.compile(r"^[\s\d.\-–—()·:;%~]+$")   # 숫자·기호·점만(페이지번호·날짜)
+
+
+def _is_junk_detail(d: str) -> bool:
+    """요구사항 아닌 셀 — 페이지번호('29')·날짜('2026. 4.')·기호·너무짧음. 올리지 않는다."""
+    d = (d or "").strip()
+    if len(d) < 3:
+        return True
+    if _JUNK_DETAIL.match(d):
+        return True
+    if re.match(r"^\d{4}\s*[.\-]\s*\d{1,2}", d):   # 날짜류
+        return True
+    return False
+
+
 def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
-    """유닛 + keep 판정 → 고정칼럼 행. (traced 파이프라인이 단계 분리해 쓰도록 공개)"""
+    """유닛 + keep 판정 → 고정칼럼 행. junk 셀(페이지번호·날짜·기호) 제외. (공개)"""
     rows: list[dict] = []
     tab_counter: dict[str, int] = {}
     tab_prefix: dict[str, str] = {}
@@ -130,13 +145,14 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
     for i, u in enumerate(units):
         if not keep.get(i, True):
             continue
+        clean = [re.sub(r"\s+", " ", d).strip() for d in (u.details or [u.title])]
+        clean = [d for d in clean if d and not _is_junk_detail(d)]
+        if not clean:                 # 실내용 없는 카드(표지·페이지번호뿐)는 올리지 않음
+            continue
         if u.tab not in tab_prefix:
             tab_prefix[u.tab] = _slug(u.tab)
         pfx = tab_prefix[u.tab]
-        for d in (u.details or [u.title]):
-            d = re.sub(r"\s+", " ", d).strip()
-            if not d:
-                continue
+        for d in clean:
             tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
             rows.append({"tab": u.tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
                          "name": u.title, "level": u.level_path, "detail": d})

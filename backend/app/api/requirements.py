@@ -136,6 +136,34 @@ async def delete_requirement(doc_id: str, req_id: str, container: ContainerDep) 
     return await list_requirements(doc_id, container)
 
 
+class RegroupBody(BaseModel):
+    req_ids: list[str]              # 대상 행들(순서 유지)
+    prefix: str | None = None      # 요구사항 ID 접두사(일괄) — 주면 prefix-001..N 재부여
+    category: str | None = None    # 탭(카드) — 주면 이 탭으로 이동(카드 병합/이동)
+
+
+@router.post("/documents/{doc_id}/requirements/regroup", response_model=list[RequirementView])
+async def regroup_requirements(doc_id: str, body: RegroupBody, container: ContainerDep) -> list[RequirementView]:
+    """카드 병합/ID 일괄지정 — 지정한 행들에 같은 탭(카드)·같은 ID 접두사를 일괄 적용.
+
+    - ID 수정(일괄): prefix 만 주면 그 행들 code = prefix-001..N (병합 후 ID 정하기).
+    - 카드 병합: category+prefix 주면 그 행들을 한 탭으로 모으고 같은 ID 접두사 부여.
+    """
+    if not body.req_ids:
+        raise HTTPException(400, "req_ids 비어있음")
+    for i, rid in enumerate(body.req_ids, 1):
+        fields: dict = {}
+        if body.category is not None:
+            fields["category"] = body.category
+        if body.prefix is not None:
+            fields["code"] = f"{body.prefix}-{i:03d}"
+        if fields:
+            await container.repo.update_requirement(rid, fields)
+    await container.event_bus.publish(PipelineEvent(
+        doc_id=doc_id, stage=PipelineStage.REQUIREMENTS_CHANGED, payload={"op": "regroup"}))
+    return await list_requirements(doc_id, container)
+
+
 class MergeBody(BaseModel):
     with_id: str   # 아랫줄 id — 윗줄(req_id)에 병합
 
