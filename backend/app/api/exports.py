@@ -19,6 +19,74 @@ from app.services.native_export import write_native_excel
 router = APIRouter(prefix="/documents", tags=["exports"])
 
 
+_FIXED_COLS = ["요구사항 ID", "요구사항명", "계위", "상세내용",
+               "KT 보유 기술", "부족 기술", "AI 판정", "AI 설명", "컨소시엄 필요 사항",
+               "Human 판정", "Human 메모"]
+_JUDG_MARK = {"YES": "O", "PARTIAL": "△", "NO": "X", "UNSET": ""}
+
+
+def _fixed_excel(reqs, recs, judges, out_path) -> None:
+    """repo 요건 → 고정칼럼 조견표(탭=category). FE 편집이 즉시 반영(단일 소스=repo)."""
+    import re as _re
+    from collections import OrderedDict
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    hdr = Font(bold=True, size=10, color="FFFFFF"); hfill = PatternFill("solid", fgColor="404040")
+    ai_fill = PatternFill("solid", fgColor="FFF2CC"); wrap = Alignment(wrap_text=True, vertical="top")
+    border = Border(*[Side(style="thin", color="D0D0D0")] * 4)
+    by_tab: "OrderedDict[str, list]" = OrderedDict()
+    for r in reqs:
+        by_tab.setdefault(r.category or "요구사항", []).append(r)
+    wb = openpyxl.Workbook(); wb.remove(wb.active); used: set[str] = set()
+    for tab, group in by_tab.items():
+        title = (_re.sub(r"[\\/*?:\[\]]", " ", tab).strip()[:31]) or "요구사항"
+        b, i = title, 2
+        while title in used:
+            title = f"{b[:28]}_{i}"; i += 1
+        used.add(title)
+        ws = wb.create_sheet(title)
+        for ci, h in enumerate(_FIXED_COLS, 1):
+            c = ws.cell(1, ci, h); c.font = hdr; c.fill = hfill
+        for ci, w in enumerate([16, 26, 20, 68, 20, 18, 8, 40, 24, 10, 24], 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = w
+        for ri, r in enumerate(group, 2):
+            rec = recs.get(r.id); jud = judges.get(r.id)
+            vals = [r.code, r.name, (r.definition or ""), r.detail,
+                    (rec.related_solution if rec else ""),
+                    (", ".join(rec.missing_tech) if rec and rec.missing_tech else ""),
+                    (_JUDG_MARK.get(rec.ai_risk.name, "") if rec else ""),
+                    (rec.ai_reason if rec else ""),
+                    (rec.consortium_need if rec and rec.consortium_need else ""),
+                    (_JUDG_MARK.get(jud.mark.name, "") if jud else ""),
+                    (jud.note if jud else "")]
+            for ci, v in enumerate(vals, 1):
+                c = ws.cell(ri, ci, v); c.alignment = wrap; c.border = border
+                if ci >= 5:
+                    c.fill = ai_fill
+    if not by_tab:
+        wb.create_sheet("요구사항")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(out_path)
+
+
+@router.get("/{doc_id}/export-fixed")
+async def export_fixed(doc_id: str, container: ContainerDep):
+    """고정칼럼(요구사항ID/명/계위/상세 + AI/Human) export — repo 직독이라 FE 편집 즉시 반영."""
+    if doc_id not in container.repo.documents or not await container.repo.list_requirements(doc_id):
+        await _restore_reqs_from_disk(container, doc_id)
+    reqs, recs, judges = await container.repo.snapshot(doc_id)
+    if not reqs:
+        raise HTTPException(409, "추출된 요구사항 없음")
+    out = container.settings.storage_root / doc_id / "exports" / "requirements_fixed.xlsx"
+    _fixed_excel(reqs, recs, judges, out)
+    doc = container.repo.documents.get(doc_id)
+    fn = (getattr(doc, "display_name", None) or doc_id) + "_조견표.xlsx"
+    return FileResponse(path=out, filename=fn,
+                        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={"Cache-Control": "no-store"})
+
+
 async def _restore_reqs_from_disk(container, doc_id: str) -> bool:
     """repo 가 비었을 때(워크스페이스 reset·재시작) 디스크 v3_export.pkl 에서 문서+요건+추천 복원.
 
