@@ -12,6 +12,40 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel
 
 from .cards import iter_blocks, marker_level, strip_marker
+from .table_extract import split_items, table_to_reqs
+
+
+# 헤딩 오인 방지: 마커가 붙어도 '긴 완결 문장'은 헤딩이 아니라 내용(상세)이다.
+# 예: '다. 제출한 제안서와 발표내용은 동일해야 하며…' → 헤딩 아님(스캔 catch-all 방지)
+_SENT_END = re.compile(r"(?:한다|하다|해야|하며|되며|바람|함|음|됨|된다|같다|없다|있다|한다\.|것|임)\s*[.]?\s*$")
+
+
+def _is_heading_line(text: str) -> bool:
+    t = strip_marker(text).strip()
+    if not t or len(t) > 50:          # 너무 길면 헤딩 아님(문장)
+        return False
+    if _SENT_END.search(t):           # 종결어미로 끝나면 문장(내용)
+        return False
+    return True
+
+
+def _detail_text(d) -> str:
+    """상세는 str 또는 dict{level,name,detail} 둘 다 허용 — 텍스트만 꺼낸다."""
+    return (d.get("detail", "") if isinstance(d, dict) else d) or ""
+
+
+# 섹션 헤더로 흔히 쓰는 도형 기호(속찬 사각/마름모). 이런 기호로 시작하는 짧은 라벨은
+# 섹션 헤딩으로 승격(예: '■기능요구사항(SFR, System Function Requirement) 목록').
+_SECTION_SYM = re.compile(r"^\s*[■▣◈◆◇□▷▶◎]")
+
+
+def _is_section_bullet(text: str) -> bool:
+    # ■/▣/◈ 로 시작하는 섹션 헤더는 다소 길어도(예: '■ 기능 요구사항 (SFR, System
+    # Function Requirement) – 13. 보이는 ARS') 헤딩으로 인정. 완결 문장만 제외.
+    if not _SECTION_SYM.match(text or ""):
+        return False
+    stripped = strip_marker(text).strip()
+    return 0 < len(stripped) <= 75 and not _SENT_END.search(stripped)
 
 
 @dataclass
@@ -20,7 +54,7 @@ class Unit:
     marker: str
     title: str                       # 요구사항명 후보
     level_path: str                  # 계위(마커 경로)
-    details: list[str] = field(default_factory=list)   # 상세내용(atomic)
+    details: list = field(default_factory=list)   # 상세내용: str 또는 dict{level,name,detail}
 
 
 def _table_details(grid: list[list[str]]) -> list[str]:
@@ -37,35 +71,67 @@ _HEAD_MAX = 3   # 레벨 0~3(Ⅰ/1./1.1/가./ㄱ/1.1.1)=헤딩, 4~5(1)/❍/-)=�
 
 
 def build_units(html: str | None = None, blocks: list | None = None) -> list[Unit]:
-    """블록 → 유닛 (헤딩 스택 트리). 헤딩(레벨≤3)마다 유닛 시작, 내용(불릿/❍/표/평문)은
-    가장 가까운(깊은) 헤딩에 붙인다. 탭=최상위 章 헤딩. 단일 card_level 함정 회피.
+    """블록 → 유닛 (헤딩 스택 트리). 헤딩(레벨≤3, 단 긴 문장 제외)마다 유닛 시작,
+    내용(불릿/❍/표/평문)은 가장 가까운 헤딩에 붙인다.
 
-    강원랜드처럼 1.섹션 아래 ❍ 내용, JB처럼 가.섹션 아래 - 내용 — 둘 다 자연히 커버.
+    개선(진단 반영):
+      - 표는 셀 join 대신 table_to_reqs 로 구조 추출(내용열=상세, 구분열=계위; 도표/현황=드롭).
+      - '긴 완결 문장' 마커는 헤딩 강등(스캔 catch-all 방지).
+      - '■시스템구성요구사항' 같은 sparse 라벨 + 다음이 표면 헤딩 승격(기아 ECR/SFR 카테고리 복원).
+      - 텍스트 블록에 ⦁/❍/• 다항목이 뭉치면 분해해 개별 상세로(JB ⦁ 복원).
     """
     if blocks is None:
         blocks = iter_blocks(html or "")
     stack: list[tuple[int, str]] = []   # (level, title)
     units: list[Unit] = []
     cur: Unit | None = None
-    for b in blocks:
-        lvl = marker_level(b.text) if b.kind == "text" else None
-        if b.kind == "text" and lvl is not None and lvl <= _HEAD_MAX:
-            title = strip_marker(b.text)[:60]
-            stack = [(l, t) for (l, t) in stack if l < lvl] + [(lvl, title)]
-            # 탭(카드) = 이 헤딩 자신(세분화). 최상위 章으로 뭉치지 않는다 → 카드별 분리.
-            tab = (title or (stack[0][1] if stack else ""))[:40] or "요구사항"
-            mk = b.text.split()[0] if b.text.split() else ""
-            cur = Unit(tab=tab, marker=mk, title=title,
-                       level_path=" > ".join(t for _, t in stack))
+
+    def ensure_cur() -> Unit:
+        nonlocal cur
+        if cur is None:
+            cur = Unit(tab="요구사항", marker="", title="", level_path="")
             units.append(cur)
-        else:
-            if cur is None:
-                cur = Unit(tab="요구사항", marker="", title="", level_path="")
-                units.append(cur)
-            if b.kind == "table":
-                cur.details += _table_details(b.grid)
-            elif b.text.strip():
-                cur.details.append(strip_marker(b.text) if marker_level(b.text) else b.text)
+        return cur
+
+    def open_heading(text: str, lvl: int) -> None:
+        nonlocal cur, stack
+        title = strip_marker(text)[:60]
+        stack = [(l, t) for (l, t) in stack if l < lvl] + [(lvl, title)]
+        tab = (title or (stack[0][1] if stack else ""))[:40] or "요구사항"
+        mk = text.split()[0] if text.split() else ""
+        cur = Unit(tab=tab, marker=mk, title=title, level_path=" > ".join(t for _, t in stack))
+        units.append(cur)
+
+    n = len(blocks)
+    for i, b in enumerate(blocks):
+        if b.kind == "table":
+            reqs = table_to_reqs(b.grid)
+            if reqs is None:                        # 요구표 판정 불가 → 기존 방식(join) 폴백
+                ensure_cur().details += _table_details(b.grid)
+            elif reqs:                              # 구조 추출 성공(내용열/계위 분리)
+                ensure_cur().details += reqs
+            # reqs == [] (도표/현황/배점) → 드롭
+            continue
+
+        lvl = marker_level(b.text)
+        # HTML 헤딩 태그(h1~h4) = 확실한 섹션 헤딩(DOCX/HWP 순수제목). 마커 없어도 유닛 경계.
+        tag_lvl = (b.htag - 1) if getattr(b, "htag", 0) and b.htag <= 4 else None
+        # sparse 라벨(짧고 다음 블록이 표) → 섹션 헤딩 승격(레벨2). 예: ■시스템구성요구사항(ECR)
+        nxt_is_table = i + 1 < n and blocks[i + 1].kind == "table"
+        sparse_label = (len(strip_marker(b.text).strip()) <= 40 and nxt_is_table
+                        and not _SENT_END.search(strip_marker(b.text)))
+        if tag_lvl is not None:
+            open_heading(b.text, tag_lvl)
+            continue
+        is_heading = ((lvl is not None and lvl <= _HEAD_MAX and _is_heading_line(b.text))
+                      or sparse_label or _is_section_bullet(b.text))
+        if is_heading:
+            open_heading(b.text, lvl if (lvl is not None and lvl <= _HEAD_MAX) else 2)
+        elif b.text.strip():
+            u = ensure_cur()
+            base = strip_marker(b.text) if lvl is not None else b.text
+            pieces = split_items(base)              # ⦁/❍/• 다항목 분해
+            u.details += pieces if len(pieces) > 1 else [base]
     return [u for u in units if u.details]   # 내용 있는 유닛만(빈 章 헤딩 제외)
 
 
@@ -97,13 +163,14 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
         def _clean(s: str) -> str:  # 대괄호 사업명 등 노이즈 제거 후 gemma 에 보여줌
             return re.sub(r"[\[\(（【][^\])）】]*[\])）】]", "", s or "").strip()
         block = "\n".join(
-            f"[{k+j}] 제목='{_clean(u.title)[:40]}' 상세='{' / '.join(d[:50] for d in u.details[:2])}'"
+            f"[{k+j}] 제목='{_clean(u.title)[:40]}' 상세='{' / '.join(_detail_text(d)[:50] for d in u.details[:2])}'"
             for j, u in enumerate(chunk)
         )
         prompt = (
             "RFP 카드들이다. 조견표에 넣을지(keep) 판정하라.\n"
             "keep=false(명백한 비요구만): 표지·문서 목차·배경/추진목적·추진일정·입찰/계약 안내·제안 평가배점·"
-            "제출/작성 양식(서식)·연락처·발주처 현황(AS-IS 보유목록)·조직/인력 현황·서약서.\n"
+            "제출/작성 양식(서식)·연락처·발주처 현황(AS-IS 보유목록)·조직/인력 현황·서약서·"
+            "요구사항 총괄표(집계)·용어/약어 정의·도입품목/장비 목록·규모/수량 현황.\n"
             "그 외 **제안사가 이행·구축·개발·제공·준수할 내용(요구/제안 사항)은 전부 keep=true. 애매하면 keep=true.**\n\n"
             f"[카드]\n{block}\n\n"
             'JSON: {"items":[{"index":<int>,"keep":<bool>}, ...]} — 모든 index.'
@@ -161,20 +228,30 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
     for i, u in enumerate(units):
         if not keep.get(i, True):
             continue
-        clean = [re.sub(r"\s+", " ", d).strip() for d in (u.details or [u.title])]
-        clean = [d for d in clean if d and not _is_junk_detail(d)]
-        if not clean:                 # 실내용 없는 카드(표지·페이지번호뿐)는 올리지 않음
+        # 상세는 str 또는 dict{level,name,detail}. dict 면 표에서 뽑은 행별 계위/명을 쓴다.
+        items = u.details or [u.title]
+        cleaned: list[dict] = []
+        for d in items:
+            txt = re.sub(r"\s+", " ", _detail_text(d)).strip()
+            if not txt or _is_junk_detail(txt):
+                continue
+            if isinstance(d, dict):
+                cleaned.append({"detail": txt,
+                                "name": _clean_toc(d.get("name") or u.title),
+                                "level": _clean_toc(d.get("level") or u.level_path)})
+            else:
+                cleaned.append({"detail": txt, "name": _clean_toc(u.title),
+                                "level": _clean_toc(u.level_path)})
+        if not cleaned:               # 실내용 없는 카드(표지·페이지번호뿐)는 올리지 않음
             continue
         if u.tab not in tab_prefix:
             tab_prefix[u.tab] = _slug(u.tab)
         pfx = tab_prefix[u.tab]
         tab = _clean_toc(u.tab) or "요구사항"
-        name = _clean_toc(u.title)
-        level = _clean_toc(u.level_path)
-        for d in clean:
+        for it in cleaned:
             tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
             rows.append({"tab": tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
-                         "name": name, "level": level, "detail": d})
+                         "name": it["name"], "level": it["level"], "detail": it["detail"]})
     return rows
 
 

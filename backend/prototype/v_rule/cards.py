@@ -14,19 +14,23 @@ from bs4 import BeautifulSoup, Tag
 # ── 마커 계위 사다리(형태만; 문서 도메인 무관) ──────────────────────────────
 # level 작을수록 상위. 같은 문서 안에서 상대 계위로 카드 경계를 잡는다.
 # 유니코드 로마자(Ⅰ-Ⅻ, hwp5html 이 표 셀에 쓰는 형태) + ASCII 로마자 모두 지원. 점 선택(표행은 점 없음).
-_ROMAN = r"(?:[IVXLCDM]{1,4}|[Ⅰ-Ⅺ])"
+# ASCII 로마자는 반드시 점을 요구(I. II.)해야 'MDM/VM/VDI/ICM' 같은 영문약어 오탐 방지.
+# 유니코드 로마자(Ⅰ-Ⅺ, hwp5html 표셀)는 점 선택.
+_ROMAN_HEAD = r"(?:[IVXLCDM]{1,4}\.|[Ⅰ-Ⅻ]\.?)"
+# 불릿 문자류 — ⦁(U+2981)·•(U+2022)·▣◈◇▶▷‣⁃ 등 사설/도형 불릿 포함(형태 기반, 도메인 무관).
+_BULLET = r"[❍○●◦▪▫◆◇■□▣◈▶▷▸‣⁃∙·•⦁*※\-–—]"
 _MARKERS: list[tuple[int, "re.Pattern[str]"]] = [
-    (0, re.compile(rf"^\s*(?:제\s*\d+\s*[부편]|{_ROMAN}\.?)\s")),           # 제1부 / I. / Ⅰ (점 선택)
+    (0, re.compile(rf"^\s*(?:제\s*\d+\s*[부편]|{_ROMAN_HEAD})\s")),          # 제1부 / I. / Ⅰ
     (1, re.compile(r"^\s*(?:제\s*\d+\s*장|\d+\.)(?!\d)\s")),                # 제1장 / 1.
-    (2, re.compile(r"^\s*\d+\.\d+(?!\.\d)\s")),                            # 1.1
+    (2, re.compile(r"^\s*\d+\.\d+\.?(?!\d)\s")),                           # 1.1 / 2.4. (후행점 허용)
     (2, re.compile(r"^\s*[가-힣]\.\s")),                                    # 가. 나.
-    (3, re.compile(r"^\s*\d+\.\d+\.\d+\s")),                               # 1.1.1
+    (3, re.compile(r"^\s*\d+\.\d+\.\d+\.?(?!\d)\s")),                      # 1.1.1
     (3, re.compile(r"^\s*[ㄱ-ㅎ]\.\s")),                                    # ㄱ. ㄴ.
-    (4, re.compile(r"^\s*(?:\d+\)|[가-힣]\)|\([0-9가-힣]+\)|[①-⑳])\s?")),   # 1) 가) (1) ①
-    (5, re.compile(r"^\s*[❍○●◦▪◆■□∙·*※\-–—]\s")),                          # 불릿(말단)
+    (4, re.compile(r"^\s*(?:\d+-\d+\)|\d+\)|[가-힣]\)|\([0-9가-힣]+\)|[①-⑳])\s?")),  # 1) 1-1) 가) (1) ①
+    (5, re.compile(rf"^\s*{_BULLET}\s?")),                                 # 불릿(말단) — 후행공백 선택(■기능요구사항 밀착)
 ]
-_MARK_ANY = re.compile(rf"^\s*(?:제\s*\d+\s*[부편장]|{_ROMAN}\.?|\d+(?:\.\d+)*\.?|"
-                       r"[가-힣]\.|[ㄱ-ㅎ]\.|\d+\)|[가-힣]\)|\([0-9가-힣]+\)|[①-⑳]|[❍○●◦▪◆■□∙·*※\-–—])\s?")
+_MARK_ANY = re.compile(rf"^\s*(?:제\s*\d+\s*[부편장]|{_ROMAN_HEAD}|\d+(?:\.\d+)*\.?|"
+                       rf"\d+-\d+\)|\d+\)|[가-힣][.)]|[ㄱ-ㅎ]\.|\([0-9가-힣]+\)|[①-⑳]|{_BULLET})\s?")
 
 
 def marker_level(text: str) -> int | None:
@@ -47,6 +51,7 @@ class Block:
     kind: str            # "text" | "table"
     text: str = ""       # text 블록 원문(마커 포함)
     grid: list[list[str]] = field(default_factory=list)  # table 블록
+    htag: int = 0        # HTML 헤딩 태그 레벨(h1=1..h6=6, 0=아님) — DOCX/HWP 순수제목 헤딩용
 
 
 @dataclass
@@ -100,7 +105,8 @@ def iter_blocks(html: str) -> list[Block]:
             continue
         if t in seen_recent:               # 직전 몇 블록과 동일 텍스트 → hwp5html 중복 제거
             continue
-        out.append(Block(kind="text", text=t))
+        htag = int(el.name[1]) if el.name in ("h1", "h2", "h3", "h4", "h5", "h6") else 0
+        out.append(Block(kind="text", text=t, htag=htag))
         seen_recent = ([t] + seen_recent)[:3]
     return out
 
