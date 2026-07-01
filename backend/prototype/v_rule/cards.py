@@ -13,8 +13,10 @@ from bs4 import BeautifulSoup, Tag
 
 # ── 마커 계위 사다리(형태만; 문서 도메인 무관) ──────────────────────────────
 # level 작을수록 상위. 같은 문서 안에서 상대 계위로 카드 경계를 잡는다.
+# 유니코드 로마자(Ⅰ-Ⅻ, hwp5html 이 표 셀에 쓰는 형태) + ASCII 로마자 모두 지원. 점 선택(표행은 점 없음).
+_ROMAN = r"(?:[IVXLCDM]{1,4}|[Ⅰ-Ⅺ])"
 _MARKERS: list[tuple[int, "re.Pattern[str]"]] = [
-    (0, re.compile(r"^\s*(?:제\s*\d+\s*[부편]|[IVXLCDM]{1,4}\.)\s")),      # 제1부 / I.
+    (0, re.compile(rf"^\s*(?:제\s*\d+\s*[부편]|{_ROMAN}\.?)\s")),           # 제1부 / I. / Ⅰ (점 선택)
     (1, re.compile(r"^\s*(?:제\s*\d+\s*장|\d+\.)(?!\d)\s")),                # 제1장 / 1.
     (2, re.compile(r"^\s*\d+\.\d+(?!\.\d)\s")),                            # 1.1
     (2, re.compile(r"^\s*[가-힣]\.\s")),                                    # 가. 나.
@@ -23,7 +25,7 @@ _MARKERS: list[tuple[int, "re.Pattern[str]"]] = [
     (4, re.compile(r"^\s*(?:\d+\)|[가-힣]\)|\([0-9가-힣]+\)|[①-⑳])\s?")),   # 1) 가) (1) ①
     (5, re.compile(r"^\s*[❍○●◦▪◆■□∙·*※\-–—]\s")),                          # 불릿(말단)
 ]
-_MARK_ANY = re.compile(r"^\s*(?:제\s*\d+\s*[부편장]|[IVXLCDM]{1,4}\.|\d+(?:\.\d+)*\.?|"
+_MARK_ANY = re.compile(rf"^\s*(?:제\s*\d+\s*[부편장]|{_ROMAN}\.?|\d+(?:\.\d+)*\.?|"
                        r"[가-힣]\.|[ㄱ-ㅎ]\.|\d+\)|[가-힣]\)|\([0-9가-힣]+\)|[①-⑳]|[❍○●◦▪◆■□∙·*※\-–—])\s?")
 
 

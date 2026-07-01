@@ -33,43 +33,39 @@ def _table_details(grid: list[list[str]]) -> list[str]:
     return out
 
 
-def build_units(html: str | None = None, blocks: list | None = None) -> list[Unit]:
-    """블록 → 유닛. 章(카드레벨-1 이상)=탭, 카드레벨(가·나 우선) 마커=요구사항 유닛.
+_HEAD_MAX = 3   # 레벨 0~3(Ⅰ/1./1.1/가./ㄱ/1.1.1)=헤딩, 4~5(1)/❍/-)=내용(상세)
 
-    blocks 를 주면 전처리된 블록을 그대로 사용(traced 파이프라인), 아니면 html 에서 추출.
+
+def build_units(html: str | None = None, blocks: list | None = None) -> list[Unit]:
+    """블록 → 유닛 (헤딩 스택 트리). 헤딩(레벨≤3)마다 유닛 시작, 내용(불릿/❍/표/평문)은
+    가장 가까운(깊은) 헤딩에 붙인다. 탭=최상위 章 헤딩. 단일 card_level 함정 회피.
+
+    강원랜드처럼 1.섹션 아래 ❍ 내용, JB처럼 가.섹션 아래 - 내용 — 둘 다 자연히 커버.
     """
     if blocks is None:
         blocks = iter_blocks(html or "")
-    levels = sorted({marker_level(b.text) for b in blocks
-                     if b.kind == "text" and marker_level(b.text) is not None})
-    if not levels:
-        return []
-    card_level = 2 if 2 in levels else (levels[1] if len(levels) > 1 else levels[0])
-    chapter_level = card_level - 1
-
-    tab = ""
-    chapter_path = ""
+    stack: list[tuple[int, str]] = []   # (level, title)
     units: list[Unit] = []
     cur: Unit | None = None
     for b in blocks:
         lvl = marker_level(b.text) if b.kind == "text" else None
-        if b.kind == "text" and lvl is not None and lvl <= chapter_level:
-            tab = strip_marker(b.text)[:40]
-            chapter_path = f"{b.text.split()[0]} {strip_marker(b.text)[:30]}"
-            cur = None
-            continue
-        if b.kind == "text" and lvl is not None and lvl == card_level:
+        if b.kind == "text" and lvl is not None and lvl <= _HEAD_MAX:
+            title = strip_marker(b.text)[:60]
+            stack = [(l, t) for (l, t) in stack if l < lvl] + [(lvl, title)]
+            tab = (stack[0][1] if stack else title)[:40] or "요구사항"
             mk = b.text.split()[0] if b.text.split() else ""
-            cur = Unit(tab=(tab or "요구사항"), marker=mk, title=strip_marker(b.text)[:60],
-                       level_path=f"{chapter_path} > {mk}".strip(" >"))
+            cur = Unit(tab=tab, marker=mk, title=title,
+                       level_path=" > ".join(t for _, t in stack))
             units.append(cur)
-            continue
-        if cur is not None:
+        else:
+            if cur is None:
+                cur = Unit(tab="요구사항", marker="", title="", level_path="")
+                units.append(cur)
             if b.kind == "table":
                 cur.details += _table_details(b.grid)
             elif b.text.strip():
                 cur.details.append(strip_marker(b.text) if marker_level(b.text) else b.text)
-    return [u for u in units if u.details or u.title]
+    return [u for u in units if u.details]   # 내용 있는 유닛만(빈 章 헤딩 제외)
 
 
 class _KeepItem(BaseModel):

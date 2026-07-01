@@ -9,6 +9,31 @@ from __future__ import annotations
 from .cards import Block, iter_blocks, marker_level, strip_marker
 
 
+def split_table_headings(blocks: list[Block]) -> list[Block]:
+    """표 블록 안의 '헤딩 행'(마커+짧은제목·sparse)을 텍스트 블록으로 분리.
+
+    hwp5html 은 헤딩('Ⅰ | | 사업개요')·목차까지 표 행으로 만든다 → 표 안 마커를 카드로 살린다.
+    표 블록에만 적용(텍스트 블록 불변) + 보수적 판정이라 진짜 데이터 표는 그대로 유지.
+    """
+    out: list[Block] = []
+    for b in blocks:
+        if b.kind != "table":
+            out.append(b); continue
+        buf: list[list[str]] = []
+        for row in b.grid:
+            ne = [c.strip() for c in row if c and c.strip()]
+            joined = " ".join(ne)
+            if ne and len(ne) <= 3 and len(joined) <= 45 and marker_level(joined) is not None:
+                if buf:
+                    out.append(Block(kind="table", grid=buf)); buf = []
+                out.append(Block(kind="text", text=joined))
+            else:
+                buf.append(row)
+        if buf:
+            out.append(Block(kind="table", grid=buf))
+    return out
+
+
 def _key(b: Block) -> tuple[str, str]:
     parts = b.text.split()
     return (parts[0] if parts else "", strip_marker(b.text)[:12])
@@ -16,6 +41,7 @@ def _key(b: Block) -> tuple[str, str]:
 
 def preprocess(html: str) -> tuple[list[Block], dict]:
     raw = iter_blocks(html)   # p/li/h/table 문서순 + 빈/직전중복 1차 제거
+    raw = split_table_headings(raw)   # 표 안 헤딩행 → 텍스트(카드 마커 살리기)
     out: list[Block] = []
     trace = {"raw_blocks": len(raw), "tables": 0, "texts": 0,
              "heading_dups_collapsed": 0, "text_before": 0}
