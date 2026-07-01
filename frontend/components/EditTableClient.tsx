@@ -42,11 +42,22 @@ export default function EditTableClient({ docId }: { docId: string }) {
     finally { setLoading(false); }
   }, [docId]);
 
-  // 마운트 시 추출 파이프라인 보장(옛 리뷰 페이지가 하던 역할 — /edit 통합) + 첫 로드.
+  // 마운트 시 첫 로드. 요건이 "이미 있으면" 절대 파이프라인을 건드리지 않는다(재추출로
+  // 기존 조견표가 초기화되는 것 방지 — ensure-pipeline 은 캐시 무효+요건존재 시 reset 함).
+  // 요건이 0건일 때만(아직 추출 안 된 문서) 파이프라인을 트리거한다.
   useEffect(() => {
-    void ensurePipeline(docId).catch(() => { /* 이미 실행중/완료면 무시 */ });
-    void load();
-  }, [docId, load]);
+    let alive = true;
+    (async () => {
+      try {
+        const initial = await listRequirements(docId);
+        if (!alive) return;
+        setRows(initial);
+        if (initial.length === 0) void ensurePipeline(docId).catch(() => { /* 이미 실행중이면 무시 */ });
+      } catch (e) { if (alive) setMsg(`불러오기 실패: ${String(e)}`); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, [docId]);
 
   // 추출 진행 중(아직 요건 0건)이면 완료를 잡기 위해 폴링 — 요건이 생기면 자동 중단.
   useEffect(() => {
