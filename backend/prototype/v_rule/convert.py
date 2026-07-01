@@ -44,6 +44,85 @@ def _html_to_txt(html: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", txt)
 
 
+def _markdown_to_html(md: str) -> str:
+    """OCR markdown → 최소 HTML. 파이프 표는 <table>, 나머지 줄은 <p>(카드 마커는 텍스트로 유지)."""
+    import html as _h
+    out: list[str] = ["<html><body>"]
+    tbl: list[list[str]] = []
+
+    def flush_tbl():
+        nonlocal tbl
+        if tbl:
+            out.append("<table>")
+            for r in tbl:
+                out.append("<tr>" + "".join(f"<td>{_h.escape(c)}</td>" for c in r) + "</tr>")
+            out.append("</table>")
+            tbl = []
+
+    for raw in md.splitlines():
+        ln = raw.strip()
+        if not ln or set(ln) <= set("-|: "):   # 표 구분선/빈줄
+            if "|" not in ln:
+                flush_tbl()
+            continue
+        if ln.count("|") >= 2:                   # 파이프 표 행
+            tbl.append([c.strip() for c in ln.strip("|").split("|")])
+            continue
+        flush_tbl()
+        t = re.sub(r"^#+\s*", "", ln)            # markdown heading 기호 제거(제목 텍스트 유지)
+        out.append(f"<p>{_h.escape(t)}</p>")
+    flush_tbl()
+    out.append("</body></html>")
+    return "\n".join(out)
+
+
+def convert_any(src_path: str | Path, workdir: str | Path) -> dict[str, Path]:
+    """입력 타입 분기 — PDF=OpenDataLoader, HWP/HWPX/DOC(X)=앱 변환기→HTML. 범용 진입점.
+
+    HWP 계열은 OpenDataLoader 가 PDF 전용이라 기존 변환기(hwp5html/hwpx/libreoffice)로 HTML 화 후
+    동일한 v_rule HTML 파이프라인을 탄다. (스펙은 PDF 중심이나 범용 비교 위해 한글도 지원)
+    """
+    src = Path(src_path)
+    ext = src.suffix.lower()
+    if ext == ".pdf":
+        # 자동 감지(파일명 무관): 텍스트 레이어 없으면 스캔본 → Gemma VLM OCR → HTML
+        from prototype.v2.ocr_pipeline import has_text_layer
+        if not has_text_layer(src):
+            from prototype.v2.ocr_pipeline import ocr_pdf_markdown
+            work = Path(workdir); work.mkdir(parents=True, exist_ok=True)
+            pages = ocr_pdf_markdown(src)
+            html = _markdown_to_html("\n".join(m for _, m in pages))
+            html_p = work / f"{src.stem}.html"
+            html_p.write_text(html, encoding="utf-8")
+            txt_p = work / f"{src.stem}.txt"; txt_p.write_text(_html_to_txt(html), encoding="utf-8")
+            return {"html": html_p, "txt": txt_p, "ocr": html_p}
+        return convert_pdf(src, workdir)
+
+    import asyncio
+    import sys
+    os.environ["PATH"] = str(Path(sys.executable).parent) + ":" + os.environ.get("PATH", "")
+    from app.core.config import Settings
+    from app.domain.enums import DocumentMime
+    from app.domain.models import Document
+    from app.phase1.converters.registry import select_converter
+
+    mime = {
+        ".hwp": DocumentMime.HWP, ".hwpx": DocumentMime.HWPX,
+        ".doc": DocumentMime.DOC, ".docx": DocumentMime.DOCX,
+        ".html": DocumentMime.HTML, ".htm": DocumentMime.HTML,
+    }[ext]
+    work = Path(workdir); work.mkdir(parents=True, exist_ok=True)
+    conv = select_converter(mime, Settings())
+    doc = Document(id="vrule", src_path=src, mime=mime)
+    html_doc = asyncio.run(conv.convert(doc, work))
+    html_p = work / f"{src.stem}.html"
+    if Path(html_doc.html_path) != html_p:
+        html_p.write_bytes(Path(html_doc.html_path).read_bytes())
+    txt = _html_to_txt(html_p.read_text(encoding="utf-8", errors="replace"))
+    txt_p = work / f"{src.stem}.txt"; txt_p.write_text(txt, encoding="utf-8")
+    return {"html": html_p, "txt": txt_p}
+
+
 def convert_pdf(pdf_path: str | Path, workdir: str | Path) -> dict[str, Path]:
     """PDF → {html, markdown, txt, json} 파일 경로 dict. OpenDataLoader 로컬 변환."""
     _ensure_java()

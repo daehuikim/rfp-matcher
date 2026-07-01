@@ -52,7 +52,8 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
         if b.kind == "text" and lvl is not None and lvl <= _HEAD_MAX:
             title = strip_marker(b.text)[:60]
             stack = [(l, t) for (l, t) in stack if l < lvl] + [(lvl, title)]
-            tab = (stack[0][1] if stack else title)[:40] or "요구사항"
+            # 탭(카드) = 이 헤딩 자신(세분화). 최상위 章으로 뭉치지 않는다 → 카드별 분리.
+            tab = (title or (stack[0][1] if stack else ""))[:40] or "요구사항"
             mk = b.text.split()[0] if b.text.split() else ""
             cur = Unit(tab=tab, marker=mk, title=title,
                        level_path=" > ".join(t for _, t in stack))
@@ -92,16 +93,19 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
     CH = 30
     for k in range(0, len(units), CH):
         chunk = units[k:k + CH]
+
+        def _clean(s: str) -> str:  # 대괄호 사업명 등 노이즈 제거 후 gemma 에 보여줌
+            return re.sub(r"[\[\(（【][^\])）】]*[\])）】]", "", s or "").strip()
         block = "\n".join(
-            f"[{k+j}] 탭='{u.tab}' 제목='{u.title}' 상세첫줄='{(u.details[0][:60] if u.details else '')}'"
+            f"[{k+j}] 제목='{_clean(u.title)[:40]}' 상세='{' / '.join(d[:50] for d in u.details[:2])}'"
             for j, u in enumerate(chunk)
         )
         prompt = (
-            "RFP 카드 유닛들이다. **제안사가 실제로 이행·구축·개발·제공·준수할 요구/제안 사항**만 keep=true.\n"
-            "다음은 전부 keep=false(엄격): 표지·목차·배경/추진목적·일정·입찰/계약 안내·평가배점·제출/작성 양식·"
-            "연락처·발주처 현황(AS-IS)·산출물 목록·조직/인력 현황·서약서·일반 안내.\n"
-            "**애매하거나 요구/제안 성격이 뚜렷하지 않으면 keep=false**(핵심 요구사항 카드만 남긴다).\n\n"
-            f"[유닛]\n{block}\n\n"
+            "RFP 카드들이다. 조견표에 넣을지(keep) 판정하라.\n"
+            "keep=false(명백한 비요구만): 표지·문서 목차·배경/추진목적·추진일정·입찰/계약 안내·제안 평가배점·"
+            "제출/작성 양식(서식)·연락처·발주처 현황(AS-IS 보유목록)·조직/인력 현황·서약서.\n"
+            "그 외 **제안사가 이행·구축·개발·제공·준수할 내용(요구/제안 사항)은 전부 keep=true. 애매하면 keep=true.**\n\n"
+            f"[카드]\n{block}\n\n"
             'JSON: {"items":[{"index":<int>,"keep":<bool>}, ...]} — 모든 index.'
         )
         try:
@@ -113,6 +117,9 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
         except Exception:
             for j in range(len(chunk)):
                 out[k + j] = True
+    # 안전망: 전부 drop 되면(엄격 오판) 문서 통째 손실 방지 — 전체 유지로 폴백.
+    if units and not any(out.get(i, True) for i in range(len(units))):
+        return {i: True for i in range(len(units))}
     return out
 
 
