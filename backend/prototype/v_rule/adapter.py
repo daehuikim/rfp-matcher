@@ -37,11 +37,30 @@ def rows_to_v2reqs(rows: list, doc_name: str) -> list[Req]:
     return reqs
 
 
-def run_v_rule_reqs(src_path: str | Path, workdir: str | Path) -> list[Req]:
-    """문서(PDF/HWP/HWPX) → v_rule 룰 추출 → v2 Req 리스트. 앱 추출엔진 진입점."""
+def run_v_rule_reqs(src_path: str | Path, workdir: str | Path, *, keep: bool = True) -> list[Req]:
+    """문서(PDF/HWP/HWPX) → **카드 추출**(전처리→가·나 카드→gemma keep) → v2 Req 리스트.
+
+    앱 추출엔진 진입점. keep=True 면 gemma 가 비요구 카드(표지·목차·현황 등) 필터.
+    매핑: 요구사항ID=code(탭별), 요구사항명=name(카드제목), 계위=level, 상세내용=detail.
+    """
+    from .preprocess import preprocess
+    from .card_extract import build_units, _judge_keep, rows_from_units
+
     src = Path(src_path)
     conv = convert_any(src, workdir)
     if "html" not in conv:
         return []
-    rows = _walk(conv["html"].read_text(encoding="utf-8", errors="replace"))
-    return rows_to_v2reqs(rows, src.stem)
+    html = conv["html"].read_text(encoding="utf-8", errors="replace")
+    blocks, _tr = preprocess(html)
+    units = build_units(blocks=blocks)
+    keep_map = _judge_keep(units) if keep else {i: True for i in range(len(units))}
+    rows = rows_from_units(units, keep_map)
+    reqs: list[Req] = []
+    for r in rows:
+        reqs.append(Req(
+            doc=src.stem, table_id=-1, page=None, rid=r["code"],
+            top=r["name"], mid=r["level"], detail=r["detail"], tab=r["tab"],
+            section_path=r["level"], levels=[r["name"], r["level"]],
+            level_names=["요구사항명", "계위"],
+        ))
+    return reqs

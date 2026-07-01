@@ -459,3 +459,41 @@ export async function ensurePipeline(
   if (!r.ok) throw new Error(`ensure-pipeline ${r.status}`);
   return r.json();
 }
+
+// ── FE 편집기능(병합/삭제/편집) — BE row-ops 엔드포인트 호출 ──
+export async function editRequirement(
+  reqId: string,
+  fields: { name?: string; definition?: string; detail?: string; code?: string },
+): Promise<Requirement> {
+  const r = await fetch(`${apiBase()}/requirements/${reqId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
+  });
+  if (!r.ok) throw new Error(`edit ${r.status}`);
+  return r.json();
+}
+
+export async function deleteRequirement(docId: string, reqId: string): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/${reqId}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`delete ${r.status}`);
+  return r.json();
+}
+
+export async function mergeRequirements(
+  docId: string,
+  reqId: string,
+  withId: string,
+): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/${reqId}/merge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ with_id: withId }),
+  });
+  if (!r.ok) throw new Error(`merge ${r.status}`);
+  return r.json();
+}
+
+export function exportFixedUrl(docId: string): string {
+  return `${apiBase()}/documents/${docId}/export-fixed`;
+}
