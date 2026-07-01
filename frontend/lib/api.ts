@@ -464,10 +464,11 @@ export async function ensurePipeline(
 export async function editRequirement(
   reqId: string,
   fields: { name?: string; definition?: string; detail?: string; code?: string },
+  editorId?: string,
 ): Promise<Requirement> {
   const r = await fetch(`${apiBase()}/requirements/${reqId}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Editor-Id": editorId ?? "" },
     body: JSON.stringify(fields),
   });
   if (!r.ok) throw new Error(`edit ${r.status}`);

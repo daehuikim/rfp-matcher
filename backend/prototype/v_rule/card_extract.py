@@ -122,8 +122,10 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
     tab_prefix: dict[str, str] = {}
 
     def _slug(t: str) -> str:
-        toks = re.findall(r"[0-9A-Za-z가-힣]+", t or "")
-        return ("".join(toks)[:16]) or "REQ"
+        # 깔끔한 접두사: 대괄호 내용·번호·마커·목차점선 제거 → 한글/영문만, 짧게.
+        t = re.sub(r"[\[\(（【][^\])）】]*[\])）】]", "", t or "")   # [..](..) 제거
+        toks = re.findall(r"[A-Za-z가-힣]+", t)                     # 숫자 제외(제안서'2'→제안서)
+        return ("".join(toks)[:8]) or "REQ"
 
     for i, u in enumerate(units):
         if not keep.get(i, True):
@@ -156,8 +158,10 @@ def _extract_fixed_rows_legacy(html: str, doc_name: str) -> list[dict]:
     tab_prefix: dict[str, str] = {}
 
     def _slug(t: str) -> str:
-        toks = re.findall(r"[0-9A-Za-z가-힣]+", t or "")
-        return ("".join(toks)[:16]) or "REQ"
+        # 깔끔한 접두사: 대괄호 내용·번호·마커·목차점선 제거 → 한글/영문만, 짧게.
+        t = re.sub(r"[\[\(（【][^\])）】]*[\])）】]", "", t or "")   # [..](..) 제거
+        toks = re.findall(r"[A-Za-z가-힣]+", t)                     # 숫자 제외(제안서'2'→제안서)
+        return ("".join(toks)[:8]) or "REQ"
 
     for i, u in enumerate(units):
         if not keep.get(i, True):

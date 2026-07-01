@@ -108,12 +108,19 @@ class RequirementEditPatch(BaseModel):
 
 
 @router.patch("/requirements/{req_id}", response_model=Requirement)
-async def edit_requirement(req_id: str, patch: RequirementEditPatch, container: ContainerDep) -> Requirement:
-    """편집 — 어떤 칸(요구사항명/계위/상세내용/ID/탭)이든 인라인 수정."""
+async def edit_requirement(
+    req_id: str, patch: RequirementEditPatch, container: ContainerDep,
+    x_editor_id: str | None = Header(default=None),
+) -> Requirement:
+    """편집 — 어떤 칸(요구사항명/계위/상세내용/ID/탭)이든 인라인 수정. 동시편집 즉시 broadcast."""
     fields = {k: v for k, v in patch.model_dump().items() if v is not None}
     upd = await container.repo.update_requirement(req_id, fields)
     if upd is None:
         raise HTTPException(404, f"requirement 없음: {req_id}")
+    await container.event_bus.publish(PipelineEvent(
+        doc_id=upd.doc_id, stage=PipelineStage.REQUIREMENT_EDITED,
+        payload={"requirement_id": req_id, "fields": fields, "editor_id": x_editor_id or ""},
+    ))
     return upd
 
 
@@ -124,6 +131,8 @@ async def delete_requirement(doc_id: str, req_id: str, container: ContainerDep) 
     if not ok:
         raise HTTPException(404, f"requirement 없음: {req_id}")
     await _apply_renumber(container, doc_id)
+    await container.event_bus.publish(PipelineEvent(
+        doc_id=doc_id, stage=PipelineStage.REQUIREMENTS_CHANGED, payload={"op": "delete"}))
     return await list_requirements(doc_id, container)
 
 
@@ -145,4 +154,6 @@ async def merge_requirements(doc_id: str, req_id: str, body: MergeBody, containe
     await container.repo.update_requirement(req_id, {"detail": merged_detail})
     await container.repo.delete_requirement(doc_id, body.with_id)
     await _apply_renumber(container, doc_id)
+    await container.event_bus.publish(PipelineEvent(
+        doc_id=doc_id, stage=PipelineStage.REQUIREMENTS_CHANGED, payload={"op": "merge"}))
     return await list_requirements(doc_id, container)
