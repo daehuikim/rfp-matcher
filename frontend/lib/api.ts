@@ -100,6 +100,15 @@ function apiBase(): string {
   return process.env.NEXT_PUBLIC_API_BASE ?? "/api";
 }
 
+/**
+ * 브라우저가 직접 소비하는 URL(anchor href·img/iframe src·EventSource) 전용 base.
+ * apiBase() 는 SSR fetch 를 위해 서버에서 절대주소를 돌려주지만, href/src 는 SSR·client
+ * 가 동일 문자열이어야 하이드레이션 불일치가 없다. 브라우저는 항상 /api(rewrite)만 쓰므로 고정.
+ */
+function browserBase(): string {
+  return "/api";
+}
+
 export async function fetchExtractionProfile(docId: string): Promise<ExtractionProfile | null> {
   const r = await fetch(`${apiBase()}/documents/${docId}/extraction-profile`, { cache: "no-store" });
   if (!r.ok) return null;
@@ -128,7 +137,7 @@ export async function patchJudgement(
 }
 
 export function eventStreamUrl(docId: string): string {
-  return `${apiBase()}/documents/${docId}/events`;
+  return `${browserBase()}/documents/${docId}/events`;
 }
 
 export type JudgementUpdatedPayload = {
@@ -241,13 +250,13 @@ export function exportUrl(
   if (cols?.length) params.set("cols", cols.join(","));
   else params.set("adaptive", "true");
   if (filename && filename.trim()) params.set("filename", filename.trim());
-  return `${apiBase()}/documents/${docId}/export?${params.toString()}`;
+  return `${browserBase()}/documents/${docId}/export?${params.toString()}`;
 }
 
 /** 요건 첨부 PNG — [표]·관련 화면(안) */
 export function assetUrl(docId: string, relPath: string): string {
   const params = new URLSearchParams({ path: relPath });
-  return `${apiBase()}/documents/${docId}/asset?${params.toString()}`;
+  return `${browserBase()}/documents/${docId}/asset?${params.toString()}`;
 }
 
 export type ExportColumnInfo = {
@@ -339,7 +348,7 @@ export type DocumentMeta = {
 
 /** 원본 파일 그대로(다운로드·새 탭용). */
 export function documentSourceUrl(docId: string): string {
-  return `${apiBase()}/documents/${docId}/source`;
+  return `${browserBase()}/documents/${docId}/source`;
 }
 
 /**
@@ -348,7 +357,7 @@ export function documentSourceUrl(docId: string): string {
  * 변환 불가(HWPX 등)는 변환 HTML 로 폴백된다.
  */
 export function documentPreviewUrl(docId: string): string {
-  return `${apiBase()}/documents/${docId}/preview`;
+  return `${browserBase()}/documents/${docId}/preview`;
 }
 
 export type RfpOverview = {
@@ -496,7 +505,7 @@ export async function mergeRequirements(
 }
 
 export function exportFixedUrl(docId: string): string {
-  return `${apiBase()}/documents/${docId}/export-fixed`;
+  return `${browserBase()}/documents/${docId}/export-fixed`;
 }
 
 /** 분해 — 상세내용을 사용자 지정 기호로 여러 행으로 쪼갬(병합의 반대). */
