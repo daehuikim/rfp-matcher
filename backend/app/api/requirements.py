@@ -162,6 +162,9 @@ async def regroup_requirements(doc_id: str, body: RegroupBody, container: Contai
             fields["code"] = f"{body.prefix}-{i:03d}"
         if fields:
             await container.repo.update_requirement(rid, fields)
+    # 카드 병합/이동 시 대상 탭에 기존행+이동행이 섞여 code(001..) 가 충돌한다.
+    # 탭 전체를 재정렬해 같은 탭 내 중복 ID 를 없앤다(사용자: "합치면 같은 ID").
+    await _apply_renumber(container, doc_id)
     await container.event_bus.publish(PipelineEvent(
         doc_id=doc_id, stage=PipelineStage.REQUIREMENTS_CHANGED, payload={"op": "regroup"}))
     return await list_requirements(doc_id, container)
