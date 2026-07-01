@@ -15,8 +15,8 @@ import {
 } from "@/lib/api";
 
 type ColKey = "code" | "name" | "level" | "action";
-const DEFAULT_W: Record<ColKey, number> = { code: 120, name: 150, level: 130, action: 150 };
-type Card = { category: string; prefix: string; reqIds: string[]; count: number };
+const DEFAULT_W: Record<ColKey, number> = { code: 120, name: 150, level: 130, action: 190 };
+type Card = { category: string; prefix: string; name: string; reqIds: string[]; count: number };
 
 export default function EditTableClient({ docId }: { docId: string }) {
   const [rows, setRows] = useState<RequirementView[]>([]);
@@ -24,6 +24,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
   const [msg, setMsg] = useState("");
   const [w, setW] = useState<Record<ColKey, number>>(DEFAULT_W);
   const [pfxEdit, setPfxEdit] = useState<Record<string, string>>({});
+  const [delim, setDelim] = useState("●");   // 분해 기준 기호(인라인)
   const editorId = useMemo(
     () => (typeof window === "undefined" ? "" : (localStorage.getItem("rfp-editor") ||
       (() => { const id = "u" + Math.random().toString(36).slice(2, 8); localStorage.setItem("rfp-editor", id); return id; })())),
@@ -56,7 +57,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
     for (const v of rows) {
       const cat = v.requirement.category || "요구사항";
       const pfx = (v.requirement.code || "").replace(/-\d+\s*$/, "");
-      if (!map.has(cat)) map.set(cat, { category: cat, prefix: pfx, reqIds: [], count: 0 });
+      if (!map.has(cat)) map.set(cat, { category: cat, prefix: pfx, name: v.requirement.name || "", reqIds: [], count: 0 });
       const c = map.get(cat)!; c.reqIds.push(v.requirement.id); c.count++;
     }
     return [...map.values()];
@@ -70,6 +71,15 @@ export default function EditTableClient({ docId }: { docId: string }) {
   const groupCounts = useMemo(() => cards.map((c) => c.count), [cards]);
 
   async function saveCell(reqId: string, field: "code" | "name" | "definition" | "detail", value: string) {
+    // #4 요구사항명 편집은 카드 전체에 전파
+    if (field === "name") {
+      const cat = rows.find((v) => v.requirement.id === reqId)?.requirement.category || "요구사항";
+      const card = cards.find((c) => c.category === cat);
+      setRows((prev) => prev.map((v) => v.requirement.category === cat ? { ...v, requirement: { ...v.requirement, name: value } } : v));
+      try { if (card) setRows(await regroupRequirements(docId, card.reqIds, { name: value })); }
+      catch (e) { setMsg(`이름 전파 실패: ${String(e)}`); }
+      return;
+    }
     setRows((prev) => prev.map((v) => v.requirement.id === reqId
       ? { ...v, requirement: { ...v.requirement, [field]: value } } : v));
     try { await editRequirement(reqId, { [field]: value }, editorId); }
@@ -81,14 +91,25 @@ export default function EditTableClient({ docId }: { docId: string }) {
   }
   async function onMergeUp(index: number) {
     if (index <= 0) return;
-    try { setRows(await mergeRequirements(docId, sortedRows[index - 1].requirement.id, sortedRows[index].requirement.id)); flash("행 병합"); }
+    const cur = sortedRows[index], prev = sortedRows[index - 1];
+    if (cur.requirement.category !== prev.requirement.category) { setMsg("같은 카드 안에서만 행 병합"); return; }
+    try { setRows(await mergeRequirements(docId, prev.requirement.id, cur.requirement.id)); flash("행 병합됨"); }
     catch (e) { setMsg(`병합 실패: ${String(e)}`); }
   }
   async function onSplit(reqId: string) {
-    const delim = prompt("어떤 기호로 분해할까요? (예: ●, -, 1))");
-    if (!delim) return;
-    try { setRows(await splitRequirement(docId, reqId, delim)); flash("분해됨"); }
+    if (!delim.trim()) { setMsg("상단에서 분해 기호를 입력하세요"); return; }
+    try { setRows(await splitRequirement(docId, reqId, delim.trim())); flash(`'${delim}'로 분해됨`); }
     catch (e) { setMsg(`분해 실패: ${String(e)}`); }
+  }
+  async function onSplitHere(index: number) {   // 여기서부터 새 카드로 분리
+    const cur = sortedRows[index];
+    const cat = cur.requirement.category || "요구사항";
+    const tail = sortedRows.filter((v, i) => i >= index && v.requirement.category === cat).map((v) => v.requirement.id);
+    if (tail.length === 0) return;
+    const newCat = `${cat} · ${cur.requirement.code}~`;   // 결정적 고유 카드명
+    const newPfx = ((cur.requirement.code || "REQ").replace(/-\d+$/, "")) + "b";
+    try { setRows(await regroupRequirements(docId, tail, { category: newCat, prefix: newPfx })); flash("여기서부터 새 카드로 분리"); }
+    catch (e) { setMsg(`분리 실패: ${String(e)}`); }
   }
   async function applyPrefix(card: Card) {
     const p = (pfxEdit[card.category] ?? card.prefix).trim();
@@ -96,16 +117,14 @@ export default function EditTableClient({ docId }: { docId: string }) {
     try { setRows(await regroupRequirements(docId, card.reqIds, { prefix: p })); flash(`ID 일괄적용 ${p}-001…`); }
     catch (e) { setMsg(`ID 적용 실패: ${String(e)}`); }
   }
-  async function mergeIntoPrev(gi: number) {   // 이 카드를 위 카드와 합침
+  async function mergeIntoPrev(gi: number) {
     if (gi <= 0) return;
     const prev = cards[gi - 1], cur = cards[gi];
-    try {
-      setRows(await regroupRequirements(docId, [...prev.reqIds, ...cur.reqIds], { category: prev.category, prefix: prev.prefix }));
-      flash(`카드 병합 → ${prev.category}`);
-    } catch (e) { setMsg(`카드 병합 실패: ${String(e)}`); }
+    try { setRows(await regroupRequirements(docId, [...prev.reqIds, ...cur.reqIds], { category: prev.category, prefix: prev.prefix })); flash(`카드 병합 → ${prev.category}`); }
+    catch (e) { setMsg(`카드 병합 실패: ${String(e)}`); }
   }
 
-  function flash(t: string) { setMsg(t); setTimeout(() => setMsg(""), 1400); }
+  function flash(t: string) { setMsg(t); setTimeout(() => setMsg(""), 1500); }
   function startResize(col: ColKey, e: React.MouseEvent) {
     e.preventDefault();
     const sx = e.clientX, sw = w[col];
@@ -113,23 +132,38 @@ export default function EditTableClient({ docId }: { docId: string }) {
     const up = () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
     window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
   }
+  function scrollToCard(gi: number) {
+    const el = document.getElementById(`cardhdr-${gi}`); el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const gridCols = `${w.code}px ${w.name}px ${w.level}px 1fr ${w.action}px`;
   const hdrCell: React.CSSProperties = { padding: "5px 6px", fontSize: 12, fontWeight: 700, color: "#fff", position: "relative", borderRight: "1px solid #555" };
   const handle: React.CSSProperties = { position: "absolute", right: 0, top: 0, width: 6, height: "100%", cursor: "col-resize" };
+  const gi_of = useMemo(() => { const m = new Map(cards.map((c, i) => [c.category, i])); return m; }, [cards]);
 
   return (
     <div style={{ padding: 16, height: "100vh", display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 18, fontWeight: 700 }}>조견표 편집</h1>
-        <span style={{ fontSize: 12, color: "#888" }}>doc {docId.slice(0, 8)} · {rows.length}행 · 카드 {cards.length} · {editorId}</span>
+        <span style={{ fontSize: 12, color: "#888" }}>doc {docId.slice(0, 8)} · {rows.length}행 · 카드 {cards.length}</span>
+        <label style={{ fontSize: 12, color: "#555" }}>분해 기호:
+          <input value={delim} onChange={(e) => setDelim(e.target.value)} style={{ width: 44, marginLeft: 4, border: "1px solid #bbb", borderRadius: 3, padding: "1px 4px", textAlign: "center" }} />
+        </label>
         {msg && <span style={{ fontSize: 12, color: "#c8102e" }}>{msg}</span>}
         <a href={exportFixedUrl(docId)} style={{ marginLeft: "auto", background: "#c8102e", color: "#fff", padding: "6px 14px", borderRadius: 6, fontSize: 13, textDecoration: "none" }}>Excel 다운로드</a>
         <button onClick={() => void load()} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13 }}>새로고침</button>
       </div>
-      <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
-        칸 클릭→수정(실시간) · 헤더 경계 드래그로 너비조절 · 카드마다 개별 표 · [병합↑]행결합 [분해]기호로쪼갬 [삭제]즉시 · 카드헤더에서 ID일괄·위카드와 병합.
-      </p>
+
+      {/* #5 개요 — 카드 목록 + 카드별 행수 (클릭 시 이동) */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxHeight: 62, overflowY: "auto", padding: "2px 0" }}>
+        {cards.map((c, i) => (
+          <button key={c.category} onClick={() => scrollToCard(i)} title={c.category}
+            style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, border: "1px solid #ccd", background: "#eef1f5", cursor: "pointer", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            📁 {c.category} <b>{c.count}</b>
+          </button>
+        ))}
+      </div>
+
       {/* 고정 컬럼 헤더 */}
       <div style={{ display: "grid", gridTemplateColumns: gridCols, background: "#404040", borderRadius: "4px 4px 0 0" }}>
         <div style={hdrCell}>요구사항 ID<span style={handle} onMouseDown={(e) => startResize("code", e)} /></div>
@@ -145,10 +179,10 @@ export default function EditTableClient({ docId }: { docId: string }) {
           groupContent={(gi) => {
             const c = cards[gi];
             return (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#eef1f5", borderTop: "2px solid #c8102e", borderBottom: "1px solid #ccd", padding: "4px 8px" }}>
-                <b style={{ fontSize: 12 }}>📁 {c.category}</b>
+              <div id={`cardhdr-${gi}`} style={{ display: "flex", alignItems: "center", gap: 6, background: "#eef1f5", borderTop: "2px solid #c8102e", borderBottom: "1px solid #ccd", padding: "4px 8px", flexWrap: "wrap" }}>
+                <b style={{ fontSize: 12, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.category}>📁 {c.category}</b>
                 <span style={{ fontSize: 11, color: "#888" }}>{c.count}행</span>
-                <span style={{ marginLeft: 8, fontSize: 11, color: "#666" }}>ID:</span>
+                <span style={{ marginLeft: 6, fontSize: 11, color: "#666" }}>ID:</span>
                 <input value={pfxEdit[c.category] ?? c.prefix}
                   onChange={(e) => setPfxEdit((p) => ({ ...p, [c.category]: e.target.value }))}
                   style={{ width: 110, fontSize: 11, border: "1px solid #bbb", borderRadius: 3, padding: "1px 4px" }} />
@@ -169,6 +203,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
                 <div style={{ padding: "3px 4px", display: "flex", gap: 3, flexWrap: "wrap", alignItems: "flex-start" }}>
                   <button onClick={() => void onMergeUp(index)} disabled={index === 0} style={{ fontSize: 10, padding: "2px 4px" }}>병합↑</button>
                   <button onClick={() => void onSplit(r.id)} style={{ fontSize: 10, padding: "2px 4px" }}>분해</button>
+                  <button onClick={() => void onSplitHere(index)} style={{ fontSize: 10, padding: "2px 4px" }}>여기부터</button>
                   <button onClick={() => void onDelete(r.id)} style={{ fontSize: 10, padding: "2px 4px", color: "#c8102e" }}>삭제</button>
                 </div>
               </div>

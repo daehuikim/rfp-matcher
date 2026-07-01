@@ -117,10 +117,11 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
 
 
 _JUNK_DETAIL = re.compile(r"^[\s\d.\-–—()·:;%~]+$")   # 숫자·기호·점만(페이지번호·날짜)
+_TOC_LINE = re.compile(r"(?:[.·‧]\s*){4,}\s*\d*\s*$|…{2,}\s*\d*\s*$")  # 목차 점선리더+페이지번호
 
 
 def _is_junk_detail(d: str) -> bool:
-    """요구사항 아닌 셀 — 페이지번호('29')·날짜('2026. 4.')·기호·너무짧음. 올리지 않는다."""
+    """요구사항 아닌 셀 — 페이지번호·날짜·기호·너무짧음·**목차(점선+페이지)**. 올리지 않는다."""
     d = (d or "").strip()
     if len(d) < 3:
         return True
@@ -128,7 +129,14 @@ def _is_junk_detail(d: str) -> bool:
         return True
     if re.match(r"^\d{4}\s*[.\-]\s*\d{1,2}", d):   # 날짜류
         return True
+    if _TOC_LINE.search(d):                          # 목차 라인(제목 …… 12)
+        return True
     return False
+
+
+def _clean_toc(s: str) -> str:
+    """제목/계위에서 목차 점선리더(…… 12) 꼬리 제거."""
+    return re.sub(r"\s*(?:[.·‧]\s*){3,}.*$|\s*…+.*$", "", s or "").strip()
 
 
 def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
@@ -153,10 +161,13 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
         if u.tab not in tab_prefix:
             tab_prefix[u.tab] = _slug(u.tab)
         pfx = tab_prefix[u.tab]
+        tab = _clean_toc(u.tab) or "요구사항"
+        name = _clean_toc(u.title)
+        level = _clean_toc(u.level_path)
         for d in clean:
             tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
-            rows.append({"tab": u.tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
-                         "name": u.title, "level": u.level_path, "detail": d})
+            rows.append({"tab": tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
+                         "name": name, "level": level, "detail": d})
     return rows
 
 

@@ -139,7 +139,8 @@ async def delete_requirement(doc_id: str, req_id: str, container: ContainerDep) 
 class RegroupBody(BaseModel):
     req_ids: list[str]              # 대상 행들(순서 유지)
     prefix: str | None = None      # 요구사항 ID 접두사(일괄) — 주면 prefix-001..N 재부여
-    category: str | None = None    # 탭(카드) — 주면 이 탭으로 이동(카드 병합/이동)
+    category: str | None = None    # 탭(카드) — 주면 이 탭으로 이동(카드 병합/이동/분리)
+    name: str | None = None        # 요구사항명(일괄) — 주면 그 행들 이름 통일(카드 이름 전파)
 
 
 @router.post("/documents/{doc_id}/requirements/regroup", response_model=list[RequirementView])
@@ -155,6 +156,8 @@ async def regroup_requirements(doc_id: str, body: RegroupBody, container: Contai
         fields: dict = {}
         if body.category is not None:
             fields["category"] = body.category
+        if body.name is not None:
+            fields["name"] = body.name
         if body.prefix is not None:
             fields["code"] = f"{body.prefix}-{i:03d}"
         if fields:
