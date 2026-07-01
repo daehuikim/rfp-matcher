@@ -490,6 +490,17 @@ export async function deleteRequirement(docId: string, reqId: string): Promise<R
   return r.json();
 }
 
+/** 카드(탭) 통째 삭제 — 여러 행 일괄 삭제 후 한 번만 재정렬. */
+export async function deleteRequirementsBatch(docId: string, reqIds: string[]): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/delete-batch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ req_ids: reqIds }),
+  });
+  if (!r.ok) throw new Error(`delete-batch ${r.status}`);
+  return r.json();
+}
+
 export async function mergeRequirements(
   docId: string,
   reqId: string,

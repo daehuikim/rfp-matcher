@@ -136,6 +136,23 @@ async def delete_requirement(doc_id: str, req_id: str, container: ContainerDep) 
     return await list_requirements(doc_id, container)
 
 
+class DeleteBatchBody(BaseModel):
+    req_ids: list[str]   # 삭제할 행들(카드 통째 삭제 등)
+
+
+@router.post("/documents/{doc_id}/requirements/delete-batch", response_model=list[RequirementView])
+async def delete_requirements_batch(doc_id: str, body: DeleteBatchBody, container: ContainerDep) -> list[RequirementView]:
+    """여러 행 일괄 삭제 — 카드(탭) 통째 삭제용. 마지막에 한 번만 ID 재정렬(300행도 빠르게)."""
+    if not body.req_ids:
+        raise HTTPException(400, "req_ids 비어있음")
+    for rid in body.req_ids:
+        await container.repo.delete_requirement(doc_id, rid)
+    await _apply_renumber(container, doc_id)
+    await container.event_bus.publish(PipelineEvent(
+        doc_id=doc_id, stage=PipelineStage.REQUIREMENTS_CHANGED, payload={"op": "delete-batch", "n": len(body.req_ids)}))
+    return await list_requirements(doc_id, container)
+
+
 class RegroupBody(BaseModel):
     req_ids: list[str]              # 대상 행들(순서 유지)
     prefix: str | None = None      # 요구사항 ID 접두사(일괄) — 주면 prefix-001..N 재부여

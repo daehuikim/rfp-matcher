@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GroupedVirtuoso } from "react-virtuoso";
+import { GroupedVirtuoso, type GroupedVirtuosoHandle } from "react-virtuoso";
 import {
   RequirementView,
   listRequirements,
   editRequirement,
   deleteRequirement,
+  deleteRequirementsBatch,
   mergeRequirements,
   splitRequirement,
   regroupRequirements,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/api";
 
 type ColKey = "code" | "name" | "level" | "action";
-const DEFAULT_W: Record<ColKey, number> = { code: 120, name: 150, level: 130, action: 190 };
+const DEFAULT_W: Record<ColKey, number> = { code: 120, name: 150, level: 130, action: 236 };
 type Card = { category: string; prefix: string; name: string; reqIds: string[]; count: number };
 
 export default function EditTableClient({ docId }: { docId: string }) {
@@ -25,7 +26,10 @@ export default function EditTableClient({ docId }: { docId: string }) {
   const [msg, setMsg] = useState("");
   const [w, setW] = useState<Record<ColKey, number>>(DEFAULT_W);
   const [pfxEdit, setPfxEdit] = useState<Record<string, string>>({});
-  const [delim, setDelim] = useState("●");   // 분해 기준 기호(인라인)
+  const [delim, setDelim] = useState("●");   // 분해 기준 기호(기본값)
+  const [rowDelim, setRowDelim] = useState<Record<string, string>>({});  // #2 행(셀)별 분해기호 오버라이드
+  const [hoverCard, setHoverCard] = useState<number | null>(null);       // #3 카드헤더 호버시 삭제 X
+  const vref = useRef<GroupedVirtuosoHandle>(null);                      // #1/#5 빠른 카드 이동
   const editorId = useMemo(
     () => (typeof window === "undefined" ? "" : (localStorage.getItem("rfp-editor") ||
       (() => { const id = "u" + Math.random().toString(36).slice(2, 8); localStorage.setItem("rfp-editor", id); return id; })())),
@@ -115,9 +119,14 @@ export default function EditTableClient({ docId }: { docId: string }) {
     catch (e) { setMsg(`병합 실패: ${String(e)}`); }
   }
   async function onSplit(reqId: string) {
-    if (!delim.trim()) { setMsg("상단에서 분해 기호를 입력하세요"); return; }
-    try { setRows(await splitRequirement(docId, reqId, delim.trim())); flash(`'${delim}'로 분해됨`); }
+    const d = (rowDelim[reqId] ?? delim).trim();   // #2 행별 기호 우선, 없으면 기본값
+    if (!d) { setMsg("분해 기호를 입력하세요"); return; }
+    try { setRows(await splitRequirement(docId, reqId, d)); flash(`'${d}'로 분해됨`); }
     catch (e) { setMsg(`분해 실패: ${String(e)}`); }
+  }
+  async function onDeleteCard(card: Card) {   // #3 카드(탭) 통째 삭제
+    try { setRows(await deleteRequirementsBatch(docId, card.reqIds)); flash(`카드 삭제됨 (${card.count}행)`); }
+    catch (e) { setMsg(`카드 삭제 실패: ${String(e)}`); }
   }
   async function onSplitHere(index: number) {   // 여기서부터 새 카드로 분리
     const cur = sortedRows[index];
@@ -126,7 +135,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
     if (tail.length === 0) return;
     const newCat = `${cat} · ${cur.requirement.code}~`;   // 결정적 고유 카드명
     const newPfx = ((cur.requirement.code || "REQ").replace(/-\d+$/, "")) + "b";
-    try { setRows(await regroupRequirements(docId, tail, { category: newCat, prefix: newPfx })); flash("여기서부터 새 카드로 분리"); }
+    try { setRows(await regroupRequirements(docId, tail, { category: newCat, prefix: newPfx })); flash("이 지점에서 카드 분해됨"); }
     catch (e) { setMsg(`분리 실패: ${String(e)}`); }
   }
   async function applyPrefix(card: Card) {
@@ -151,7 +160,10 @@ export default function EditTableClient({ docId }: { docId: string }) {
     window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
   }
   function scrollToCard(gi: number) {
-    const el = document.getElementById(`cardhdr-${gi}`); el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // 가상화 리스트라 DOM 스크롤은 화면 밖 카드에 안 먹힘 → Virtuoso 인덱스 점프(즉시).
+    let idx = 0;
+    for (let i = 0; i < gi; i++) idx += groupCounts[i];
+    vref.current?.scrollToIndex({ index: idx, align: "start" });
   }
 
   const gridCols = `${w.code}px ${w.name}px ${w.level}px 1fr ${w.action}px`;
@@ -164,7 +176,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 18, fontWeight: 700 }}>조견표 편집</h1>
         <span style={{ fontSize: 12, color: "#888" }}>doc {docId.slice(0, 8)} · {rows.length}행 · 카드 {cards.length}</span>
-        <label style={{ fontSize: 12, color: "#555" }}>분해 기호:
+        <label style={{ fontSize: 12, color: "#555" }} title="각 행에서 개별 지정 가능(행 옆 작은 칸). 여기는 기본값.">기본 분해기호:
           <input value={delim} onChange={(e) => setDelim(e.target.value)} style={{ width: 44, marginLeft: 4, border: "1px solid #bbb", borderRadius: 3, padding: "1px 4px", textAlign: "center" }} />
         </label>
         {msg && <span style={{ fontSize: 12, color: "#c8102e" }}>{msg}</span>}
@@ -192,12 +204,15 @@ export default function EditTableClient({ docId }: { docId: string }) {
       </div>
       {loading ? <p>불러오는 중…</p> : (
         <GroupedVirtuoso
+          ref={vref}
           style={{ flex: 1, border: "1px solid #ddd", borderTop: "none" }}
           groupCounts={groupCounts}
           groupContent={(gi) => {
             const c = cards[gi];
             return (
-              <div id={`cardhdr-${gi}`} style={{ display: "flex", alignItems: "center", gap: 6, background: "#eef1f5", borderTop: "2px solid #c8102e", borderBottom: "1px solid #ccd", padding: "4px 8px", flexWrap: "wrap" }}>
+              <div id={`cardhdr-${gi}`}
+                onMouseEnter={() => setHoverCard(gi)} onMouseLeave={() => setHoverCard((h) => (h === gi ? null : h))}
+                style={{ display: "flex", alignItems: "center", gap: 6, background: "#eef1f5", borderTop: "2px solid #c8102e", borderBottom: "1px solid #ccd", padding: "4px 8px", flexWrap: "wrap" }}>
                 <b style={{ fontSize: 12, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.category}>📁 {c.category}</b>
                 <span style={{ fontSize: 11, color: "#888" }}>{c.count}행</span>
                 <span style={{ marginLeft: 6, fontSize: 11, color: "#666" }}>ID:</span>
@@ -206,6 +221,11 @@ export default function EditTableClient({ docId }: { docId: string }) {
                   style={{ width: 110, fontSize: 11, border: "1px solid #bbb", borderRadius: 3, padding: "1px 4px" }} />
                 <button onClick={() => void applyPrefix(c)} style={{ fontSize: 11, padding: "2px 8px" }}>ID 일괄적용</button>
                 <button onClick={() => void mergeIntoPrev(gi)} disabled={gi === 0} style={{ fontSize: 11, padding: "2px 8px" }}>↑ 위 카드와 병합</button>
+                {/* #3 카드(탭) 통째 삭제 — 헤더 호버 시 우상단 X */}
+                <button onClick={() => void onDeleteCard(c)} title="이 카드(탭) 통째 삭제"
+                  style={{ marginLeft: "auto", fontSize: 11, padding: "1px 8px", color: "#c8102e", border: "1px solid #e3b0b6", borderRadius: 4, background: "#fff", cursor: "pointer", opacity: hoverCard === gi ? 1 : 0.2, transition: "opacity .12s" }}>
+                  ✕ 카드삭제
+                </button>
               </div>
             );
           }}
@@ -220,8 +240,11 @@ export default function EditTableClient({ docId }: { docId: string }) {
                 <Cell value={r.detail} onSave={(x) => saveCell(r.id, "detail", x)} multiline />
                 <div style={{ padding: "3px 4px", display: "flex", gap: 3, flexWrap: "wrap", alignItems: "flex-start" }}>
                   <button onClick={() => void onMergeUp(index)} disabled={index === 0} style={{ fontSize: 10, padding: "2px 4px" }}>병합↑</button>
+                  {/* #2 이 행 분해 기호(비우면 상단 기본값 사용) */}
+                  <input value={rowDelim[r.id] ?? delim} onChange={(e) => setRowDelim((p) => ({ ...p, [r.id]: e.target.value }))}
+                    title="이 행 분해 기호" style={{ width: 26, fontSize: 10, border: "1px solid #ccc", borderRadius: 3, textAlign: "center", padding: "1px 2px" }} />
                   <button onClick={() => void onSplit(r.id)} style={{ fontSize: 10, padding: "2px 4px" }}>분해</button>
-                  <button onClick={() => void onSplitHere(index)} style={{ fontSize: 10, padding: "2px 4px" }}>여기부터</button>
+                  <button onClick={() => void onSplitHere(index)} title="이 지점에서 카드 분해(이 행부터 새 카드)" style={{ fontSize: 10, padding: "2px 4px" }}>↓카드분해</button>
                   <button onClick={() => void onDelete(r.id)} style={{ fontSize: 10, padding: "2px 4px", color: "#c8102e" }}>삭제</button>
                 </div>
               </div>
