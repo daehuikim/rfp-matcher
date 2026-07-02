@@ -146,8 +146,11 @@ def _horizontal_reqs(grid: list[list[str]], ncol: int, stats: list[dict]) -> lis
         cat_fill = cat or cat_fill
         nm = cell(row, name_col) or name_fill
         name_fill = nm or name_fill
+        # _tab = 구분(계위)열 값 → 이 요구표를 ambient 헤딩이 아닌 자기 카테고리로 그룹핑
+        # (기아처럼 요구표가 '상담석 규모' 같은 junk 헤딩 아래 misfiled 되는 것 방지)
+        tab_hint = re.sub(r"^\s*(?:\d+[-.)]\s*)+", "", cat).strip() or cat
         for piece in split_items(det):
-            out.append({"level": cat, "name": nm or cat, "detail": piece})
+            out.append({"level": cat, "name": nm or cat, "detail": piece, "_tab": tab_hint})
     return out
 
 

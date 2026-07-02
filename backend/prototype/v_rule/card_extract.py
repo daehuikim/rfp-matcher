@@ -108,7 +108,19 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
             reqs = table_to_reqs(b.grid)
             if reqs is None:                        # 요구표 판정 불가 → 기존 방식(join) 폴백
                 ensure_cur().details += _table_details(b.grid)
-            elif reqs:                              # 구조 추출 성공(내용열/계위 분리)
+            elif reqs and any("_tab" in r for r in reqs):
+                # 가로 요구표 → 구분(계위)별 독립 유닛(ambient junk 헤딩 흡수 방지 — 기아 misfiling)
+                cur_tab = None
+                tu = None
+                for r in reqs:
+                    t = (r.get("_tab") or (cur.tab if cur else "요구사항"))[:40] or "요구사항"
+                    if tu is None or t != cur_tab:
+                        tu = Unit(tab=t, marker="", title=t,
+                                  level_path=(cur.level_path + " > " + t if cur and cur.level_path else t))
+                        units.append(tu)
+                        cur_tab = t
+                    tu.details.append(r)
+            elif reqs:                              # 세로 카드 등 → ambient 유닛에 부착
                 ensure_cur().details += reqs
             # reqs == [] (도표/현황/배점) → 드롭
             continue
@@ -163,15 +175,17 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
         def _clean(s: str) -> str:  # 대괄호 사업명 등 노이즈 제거 후 gemma 에 보여줌
             return re.sub(r"[\[\(（【][^\])）】]*[\])）】]", "", s or "").strip()
         block = "\n".join(
-            f"[{k+j}] 제목='{_clean(u.title)[:40]}' 상세='{' / '.join(_detail_text(d)[:50] for d in u.details[:2])}'"
+            f"[{k+j}] 계위='{_clean(u.level_path)[:50]}' 제목='{_clean(u.title)[:40]}' "
+            f"상세='{' / '.join(_detail_text(d)[:60] for d in u.details[:3])}'"
             for j, u in enumerate(chunk)
         )
         prompt = (
-            "RFP 카드들이다. 조견표에 넣을지(keep) 판정하라.\n"
-            "keep=false(명백한 비요구만): 표지·문서 목차·배경/추진목적·추진일정·입찰/계약 안내·제안 평가배점·"
-            "제출/작성 양식(서식)·연락처·발주처 현황(AS-IS 보유목록)·조직/인력 현황·서약서·"
-            "요구사항 총괄표(집계)·용어/약어 정의·도입품목/장비 목록·규모/수량 현황.\n"
-            "그 외 **제안사가 이행·구축·개발·제공·준수할 내용(요구/제안 사항)은 전부 keep=true. 애매하면 keep=true.**\n\n"
+            "RFP 카드들이다. 조견표에 넣을지(keep) 판정하라. (계위=섹션 경로 참고)\n"
+            "keep=false(명백한 비요구만): 표지·개정이력·문서 목차·사업 배경/추진목적·추진일정·입찰/계약 안내·"
+            "제안 평가배점·제출/작성 양식(서식)·연락처·발주처 현황(AS-IS 보유목록)·조직/인력 현황(명단)·서약서·"
+            "요구사항 총괄표(집계)·용어/약어 정의·도입품목/장비 목록·규모/수량 현황·다이어그램 라벨 파편.\n"
+            "그 외 **제안사가 이행·구축·개발·제공·준수·수행할 내용(요구/제안/방안/기준/기능)은 전부 keep=true. "
+            "'~방안/방법/체계/기준'도 요구사항이므로 keep=true. 애매하면 keep=true.**\n\n"
             f"[카드]\n{block}\n\n"
             'JSON: {"items":[{"index":<int>,"keep":<bool>}, ...]} — 모든 index.'
         )
