@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GroupedVirtuoso, type GroupedVirtuosoHandle } from "react-virtuoso";
 import {
   RequirementView,
+  DocumentMeta,
   listRequirements,
   editRequirement,
   deleteRequirement,
@@ -14,10 +15,12 @@ import {
   exportFixedUrl,
   eventStreamUrl,
   ensurePipeline,
+  fetchDocumentMeta,
 } from "@/lib/api";
+import { PdfViewerPane } from "@/components/PdfViewerPane";
 
-type ColKey = "code" | "name" | "level" | "action";
-const DEFAULT_W: Record<ColKey, number> = { code: 120, name: 150, level: 130, action: 236 };
+type ColKey = "code" | "name" | "level" | "source" | "action";
+const DEFAULT_W: Record<ColKey, number> = { code: 120, name: 150, level: 130, source: 60, action: 236 };
 type Card = { category: string; prefix: string; name: string; reqIds: string[]; count: number };
 
 export default function EditTableClient({ docId }: { docId: string }) {
@@ -30,6 +33,23 @@ export default function EditTableClient({ docId }: { docId: string }) {
   const [rowDelim, setRowDelim] = useState<Record<string, string>>({});  // #2 행(셀)별 분해기호 오버라이드
   const [hoverCard, setHoverCard] = useState<number | null>(null);       // #3 카드헤더 호버시 삭제 X
   const vref = useRef<GroupedVirtuosoHandle>(null);                      // #1/#5 빠른 카드 이동
+
+  // 출처(페이지) 클릭 → 우측 PDF/원문 뷰어로 점프.
+  const [docMeta, setDocMeta] = useState<DocumentMeta | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(true);
+  const [viewerPage, setViewerPage] = useState<number | null>(null);
+  const [viewerTableIdx, setViewerTableIdx] = useState<number | null>(null);
+  const [viewerAnchor, setViewerAnchor] = useState<string | null>(null);
+  const [jumpNonce, setJumpNonce] = useState(0);
+  useEffect(() => { void fetchDocumentMeta(docId).then(setDocMeta).catch(() => {}); }, [docId]);
+  function jumpTo(r: RequirementView["requirement"]) {
+    const p = r.source_page != null ? Number(r.source_page) : null;
+    setViewerPage(p && !Number.isNaN(p) ? p : null);
+    setViewerTableIdx(r.source_table_index ?? null);
+    setViewerAnchor(r.detail || r.name || null);
+    setViewerOpen(true);
+    setJumpNonce((n) => n + 1);
+  }
   const editorId = useMemo(
     () => (typeof window === "undefined" ? "" : (localStorage.getItem("rfp-editor") ||
       (() => { const id = "u" + Math.random().toString(36).slice(2, 8); localStorage.setItem("rfp-editor", id); return id; })())),
@@ -177,13 +197,19 @@ export default function EditTableClient({ docId }: { docId: string }) {
     vref.current?.scrollToIndex({ index: idx, align: "start" });
   }
 
-  const gridCols = `${w.code}px ${w.name}px ${w.level}px 1fr ${w.action}px`;
+  const gridCols = `${w.code}px ${w.name}px ${w.level}px 1fr ${w.source}px ${w.action}px`;
   const hdrCell: React.CSSProperties = { padding: "5px 6px", fontSize: 12, fontWeight: 700, color: "#fff", position: "relative", borderRight: "1px solid #555" };
   const handle: React.CSSProperties = { position: "absolute", right: 0, top: 0, width: 6, height: "100%", cursor: "col-resize" };
   const gi_of = useMemo(() => { const m = new Map(cards.map((c, i) => [c.category, i])); return m; }, [cards]);
 
+  const canPreview = !!docMeta && docMeta.preview_kind !== "none" && docMeta.has_preview !== false;
+
   return (
-    <div style={{ padding: 16, height: "100vh", display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
+    <div style={{ padding: 16, height: "100vh", display: "flex", gap: 12, boxSizing: "border-box" }}>
+    {/* min-height:0 필수 — row flex 안 column 자식은 기본 min-height:auto 라 내용(Virtuoso)
+        높이만큼 부모가 늘어나려 하고, react-virtuoso 는 부모가 측정가능한 높이를 못 받으면
+        행을 0개로 렌더링한다(전형적 중첩 flexbox 함정). */}
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 18, fontWeight: 700 }}>조견표 편집</h1>
         <span style={{ fontSize: 12, color: "#888" }}>doc {docId.slice(0, 8)} · {rows.length}행 · 카드 {cards.length}</span>
@@ -191,7 +217,10 @@ export default function EditTableClient({ docId }: { docId: string }) {
           <input value={delim} onChange={(e) => setDelim(e.target.value)} style={{ width: 44, marginLeft: 4, border: "1px solid #bbb", borderRadius: 3, padding: "1px 4px", textAlign: "center" }} />
         </label>
         {msg && <span style={{ fontSize: 12, color: "#c8102e" }}>{msg}</span>}
-        <a href={exportFixedUrl(docId)} style={{ marginLeft: "auto", background: "#c8102e", color: "#fff", padding: "6px 14px", borderRadius: 6, fontSize: 13, textDecoration: "none" }}>Excel 다운로드</a>
+        {!viewerOpen && canPreview && (
+          <button onClick={() => setViewerOpen(true)} style={{ marginLeft: "auto", padding: "6px 12px", borderRadius: 6, fontSize: 13 }}>◂ 원문 뷰어</button>
+        )}
+        <a href={exportFixedUrl(docId)} style={{ marginLeft: viewerOpen || !canPreview ? "auto" : undefined, background: "#c8102e", color: "#fff", padding: "6px 14px", borderRadius: 6, fontSize: 13, textDecoration: "none" }}>Excel 다운로드</a>
         <button onClick={() => void load()} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13 }}>새로고침</button>
       </div>
 
@@ -211,6 +240,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
         <div style={hdrCell}>요구사항명<span style={handle} onMouseDown={(e) => startResize("name", e)} /></div>
         <div style={hdrCell}>계위<span style={handle} onMouseDown={(e) => startResize("level", e)} /></div>
         <div style={hdrCell}>상세내용</div>
+        <div style={hdrCell} title="원문 페이지 — 클릭하면 우측 뷰어로 이동">출처<span style={handle} onMouseDown={(e) => startResize("source", e)} /></div>
         <div style={{ ...hdrCell, borderRight: "none" }}>작업</div>
       </div>
       {loading ? <p>불러오는 중…</p> : (
@@ -249,6 +279,14 @@ export default function EditTableClient({ docId }: { docId: string }) {
                 <Cell value={r.name} onSave={(x) => saveCell(r.id, "name", x)} />
                 <Cell value={r.definition ?? ""} onSave={(x) => saveCell(r.id, "definition", x)} />
                 <Cell value={r.detail} onSave={(x) => saveCell(r.id, "detail", x)} multiline />
+                <div style={{ padding: "2px 4px", borderRight: "1px solid #eee", display: "flex", alignItems: "flex-start" }}>
+                  {(r.source_page != null || r.source_table_index != null) ? (
+                    <button onClick={() => jumpTo(r)} title="원문에서 보기"
+                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #c8d0e0", background: "#eef3ff", color: "#2a4d8f", cursor: "pointer" }}>
+                      {r.source_page != null ? `p.${r.source_page}` : "원문"}
+                    </button>
+                  ) : <span style={{ fontSize: 11, color: "#ccc" }}>-</span>}
+                </div>
                 <div style={{ padding: "3px 4px", display: "flex", gap: 3, flexWrap: "wrap", alignItems: "flex-start" }}>
                   <button onClick={() => void onMergeUp(index)} disabled={index === 0} style={{ fontSize: 10, padding: "2px 4px" }}>병합↑</button>
                   {/* #2 이 행 분해 기호(비우면 상단 기본값 사용) */}
@@ -263,6 +301,21 @@ export default function EditTableClient({ docId }: { docId: string }) {
           }}
         />
       )}
+    </div>
+    {viewerOpen && canPreview && (
+      <div style={{ width: 460, flexShrink: 0 }}>
+        <PdfViewerPane
+          docId={docId}
+          kind={docMeta?.preview_kind === "html" ? "html" : "pdf"}
+          page={viewerPage}
+          tableIndex={viewerTableIdx}
+          anchorText={viewerAnchor}
+          jumpNonce={jumpNonce}
+          sourceFilename={docMeta?.source_filename}
+          onCollapse={() => setViewerOpen(false)}
+        />
+      </div>
+    )}
     </div>
   );
 }

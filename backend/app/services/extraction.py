@@ -471,14 +471,19 @@ class ExtractionService:
             sample_id = (document.content_hash or document.id)[:16]
             label = document.source_filename or Path(document.src_path).stem
             if strategy == "v_rule":
-                # 룰 전용 엔진 — PDF/HWP/HWPX → v_rule 룰 추출 → v2 Req(어댑터)
+                # v4 엔진(구 v_rule) — PDF/HWP/HWPX → 구조인식 룰 추출 → v2 Req(어댑터)
                 from prototype.v_rule.adapter import run_v_rule_reqs
 
                 workdir = self._c.settings.storage_root / document.id / "v_rule"
                 async with _EXTRACT_SEM:   # 병렬 추출 동시성 상한(세그폴트 방지)
                     v2_reqs = await asyncio.to_thread(run_v_rule_reqs, Path(document.src_path), workdir)
+                page_note = ""
+                if Path(document.src_path).suffix.lower() == ".pdf":
+                    from prototype.v3.pipeline_final import assign_pages_from_pdf
+                    page_note = await asyncio.to_thread(
+                        assign_pages_from_pdf, v2_reqs, Path(document.src_path))
                 overview = None
-                steps = [f"v_rule(룰 엔진): {len(v2_reqs)} rows"]
+                steps = [f"v4(구조인식 엔진): {len(v2_reqs)} rows"] + ([page_note] if page_note else [])
             elif strategy == "public_form":
                 # 공공(요구사항 총괄표) — 기존 경로 유지(잘 동작)
                 from prototype.v3.pipeline_final import run_sample

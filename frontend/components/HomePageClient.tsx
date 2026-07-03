@@ -113,13 +113,9 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const excelRef = useRef<HTMLInputElement | null>(null);
-  const [engine, setEngine] = useState<string>(() =>
-    typeof window === "undefined" ? "v2" : window.localStorage.getItem("rfp-engine") || "v2",
-  );
-  function chooseEngine(e: string) {
-    setEngine(e);
-    if (typeof window !== "undefined") window.localStorage.setItem("rfp-engine", e);
-  }
+  // v2/v_rule 두 엔진을 고르게 하던 토글은 혼란만 줘서 제거 — v4(내부명 v_rule, 구조인식+
+  // gemma keep+페이지추적)로 단일화. 새 엔진을 또 만들면 여기 값만 바꾸면 된다.
+  const engine = "v_rule";
 
   async function onUpload(file: File) {
     setBusy("upload");
@@ -184,23 +180,6 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 rounded-lg border border-neutral-200 p-0.5 text-xs" title="추출 엔진 선택">
-              {[
-                { id: "v2", label: "v2 (LLM)" },
-                { id: "v_rule", label: "v_rule (룰)" },
-              ].map((e) => (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => chooseEngine(e.id)}
-                  className={`rounded-md px-2 py-1 font-medium transition ${
-                    engine === e.id ? "bg-ktred-600 text-white" : "text-neutral-600 hover:bg-neutral-100"
-                  }`}
-                >
-                  {e.label}
-                </button>
-              ))}
-            </div>
             <LlmModelSelector />
           </div>
         </div>
