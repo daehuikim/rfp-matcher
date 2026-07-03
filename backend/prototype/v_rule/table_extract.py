@@ -166,7 +166,16 @@ def _horizontal_reqs(grid: list[list[str]], ncol: int, stats: list[dict]) -> lis
         # 'N-M)' 형제번호(예: '1-3)')는 카드유닛 단계 형제묶음(_merge_sibling_numbered_tabs)이
         # 참조할 수 있게 정규화된 마커로 별도 보존 — tab_hint 는 마커 뗀 깔끔한 이름으로 남긴다.
         sib_m = re.match(r"^\s*(\d+)\s*-\s*(\d+)\)", cat)
-        tab_marker = f"{sib_m.group(1)}-{sib_m.group(2)})" if sib_m else ""
+        plain_m = None if sib_m else re.match(r"^\s*(\d+)\s*\)", cat)
+        if sib_m:
+            tab_marker = f"{sib_m.group(1)}-{sib_m.group(2)})"
+        elif plain_m:
+            # 단순 'N)' 번호(예: '20) CS Plaza') — 형제묶음 텍스트 공통접두사가 없어도
+            # (각 항목명이 서로 다름) 번호 연속성으로 상위 계열(_merge_numbered_family)에
+            # 편입시킬 수 있게 순번만 보존.
+            tab_marker = f"{plain_m.group(1)})"
+        else:
+            tab_marker = ""
         for piece in split_items(det):
             out.append({"level": cat, "name": nm or cat, "detail": piece,
                         "_tab": tab_hint, "_tab_marker": tab_marker})

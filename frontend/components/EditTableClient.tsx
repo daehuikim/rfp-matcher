@@ -106,30 +106,37 @@ export default function EditTableClient({ docId }: { docId: string }) {
     return () => src.close();
   }, [docId, editorId, load]);
 
+  // 카드 = rows(백엔드가 이미 페이지순으로 준 순서) 안에서 카테고리가 연속으로 이어지는
+  // 구간. 이름으로 전체를 묶어버리면(Map) 같은 이름이 문서 뒤쪽에 멀리 떨어져 다시
+  // 나올 때 그 행들이 앞쪽 카드로 끌려와 붙어 페이지 순서가 뒤섞인다 — 사람이 검토할 때
+  // 원문과 대조하려면 항상 페이지순이어야 하므로, 연속 구간별로 카드를 따로 만든다
+  // (같은 이름의 카드가 여러 번 나올 수 있음 — 필요하면 "카드 병합" 버튼으로 합치면 됨).
   const cards = useMemo<Card[]>(() => {
-    const map = new Map<string, Card>();
+    const list: Card[] = [];
+    let cur: Card | null = null;
     for (const v of rows) {
       const cat = v.requirement.category || "요구사항";
       const pfx = (v.requirement.code || "").replace(/-\d+\s*$/, "");
-      if (!map.has(cat)) map.set(cat, { category: cat, prefix: pfx, name: v.requirement.name || "", reqIds: [], count: 0 });
-      const c = map.get(cat)!; c.reqIds.push(v.requirement.id); c.count++;
+      if (!cur || cur.category !== cat) {
+        cur = { category: cat, prefix: pfx, name: v.requirement.name || "", reqIds: [], count: 0 };
+        list.push(cur);
+      }
+      cur.reqIds.push(v.requirement.id);
+      cur.count++;
     }
-    return [...map.values()];
+    return list;
   }, [rows]);
 
-  const sortedRows = useMemo(() => {
-    const order = new Map(cards.map((c, i) => [c.category, i]));
-    return [...rows].sort((a, b) =>
-      order.get(a.requirement.category || "요구사항")! - order.get(b.requirement.category || "요구사항")!);
-  }, [rows, cards]);
+  const sortedRows = rows;   // 이미 페이지순 — 카드가 그 순서를 그대로 따라가므로 재정렬 불필요.
   const groupCounts = useMemo(() => cards.map((c) => c.count), [cards]);
 
   async function saveCell(reqId: string, field: "code" | "name" | "definition" | "detail", value: string) {
-    // #4 요구사항명 편집은 카드 전체에 전파
+    // #4 요구사항명 편집은 카드 전체에 전파. 카테고리 이름이 아니라 reqId 소속으로 카드를
+    // 찾는다 — 같은 이름의 카드가 문서 안에 여러 번(비연속) 있을 수 있어(페이지순 보존),
+    // 이름으로 찾으면 엉뚱한(먼저 나온) 카드가 잡혀 실제 편집한 카드엔 반영이 안 될 수 있다.
     if (field === "name") {
-      const cat = rows.find((v) => v.requirement.id === reqId)?.requirement.category || "요구사항";
-      const card = cards.find((c) => c.category === cat);
-      setRows((prev) => prev.map((v) => v.requirement.category === cat ? { ...v, requirement: { ...v.requirement, name: value } } : v));
+      const card = cards.find((c) => c.reqIds.includes(reqId));
+      setRows((prev) => prev.map((v) => (card?.reqIds.includes(v.requirement.id) ? { ...v, requirement: { ...v.requirement, name: value } } : v)));
       try { if (card) setRows(await regroupRequirements(docId, card.reqIds, { name: value })); }
       catch (e) { setMsg(`이름 전파 실패: ${String(e)}`); }
       return;
@@ -230,7 +237,9 @@ export default function EditTableClient({ docId }: { docId: string }) {
       {/* #5 개요 — 카드 목록 + 카드별 행수 (클릭 시 이동) */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxHeight: 62, overflowY: "auto", padding: "2px 0" }}>
         {cards.map((c, i) => (
-          <button key={c.category} onClick={() => scrollToCard(i)} title={c.category}
+          // key=index — 같은 카테고리명이 페이지순 보존을 위해 비연속으로 여러 카드에
+          // 걸쳐 나올 수 있어(예: '보이는 ARS'가 두 곳에) category 자체는 unique 하지 않다.
+          <button key={c.reqIds[0] ?? i} onClick={() => scrollToCard(i)} title={c.category}
             style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, border: "1px solid #ccd", background: "#eef1f5", cursor: "pointer", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             📁 {c.category} <b>{c.count}</b>
           </button>

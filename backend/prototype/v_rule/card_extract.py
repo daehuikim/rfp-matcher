@@ -99,9 +99,13 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
     stack: list[tuple[int, str]] = []   # (level, title)
     units: list[Unit] = []
     cur: Unit | None = None
-    # 가로 요구표에서 뽑은 카테고리(구분열) 탭 — 문서 전체에 걸쳐 정규화 키로 병합.
+    # 가로 요구표에서 뽑은 카테고리(구분열) 탭 — 가까운 거리(창 이내)에서 정규화 키로 병합.
     # (표 블록마다 새로 만들면 같은 카테고리가 다른 위치의 표에 다시 나올 때 별도 탭이 됨)
-    tab_units: dict[str, Unit] = {}
+    # 단, 문서 전체 무제한 병합은 페이지 순서를 깨버린다(개요에서 스친 언급 vs 훨씬 뒤
+    # 본편 섹션이 한 탭으로 묶여 카드가 문서 위치와 무관하게 뒤섞임) — 창을 벗어나면
+    # 같은 이름이라도 새 탭으로 다시 시작(사람은 항상 페이지순으로 본다).
+    tab_units: dict[str, tuple[Unit, int]] = {}
+    _TAB_MERGE_WINDOW = 80
 
     def ensure_cur() -> Unit:
         nonlocal cur
@@ -171,18 +175,23 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
                     # 구분값 적음(≤8, 평균응답시간/평균처리시간 등 한 화제의 하위항목) → ambient 탭 하나.
                     attach_isolated(reqs, use_item_tab=n_cat > 8)
                 else:
-                    # 정규화 키로 문서 전체에서 병합 — 같은 카테고리가 다른 표에 다시 나와도 한 탭 유지.
+                    # 정규화 키로 근접 구간에서만 병합 — 같은 카테고리가 가까운 다른 표에
+                    # 다시 나오면 한 탭 유지하되, 창(_TAB_MERGE_WINDOW)을 벗어나면 새 탭.
                     for r in reqs:
                         t = (r.get("_tab") or (cur.tab if cur else "요구사항"))[:40] or "요구사항"
                         key = _norm_tab_key(t)
-                        tu = tab_units.get(key)
-                        if tu is None:
+                        entry = tab_units.get(key)
+                        if entry is not None and len(units) - entry[1] > _TAB_MERGE_WINDOW:
+                            entry = None
+                        if entry is None:
                             # 구분열이 'N-M)' 형제번호를 가지면(예: '1-1)~1-6) 통합 상담
                             # 시스템 ...') 마커를 실어 _merge_sibling_numbered_tabs 가 인식.
                             tu = Unit(tab=t, marker=(r.get("_tab_marker") or ""), title=t,
                                       level_path=(cur.level_path + " > " + t if cur and cur.level_path else t))
                             units.append(tu)
-                            tab_units[key] = tu
+                        else:
+                            tu = entry[0]
+                        tab_units[key] = (tu, len(units))
                         tu.details.append(r)
             elif reqs:                              # 세로 카드 등 → ambient 탭 공유 + 항목별 독립 유닛
                 attach_isolated(reqs)
@@ -222,9 +231,59 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
                 attach_isolated([base])
             else:
                 ensure_cur().details.append(base)
+    # 헤딩 자체는 상세가 비어(바로 표가 이어지므로) 필터에서 빠지지만, 형제계열 인식엔
+    # 헤딩이 필요하므로 필터 전에 돌린다 — 산하 표/본문 유닛(level_path 로 추적)의 탭도
+    # 함께 정정되므로 필터 후에도 효과가 남는다.
+    _merge_bullet_heading_families(units)
     out = [u for u in units if u.details]   # 내용 있는 유닛만(빈 章 헤딩 제외)
     _merge_sibling_numbered_tabs(out)
     return out
+
+
+_FAMILY_BULLETS = set("■▣◈◆◇□▷▶◎")
+
+
+def _merge_bullet_heading_families(units: list[Unit]) -> None:
+    """'■ 기능 요구사항(SFR, System Function Requirement) – 20. CS Plaza' 처럼 섹션헤딩이
+    번호/개별 서비스명만 다르고 나머지 라벨은 그대로 반복되는 '형제 계열'이면, 반복되는
+    공통 접두사(예: '기능 요구사항 (SFR, System Function Requirement)')를 진짜 탭으로
+    쓴다. 안 그러면 항목마다 제각각 탭이 돼(SFR 하나가 20~30개 서비스로) 탭이 100개
+    넘게 폭발하고, 사람이 볼 땐 'SFR'이어야 할 탭이 개별 서비스명('CS Plaza')이 돼버린다.
+
+    헤딩 유닛 자신은 보통 상세가 비어 있고(바로 표가 이어짐) 진짜 내용은 표에서 뽑힌
+    별도 유닛에 있다. 게다가 같은 계열의 일부 항목(예: '20) CS Plaza')은 자기 헤딩조차
+    없이 표 구분열의 단순 번호로만 존재해, 제목 유사성으로는 계열을 못 알아본다 —
+    그래서 헤딩 산하 유닛뿐 아니라, 체인의 첫~끝 헤딩 '사이 구간'에 있는 모든 유닛을
+    통째로 계열에 편입한다(그 구간은 정의상 이 계열 항목들의 본문/표이거나 그 빈틈).
+    같은 계열 헤딩 사이에 본문/표 유닛이 껴도 건너뛰며 체인을 유지 — 인접 구간에서만
+    합치므로 페이지 순서는 그대로 보존된다."""
+    n = len(units)
+    i = 0
+    while i < n:
+        if (units[i].marker or "") not in _FAMILY_BULLETS:
+            i += 1
+            continue
+        chain = [units[i]]
+        chain_idx = [i]
+        j = i + 1
+        while j < n:
+            mk = units[j].marker or ""
+            if mk in _FAMILY_BULLETS:
+                cand = _common_prefix_words([chain[0].title, units[j].title])
+                if len(cand) >= 6:
+                    chain.append(units[j])
+                    chain_idx.append(j)
+                    j += 1
+                    continue
+                break   # 접두사 안 맞는 다른 계열의 ■헤딩 → 체인 종료
+            j += 1      # 마커 없는 본문/표 유닛은 건너뛰며 체인 유지
+        if len(chain) >= 2:
+            common = _common_prefix_words([u.title for u in chain]).rstrip(" –-:,").strip()
+            if len(common) >= 6:
+                lo, hi = chain_idx[0], chain_idx[-1]
+                for k in range(lo, hi + 1):
+                    units[k].tab = common[:40]
+        i = j if len(chain) >= 2 else i + 1
 
 
 _SIBLING_MARKER = re.compile(r"^(\d+)-(\d+)\)$")
@@ -413,6 +472,86 @@ def _consolidate_small_tabs(rows: list[dict], small_max: int = 2, large_min: int
     return out
 
 
+class _TabGroup(BaseModel):
+    new_tab: str
+    old_tabs: list[str]
+
+
+class _TabGroupResult(BaseModel):
+    groups: list[_TabGroup]
+
+
+def _consolidate_tabs_llm(rows: list[dict], target_max: int = 20) -> list[dict]:
+    """구조 규칙만으론 못 잡는 과분할(예: SFR 하위 20+개 서비스가 각자 탭)을 gemma 가
+    사람이 쓸 법한 상위 카테고리로 묶는다. **탭 이름과 그에 따른 code 재부여만 하고,
+    detail/name/level(요구사항 본문)은 절대 건드리지 않는다** — 원문 충실 전사 원칙 유지.
+    탭이 이미 충분히 적으면(target_max 이하) 호출 자체를 생략. 실패/미매핑 탭은 원래
+    이름 그대로 유지(안전 폴백) — 통합에 실패해도 정보 손실은 없다."""
+    from collections import Counter, OrderedDict
+
+    order = list(OrderedDict.fromkeys(r["tab"] for r in rows))
+    if len(order) <= target_max:
+        return rows
+
+    from app.core.config import Settings
+    from app.llm.base import Message
+    from app.llm.factory import build_llm_client
+    from app.llm.fake_client import FakeLlmClient
+    from prototype.v2.async_run import run_coro
+
+    client = build_llm_client(Settings())
+    if isinstance(client, FakeLlmClient):
+        return rows
+
+    counts = Counter(r["tab"] for r in rows)
+    listing = "\n".join(f"- '{t}' ({counts[t]}행)" for t in order)
+    prompt = (
+        "아래는 한 RFP 문서에서 자동 추출된 탭(섹션) 목록이다(문서 등장 순서, 괄호는 행수).\n"
+        "탭이 지나치게 잘게 쪼개져 있다 — 사람이 조견표를 만들 때 쓸 법한 상위 카테고리로 "
+        "묶어라. 예를 들어 'SIP','CTI','챗봇','CS Plaza','옴니채널상담' 처럼 하나의 상위 "
+        "기능요구사항 목록 아래 나열되는 개별 서비스/컴포넌트들은 그 상위 카테고리 이름으로 "
+        "하나의 탭에 묶는다. 이미 명확히 독립적인 대분류(예: 보안요구사항, 데이터요구사항, "
+        "품질/하자보수 요구사항 등)는 그대로 유지해도 된다.\n"
+        "목표 탭 개수는 문서 규모에 맞게 대략 10~20개 내외(사람이 실제로 조견표 시트를 "
+        "나눌 법한 개수). 모든 원본 탭을 정확히 하나의 새 그룹에 배정해야 한다(누락 금지).\n\n"
+        f"[탭 목록]\n{listing}\n\n"
+        'JSON: {"groups":[{"new_tab":"<새 탭 이름>","old_tabs":["<원본 탭1>","<원본 탭2>",...]}]}'
+    )
+    try:
+        res = run_coro(client.structured_output(
+            [Message(role="user", content=prompt)], _TabGroupResult,
+            purpose="tab_consolidate", max_tokens=6000))
+        mapping: dict[str, str] = {}
+        for g in res.groups:
+            for old in g.old_tabs:
+                mapping[old] = g.new_tab
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "gemma 탭 통합 호출 실패 — 원본 탭 구조 그대로 유지", exc_info=True)
+        return rows
+
+    changed = False
+    for r in rows:
+        nt = mapping.get(r["tab"])
+        if nt and nt.strip() and nt != r["tab"]:
+            r["tab"] = nt.strip()[:40]
+            changed = True
+    if not changed:
+        return rows
+    tab_counter: dict[str, int] = {}
+    tab_prefix: dict[str, str] = {}
+    out = []
+    for r in rows:
+        tab = r["tab"]
+        if tab not in tab_prefix:
+            tab_prefix[tab] = _slug_tab(tab)
+        pfx = tab_prefix[tab]
+        tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
+        out.append({**r, "code": f"{pfx}-{tab_counter[pfx]:03d}"})
+    return out
+
+
 def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
     """유닛 + keep 판정 → 고정칼럼 행. junk 셀(페이지번호·날짜·기호) 제외. (공개)"""
     rows: list[dict] = []
@@ -447,7 +586,7 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
             tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
             rows.append({"tab": tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
                          "name": it["name"], "level": it["level"], "detail": it["detail"]})
-    return _consolidate_small_tabs(rows)
+    return _consolidate_tabs_llm(_consolidate_small_tabs(rows))
 
 
 def extract_fixed_rows(html: str, doc_name: str) -> list[dict]:
