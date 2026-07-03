@@ -95,8 +95,13 @@ def _vertical_to_reqs(grid: list[list[str]]) -> list[dict]:
         return []
     code = next((v for _, v in vals if _ID_PAT.search(v) and len(v) <= 16), "")
     detail_val = max((v for _, v in vals), key=len)                    # 세부내용 = 최장값
+    # 요구사항명 = '명칭/항목명/제목' 라벨의 값을 최우선. 최단길이 휴리스틱만 쓰면 '정의'·
+    # '구분'(짧은 소라벨)이 진짜 제목("IP-PHONE"·"SLA 체계 마련 및 운영")보다 먼저 뽑혀
+    # 오염된다(강원랜드 31%·경기도 58% 행에서 실측). 라벨 힌트를 우선 사용.
+    name_labeled = next((v for lab, v in vals
+                        if any(k in lab for k in ("명칭", "항목명", "제목")) and v != code and v != detail_val), None)
     name_cand = [v for _, v in vals if v != code and v != detail_val and not _NUM_ONLY.match(v)]
-    name = min(name_cand, key=len) if name_cand else ""                # 요구사항명 ≈ 최단 제목값
+    name = name_labeled or (min(name_cand, key=len) if name_cand else "")
     out = []
     for piece in split_items(detail_val):
         out.append({"level": name or code, "name": name, "detail": piece, "code_hint": code})
@@ -129,12 +134,15 @@ def _horizontal_reqs(grid: list[list[str]], ncol: int, stats: list[dict]) -> lis
         if stats[c]["avglen"] <= 25:
             cat_col = c
             break
-    # 요구사항명 열 = content 왼쪽, cat_col 아닌 중간 길이 열(있으면)
+    # 요구사항명 열 = content 왼쪽, cat_col 아닌 중간 길이 열(있으면).
+    # 버그: 이전엔 avglen(문자열 길이)을 content(열 인덱스, 예 1·2)와 비교해 name_col이
+    # 사실상 선택 불가능했다(스캔 신한카드 등에서 name이 통째로 번호열 값으로 오염).
+    # content 열 자체의 평균길이(문자수)와 비교해야 의미가 맞는다.
     name_col = None
     for c in range(content):
         if c == cat_col or stats[c]["numratio"] > 0.6:
             continue
-        if 4 <= stats[c]["avglen"] <= content and c != cat_col:
+        if 4 <= stats[c]["avglen"] <= stats[content]["avglen"]:
             name_col = c
             break
 

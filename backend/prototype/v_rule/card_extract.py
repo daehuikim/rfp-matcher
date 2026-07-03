@@ -111,7 +111,12 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
         base_title = cur.title if cur else ""
         base_level = cur.level_path if cur else ""
         for it in items:
-            units.append(Unit(tab=base_tab, marker="", title=base_title, level_path=base_level, details=[it]))
+            # 표에서 뽑힌 항목이 자기 카테고리(_tab)를 갖고 있으면(기아 SIP/CTI 등) 그걸
+            # 탭으로 쓴다 — ambient 헤딩("상담석 규모" 같은 무관한 현황표 제목)에 잘못
+            # 묶이는 오분류 방지(기아: 43개 요구사항이 통째로 '상담석 규모' 탭에 오분류됨).
+            item_tab = it.get("_tab") if isinstance(it, dict) else None
+            tab = item_tab[:40] if item_tab else base_tab
+            units.append(Unit(tab=tab, marker="", title=base_title, level_path=base_level, details=[it]))
 
     def open_heading(text: str, lvl: int) -> None:
         nonlocal cur, stack
@@ -184,6 +189,11 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
             pieces = split_items(base)              # ⦁/❍/• 다항목 분해
             if len(pieces) > 1:
                 attach_isolated(pieces)              # 다항목 한 블록 → 항목별 독립 유닛(keep 격리)
+            elif lvl is not None and lvl >= 4:
+                # 레벨4/5 마커(가)/나)/1)/2)/❍/- 등)는 나열형 리스트의 개별 항목이다.
+                # 마커 없는 연속 평문과 달리 방치하면 여러 항목이 한 유닛에 쌓여, 그중
+                # 하나가 junk 판정될 때 옆의 진짜 요구사항까지 통째로 drop된다(신한은행/경기도 실측).
+                attach_isolated([base])
             else:
                 ensure_cur().details.append(base)
     return [u for u in units if u.details]   # 내용 있는 유닛만(빈 章 헤딩 제외)
