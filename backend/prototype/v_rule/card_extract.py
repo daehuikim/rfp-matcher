@@ -34,6 +34,13 @@ def _detail_text(d) -> str:
     return (d.get("detail", "") if isinstance(d, dict) else d) or ""
 
 
+def _norm_tab_key(t: str) -> str:
+    """탭 병합 키 — 공백·전각/반각 괄호 차이로 같은 카테고리가 별도 탭으로 쪼개지는 것 방지
+    (예: 'SIP (IP-PBX)' 안의 공백 유무, '옴니채널상담' vs '옴니채널 상담')."""
+    t = re.sub(r"[（）]", lambda m: "(" if m.group() == "（" else ")", t or "")
+    return re.sub(r"\s+", "", t).lower()
+
+
 # 섹션 헤더로 흔히 쓰는 도형 기호(속찬 사각/마름모). 이런 기호로 시작하는 짧은 라벨은
 # 섹션 헤딩으로 승격(예: '■기능요구사항(SFR, System Function Requirement) 목록').
 _SECTION_SYM = re.compile(r"^\s*[■▣◈◆◇□▷▶◎]")
@@ -85,6 +92,9 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
     stack: list[tuple[int, str]] = []   # (level, title)
     units: list[Unit] = []
     cur: Unit | None = None
+    # 가로 요구표에서 뽑은 카테고리(구분열) 탭 — 문서 전체에 걸쳐 정규화 키로 병합.
+    # (표 블록마다 새로 만들면 같은 카테고리가 다른 위치의 표에 다시 나올 때 별도 탭이 됨)
+    tab_units: dict[str, Unit] = {}
 
     def ensure_cur() -> Unit:
         nonlocal cur
@@ -92,6 +102,16 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
             cur = Unit(tab="요구사항", marker="", title="", level_path="")
             units.append(cur)
         return cur
+
+    def attach_isolated(items: list) -> None:
+        """ambient(cur) 탭/계위를 공유하되 항목마다 독립 유닛(keep 판정 격리).
+        표·다항목 셀은 본질적으로 여러 요구사항이라, 한 유닛에 몰아넣으면 그중
+        하나가 junk 라 판정될 때 옆의 진짜 요구사항까지 통째로 drop된다(대한항공 recall 원인)."""
+        base_tab = cur.tab if cur else "요구사항"
+        base_title = cur.title if cur else ""
+        base_level = cur.level_path if cur else ""
+        for it in items:
+            units.append(Unit(tab=base_tab, marker="", title=base_title, level_path=base_level, details=[it]))
 
     def open_heading(text: str, lvl: int) -> None:
         nonlocal cur, stack
@@ -106,44 +126,66 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
     for i, b in enumerate(blocks):
         if b.kind == "table":
             reqs = table_to_reqs(b.grid)
-            if reqs is None:                        # 요구표 판정 불가 → 기존 방식(join) 폴백
-                ensure_cur().details += _table_details(b.grid)
+            if reqs is None:
+                # 요구표 판정 불가(1열 요구표 등) → 행마다 독립 유닛(표는 본질적으로 다중
+                # 요구사항 나열이라 한 유닛에 몰아넣으면 keep 판정이 콜래터럴 드롭을 낸다).
+                pieces = [p for line in _table_details(b.grid) for p in split_items(line)]
+                attach_isolated(pieces)
             elif reqs and any("_tab" in r for r in reqs):
-                # 가로 요구표 → 구분(계위)별 독립 유닛(ambient junk 헤딩 흡수 방지 — 기아 misfiling)
-                cur_tab = None
-                tu = None
-                for r in reqs:
-                    t = (r.get("_tab") or (cur.tab if cur else "요구사항"))[:40] or "요구사항"
-                    if tu is None or t != cur_tab:
-                        tu = Unit(tab=t, marker="", title=t,
-                                  level_path=(cur.level_path + " > " + t if cur and cur.level_path else t))
-                        units.append(tu)
-                        cur_tab = t
-                    tu.details.append(r)
-            elif reqs:                              # 세로 카드 등 → ambient 유닛에 부착
-                ensure_cur().details += reqs
+                # 구분(카테고리)열 반복도 확인 — 여러 행이 같은 구분을 공유해야 '진짜 분류표'
+                # (예: SFR 20행이 'SIP' 공유). 행마다 구분값이 거의 다 다르면 분류표가 아니라
+                # 로드맵/체크리스트(항목당 1라벨)이므로 탭 쪼개지 말고 ambient 유닛에 붙인다
+                # (기아 '고객 채널 최적화 1' 등 1행짜리 탭 폭발 방지 — 구조 신호, 키워드 아님).
+                hints = [r.get("_tab") for r in reqs if r.get("_tab")]
+                grouped = bool(hints) and len(hints) >= 3 and len(set(hints)) / len(hints) <= 0.7
+                if not grouped:
+                    # 진짜 분류표 아님 → ambient 탭 공유(탭 폭발 방지)하되 행별 독립 유닛(keep 격리).
+                    attach_isolated(reqs)
+                else:
+                    # 정규화 키로 문서 전체에서 병합 — 같은 카테고리가 다른 표에 다시 나와도 한 탭 유지.
+                    for r in reqs:
+                        t = (r.get("_tab") or (cur.tab if cur else "요구사항"))[:40] or "요구사항"
+                        key = _norm_tab_key(t)
+                        tu = tab_units.get(key)
+                        if tu is None:
+                            tu = Unit(tab=t, marker="", title=t,
+                                      level_path=(cur.level_path + " > " + t if cur and cur.level_path else t))
+                            units.append(tu)
+                            tab_units[key] = tu
+                        tu.details.append(r)
+            elif reqs:                              # 세로 카드 등 → ambient 탭 공유 + 항목별 독립 유닛
+                attach_isolated(reqs)
             # reqs == [] (도표/현황/배점) → 드롭
             continue
 
         lvl = marker_level(b.text)
-        # HTML 헤딩 태그(h1~h4) = 확실한 섹션 헤딩(DOCX/HWP 순수제목). 마커 없어도 유닛 경계.
+        # HTML 헤딩 태그(h1~h4) = DOCX/HWP 순수제목(마커 없음) 전용 폴백.
+        # 주의: OpenDataLoader 는 PDF 단락에도 자체 판단으로 <h3> 등을 붙이는데, 그 레벨이
+        # 텍스트 마커(로마자 Ⅰ/Ⅱ 등)의 실제 계위와 어긋날 수 있다(대한항공 'I./II./III.'가
+        # 문서 최상위(0)인데 <h3>로 붙어 레벨2로 강등돼 상위 계위가 통째로 무너진 사례).
+        # 그래서 마커가 있으면 마커를 우선하고, htag 는 마커가 없을 때만 쓴다.
         tag_lvl = (b.htag - 1) if getattr(b, "htag", 0) and b.htag <= 4 else None
         # sparse 라벨(짧고 다음 블록이 표) → 섹션 헤딩 승격(레벨2). 예: ■시스템구성요구사항(ECR)
         nxt_is_table = i + 1 < n and blocks[i + 1].kind == "table"
         sparse_label = (len(strip_marker(b.text).strip()) <= 40 and nxt_is_table
                         and not _SENT_END.search(strip_marker(b.text)))
+        marker_head = lvl is not None and lvl <= _HEAD_MAX and _is_heading_line(b.text)
+        if marker_head:
+            open_heading(b.text, lvl)
+            continue
         if tag_lvl is not None:
             open_heading(b.text, tag_lvl)
             continue
-        is_heading = ((lvl is not None and lvl <= _HEAD_MAX and _is_heading_line(b.text))
-                      or sparse_label or _is_section_bullet(b.text))
+        is_heading = sparse_label or _is_section_bullet(b.text)
         if is_heading:
-            open_heading(b.text, lvl if (lvl is not None and lvl <= _HEAD_MAX) else 2)
+            open_heading(b.text, 2)
         elif b.text.strip():
-            u = ensure_cur()
             base = strip_marker(b.text) if lvl is not None else b.text
             pieces = split_items(base)              # ⦁/❍/• 다항목 분해
-            u.details += pieces if len(pieces) > 1 else [base]
+            if len(pieces) > 1:
+                attach_isolated(pieces)              # 다항목 한 블록 → 항목별 독립 유닛(keep 격리)
+            else:
+                ensure_cur().details.append(base)
     return [u for u in units if u.details]   # 내용 있는 유닛만(빈 章 헤딩 제외)
 
 
@@ -196,6 +238,11 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
             for it in res.items:
                 out[it.index] = it.keep
         except Exception:
+            # 조용히 전체keep 폴백하면 gemma 장애를 알아챌 수 없다 — 반드시 로그.
+            import logging
+            logging.getLogger(__name__).warning(
+                "gemma keep 호출 실패(청크 %d~%d) — 이 청크는 전부 keep=True 폴백", k, k + len(chunk) - 1,
+                exc_info=True)
             for j in range(len(chunk)):
                 out[k + j] = True
     # 안전망: 전부 drop 되면(엄격 오판) 문서 통째 손실 방지 — 전체 유지로 폴백.

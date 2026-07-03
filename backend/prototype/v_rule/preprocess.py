@@ -23,7 +23,11 @@ def split_table_headings(blocks: list[Block]) -> list[Block]:
         for row in b.grid:
             ne = [c.strip() for c in row if c and c.strip()]
             joined = " ".join(ne)
-            if ne and len(ne) <= 3 and len(joined) <= 45 and marker_level(joined) is not None:
+            lvl = marker_level(joined)
+            # 레벨 0~3만 헤딩(章·절·항), 4~5(1)/❍/- 등)는 원래 '내용'(card_extract.py 동일 컨벤션).
+            # 이걸 안 가리면 "26) IVR 단계에서..." 같은 완결 요구사항 문장(레벨4 마커)까지
+            # 표에서 뽑혀 나가 build_units 의 표-격리 로직을 건너뛰고 콜래터럴 드롭 위험에 노출됨.
+            if ne and len(ne) <= 3 and len(joined) <= 45 and lvl is not None and lvl <= 3:
                 if buf:
                     out.append(Block(kind="table", grid=buf)); buf = []
                 out.append(Block(kind="text", text=joined))
