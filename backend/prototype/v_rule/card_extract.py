@@ -127,14 +127,22 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
         for it in items:
             item_tab = it.get("_tab") if (use_item_tab and isinstance(it, dict)) else None
             tab = item_tab[:40] if item_tab else base_tab
-            units.append(Unit(tab=tab, marker="", title=base_title, level_path=base_level, details=[it]))
+            # 표 구분열이 'N-M)' 형제번호를 갖고 있으면(예: 기아 SFR표의 '1-1)~1-5) 통합
+            # 상담 시스템 ...') 마커를 유닛에 실어 _merge_sibling_numbered_tabs 가 인식하게 한다.
+            tab_marker = it.get("_tab_marker") if isinstance(it, dict) else None
+            mk = tab_marker if (tab_marker and item_tab) else ""
+            title = item_tab[:60] if (tab_marker and item_tab) else base_title
+            units.append(Unit(tab=tab, marker=mk, title=title, level_path=base_level, details=[it]))
 
     def open_heading(text: str, lvl: int) -> None:
         nonlocal cur, stack
         title = strip_marker(text)[:60]
         stack = [(l, t) for (l, t) in stack if l < lvl] + [(lvl, title)]
         tab = (title or (stack[0][1] if stack else ""))[:40] or "요구사항"
-        mk = text.split()[0] if text.split() else ""
+        # 'N-M)' 형제마커는 변환기가 'N - M)' 처럼 사이 공백을 넣기도 해 text.split()[0]로는
+        # "N"만 잡혀 형제묶음(_merge_sibling_numbered_tabs)이 인식 못 한다 — 패턴 전체를 캡처.
+        sib = re.match(r"^\s*\d+\s*-\s*\d+\)", text or "")
+        mk = re.sub(r"\s+", "", sib.group()) if sib else (text.split()[0] if text.split() else "")
         cur = Unit(tab=tab, marker=mk, title=title, level_path=" > ".join(t for _, t in stack))
         units.append(cur)
 
@@ -169,7 +177,9 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
                         key = _norm_tab_key(t)
                         tu = tab_units.get(key)
                         if tu is None:
-                            tu = Unit(tab=t, marker="", title=t,
+                            # 구분열이 'N-M)' 형제번호를 가지면(예: '1-1)~1-6) 통합 상담
+                            # 시스템 ...') 마커를 실어 _merge_sibling_numbered_tabs 가 인식.
+                            tu = Unit(tab=t, marker=(r.get("_tab_marker") or ""), title=t,
                                       level_path=(cur.level_path + " > " + t if cur and cur.level_path else t))
                             units.append(tu)
                             tab_units[key] = tu
@@ -212,7 +222,62 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
                 attach_isolated([base])
             else:
                 ensure_cur().details.append(base)
-    return [u for u in units if u.details]   # 내용 있는 유닛만(빈 章 헤딩 제외)
+    out = [u for u in units if u.details]   # 내용 있는 유닛만(빈 章 헤딩 제외)
+    _merge_sibling_numbered_tabs(out)
+    return out
+
+
+_SIBLING_MARKER = re.compile(r"^(\d+)-(\d+)\)$")
+
+
+def _common_prefix_words(strs: list[str]) -> str:
+    """문자열들의 공통 접두사(단어 단위) — 'X 일반'/'X 고객센터'/'X 긴급출동' → 'X'."""
+    if not strs:
+        return ""
+    split = [s.split() for s in strs]
+    common: list[str] = []
+    for tokens in zip(*split):
+        if len(set(tokens)) == 1:
+            common.append(tokens[0])
+        else:
+            break
+    return " ".join(common)
+
+
+def _merge_sibling_numbered_tabs(units: list[Unit]) -> None:
+    """'1-1)/1-2)/1-3)' 형제번호 헤딩들이 각자 탭이 되면 사람이 만드는 것보다 훨씬 잘게
+    쪼개진다(기아: 원문에 '1.통합상담시스템' 같은 부모 章 헤딩 자체가 없어(목차에만
+    있음) 산하 5개 하위섹션이 각자 탭으로 흩어짐 — 정답지는 이 5개를 시트 1개로 묶음).
+    문서 순서상 연속으로 이어지는 같은 부모번호(N) 형제들을 찾아, 제목의 공통 접두사
+    (형제들이 다 같은 말로 시작 — '통합 상담 시스템 일반/고객센터/긴급출동...')를
+    탭으로 재배정한다. 마커 있는 다른 부모번호가 끼면 체인을 끊어 오병합을 막는다."""
+    n = len(units)
+    i = 0
+    while i < n:
+        m = _SIBLING_MARKER.match(units[i].marker or "")
+        if not m:
+            i += 1
+            continue
+        parent = m.group(1)
+        chain = [units[i]]
+        j = i + 1
+        expect = int(m.group(2)) + 1
+        while j < n:
+            m2 = _SIBLING_MARKER.match(units[j].marker or "")
+            if m2 and m2.group(1) == parent and int(m2.group(2)) == expect:
+                chain.append(units[j])
+                expect += 1
+                j += 1
+            elif m2:
+                break   # 다른 부모/순번의 형제 마커 → 체인 종료(다른 그룹 시작)
+            else:
+                j += 1  # 마커 없는 본문 유닛(개별 요구사항 등) — 체인 유지하며 건너뜀
+        if len(chain) >= 2:
+            common = _common_prefix_words([u.title for u in chain])
+            if len(common) >= 2:   # 의미있는 공통어(2자 이상)일 때만 병합
+                for u in chain:
+                    u.tab = common[:40]
+        i = j if len(chain) >= 2 else i + 1
 
 
 class _KeepItem(BaseModel):

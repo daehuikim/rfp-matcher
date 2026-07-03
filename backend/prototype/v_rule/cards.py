@@ -26,11 +26,11 @@ _MARKERS: list[tuple[int, "re.Pattern[str]"]] = [
     (2, re.compile(r"^\s*[가-힣]\.\s")),                                    # 가. 나.
     (3, re.compile(r"^\s*\d+\.\d+\.\d+\.?(?!\d)\s")),                      # 1.1.1
     (3, re.compile(r"^\s*[ㄱ-ㅎ]\.\s")),                                    # ㄱ. ㄴ.
-    (4, re.compile(r"^\s*(?:\d+-\d+\)|\d+\)|[가-힣]\)|\([0-9가-힣]+\)|[①-⑳])\s?")),  # 1) 1-1) 가) (1) ①
+    (4, re.compile(r"^\s*(?:\d+\s*-\s*\d+\)|\d+\)|[가-힣]\)|\([0-9가-힣]+\)|[①-⑳])\s?")),  # 1) 1-1) 1 - 1)(변환기 공백삽입) 가) (1) ①
     (5, re.compile(rf"^\s*{_BULLET}\s?")),                                 # 불릿(말단) — 후행공백 선택(■기능요구사항 밀착)
 ]
-_MARK_ANY = re.compile(rf"^\s*(?:제\s*\d+\s*[부편장]|{_ROMAN_HEAD}|\d+(?:\.\d+)*\.?|"
-                       rf"\d+-\d+\)|\d+\)|[가-힣][.)]|[ㄱ-ㅎ]\.|\([0-9가-힣]+\)|[①-⑳]|{_BULLET})\s?")
+_MARK_ANY = re.compile(rf"^\s*(?:제\s*\d+\s*[부편장]|{_ROMAN_HEAD}|"
+                       rf"\d+\s*-\s*\d+\)|\d+(?:\.\d+)*\.?|\d+\)|[가-힣][.)]|[ㄱ-ㅎ]\.|\([0-9가-힣]+\)|[①-⑳]|{_BULLET})\s?")
 
 
 def marker_level(text: str) -> int | None:

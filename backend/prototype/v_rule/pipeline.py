@@ -10,7 +10,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-from .convert import convert_pdf
+from .convert import convert_any
 from .db import HeadingStack, Row, heading_label, heading_level
 from .excel import write_excel
 from .rules import body_to_rows, table_to_rows
@@ -76,10 +76,10 @@ def _walk(html: str) -> list[Row]:
 
 
 def run(pdf_path: str | Path, workdir: str | Path, out_xlsx: str | Path) -> dict:
-    """PDF → Excel(v_rule). 반환: 산출물 경로·통계."""
-    conv = convert_pdf(pdf_path, workdir)
+    """문서(PDF/HWP/HWPX/DOC) → Excel(v_rule). 반환: 산출물 경로·통계."""
+    conv = convert_any(pdf_path, workdir)
     if "html" not in conv:
-        raise RuntimeError("OpenDataLoader HTML 변환 실패")
+        raise RuntimeError("HTML 변환 실패")
     html = conv["html"].read_text(encoding="utf-8", errors="replace")
     rows = _walk(html)
     stats = write_excel(rows, out_xlsx)

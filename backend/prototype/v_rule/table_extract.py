@@ -161,9 +161,15 @@ def _horizontal_reqs(grid: list[list[str]], ncol: int, stats: list[dict]) -> lis
         name_fill = nm or name_fill
         # _tab = 구분(계위)열 값 → 이 요구표를 ambient 헤딩이 아닌 자기 카테고리로 그룹핑
         # (기아처럼 요구표가 '상담석 규모' 같은 junk 헤딩 아래 misfiled 되는 것 방지)
-        tab_hint = re.sub(r"^\s*(?:\d+[-.)]\s*)+", "", cat).strip() or cat
+        # 숫자-구분기호 사이 공백 허용(변환기가 '1-1)'을 '1 - 1)'로 벌려놓는 경우 대비).
+        tab_hint = re.sub(r"^\s*(?:\d+\s*[-.)]\s*)+", "", cat).strip() or cat
+        # 'N-M)' 형제번호(예: '1-3)')는 카드유닛 단계 형제묶음(_merge_sibling_numbered_tabs)이
+        # 참조할 수 있게 정규화된 마커로 별도 보존 — tab_hint 는 마커 뗀 깔끔한 이름으로 남긴다.
+        sib_m = re.match(r"^\s*(\d+)\s*-\s*(\d+)\)", cat)
+        tab_marker = f"{sib_m.group(1)}-{sib_m.group(2)})" if sib_m else ""
         for piece in split_items(det):
-            out.append({"level": cat, "name": nm or cat, "detail": piece, "_tab": tab_hint})
+            out.append({"level": cat, "name": nm or cat, "detail": piece,
+                        "_tab": tab_hint, "_tab_marker": tab_marker})
     return out
 
 
