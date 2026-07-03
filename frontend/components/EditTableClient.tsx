@@ -34,9 +34,10 @@ export default function EditTableClient({ docId }: { docId: string }) {
   const [hoverCard, setHoverCard] = useState<number | null>(null);       // #3 카드헤더 호버시 삭제 X
   const vref = useRef<GroupedVirtuosoHandle>(null);                      // #1/#5 빠른 카드 이동
 
-  // 출처(페이지) 클릭 → 우측 PDF/원문 뷰어로 점프.
+  // 출처(페이지) 클릭 → 우측 PDF/원문 뷰어로 점프. 뷰어는 표 레이아웃을 잠식하지 않는
+  // 오버레이 드로어(사이드바)라 기본은 닫힘 — "출처" 클릭 시에만 슬라이드로 열린다.
   const [docMeta, setDocMeta] = useState<DocumentMeta | null>(null);
-  const [viewerOpen, setViewerOpen] = useState(true);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerPage, setViewerPage] = useState<number | null>(null);
   const [viewerTableIdx, setViewerTableIdx] = useState<number | null>(null);
   const [viewerAnchor, setViewerAnchor] = useState<string | null>(null);
@@ -205,11 +206,13 @@ export default function EditTableClient({ docId }: { docId: string }) {
   const canPreview = !!docMeta && docMeta.preview_kind !== "none" && docMeta.has_preview !== false;
 
   return (
-    <div style={{ padding: 16, height: "100vh", display: "flex", gap: 12, boxSizing: "border-box" }}>
-    {/* min-height:0 필수 — row flex 안 column 자식은 기본 min-height:auto 라 내용(Virtuoso)
-        높이만큼 부모가 늘어나려 하고, react-virtuoso 는 부모가 측정가능한 높이를 못 받으면
-        행을 0개로 렌더링한다(전형적 중첩 flexbox 함정). */}
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
+    // height:100%(뷰포트 아님) — 이 컴포넌트는 AppShell 의 상단 고정헤더 아래 <main> 안에
+    // 얹힌다. 100vh 를 쓰면 헤더 높이만큼 실제 가용영역보다 더 커져 아래로 삐져나갔다.
+    <div style={{ padding: 16, height: "100%", boxSizing: "border-box", position: "relative" }}>
+    {/* min-height:0 필수 — column 자식은 기본 min-height:auto 라 내용(Virtuoso) 높이만큼
+        부모가 늘어나려 하고, react-virtuoso 는 부모가 측정가능한 높이를 못 받으면 행을
+        0개로 렌더링한다(전형적 중첩 flexbox 함정). */}
+    <div style={{ height: "100%", minHeight: 0, display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 18, fontWeight: 700 }}>조견표 편집</h1>
         <span style={{ fontSize: 12, color: "#888" }}>doc {docId.slice(0, 8)} · {rows.length}행 · 카드 {cards.length}</span>
@@ -302,19 +305,25 @@ export default function EditTableClient({ docId }: { docId: string }) {
         />
       )}
     </div>
+    {/* 뷰어 = 우측에서 슬라이드로 나오는 오버레이 드로어. 표 레이아웃(flex 너비)을
+        전혀 잠식하지 않는다 — 이전엔 flex 형제라 좁은 화면에서 표가 거의 안 보였다. */}
     {viewerOpen && canPreview && (
-      <div style={{ width: 460, flexShrink: 0 }}>
-        <PdfViewerPane
-          docId={docId}
-          kind={docMeta?.preview_kind === "html" ? "html" : "pdf"}
-          page={viewerPage}
-          tableIndex={viewerTableIdx}
-          anchorText={viewerAnchor}
-          jumpNonce={jumpNonce}
-          sourceFilename={docMeta?.source_filename}
-          onCollapse={() => setViewerOpen(false)}
-        />
-      </div>
+      <>
+        <div onClick={() => setViewerOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(15,15,20,0.25)" }} />
+        <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 41, width: 460, maxWidth: "92vw", padding: 12, boxSizing: "border-box" }}>
+          <PdfViewerPane
+            docId={docId}
+            kind={docMeta?.preview_kind === "html" ? "html" : "pdf"}
+            page={viewerPage}
+            tableIndex={viewerTableIdx}
+            anchorText={viewerAnchor}
+            jumpNonce={jumpNonce}
+            sourceFilename={docMeta?.source_filename}
+            onCollapse={() => setViewerOpen(false)}
+          />
+        </div>
+      </>
     )}
     </div>
   );
