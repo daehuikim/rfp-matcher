@@ -41,6 +41,13 @@ def _norm_tab_key(t: str) -> str:
     return re.sub(r"\s+", "", t).lower()
 
 
+def _tab_base_key(t: str) -> str:
+    """괄호 안 내용까지 지운 느슨한 병합 키 — 'SIP (IP-PBX)'와 'SIP (Session Initiation
+    Protocol)'처럼 같은 대상을 다르게 부연설명한 탭들을 하나로 합친다(overview/glossary
+    잔여 탭 중복 방지). 완전탭명 병합(_norm_tab_key)이 실패했을 때의 느슨한 폴백으로만 사용."""
+    return re.sub(r"[\(（][^\)）]*[\)）]", "", t or "").strip().lower()
+
+
 # 섹션 헤더로 흔히 쓰는 도형 기호(속찬 사각/마름모). 이런 기호로 시작하는 짧은 라벨은
 # 섹션 헤딩으로 승격(예: '■기능요구사항(SFR, System Function Requirement) 목록').
 _SECTION_SYM = re.compile(r"^\s*[■▣◈◆◇□▷▶◎]")
@@ -103,18 +110,22 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
             units.append(cur)
         return cur
 
-    def attach_isolated(items: list) -> None:
+    def attach_isolated(items: list, use_item_tab: bool = True) -> None:
         """ambient(cur) 탭/계위를 공유하되 항목마다 독립 유닛(keep 판정 격리).
         표·다항목 셀은 본질적으로 여러 요구사항이라, 한 유닛에 몰아넣으면 그중
-        하나가 junk 라 판정될 때 옆의 진짜 요구사항까지 통째로 drop된다(대한항공 recall 원인)."""
+        하나가 junk 라 판정될 때 옆의 진짜 요구사항까지 통째로 drop된다(대한항공 recall 원인).
+
+        use_item_tab: 표에서 뽑힌 항목이 자기 카테고리(_tab)를 갖고 있을 때 그걸 탭으로 쓸지.
+        큰 표(행 많음, 각 행=서로 다른 컴포넌트 — SIP/CTI/챗봇 등)는 True 로 각자 탭을 줘야
+        기아 43행이 '상담석 규모' 같은 무관 ambient 헤딩에 오분류되지 않는다. 반대로 작은
+        표(≤8행, 평균응답시간/평균처리시간/동시처리 같은 한 화제의 하위항목)까지 항목마다
+        탭을 쪼개면 사람이 안 만들 만큼 탭이 폭발한다(기아 161탭) — 이런 경우는 False 로
+        ambient 탭 하나에 묶되, keep 판정 격리는 그대로 유지."""
         base_tab = cur.tab if cur else "요구사항"
         base_title = cur.title if cur else ""
         base_level = cur.level_path if cur else ""
         for it in items:
-            # 표에서 뽑힌 항목이 자기 카테고리(_tab)를 갖고 있으면(기아 SIP/CTI 등) 그걸
-            # 탭으로 쓴다 — ambient 헤딩("상담석 규모" 같은 무관한 현황표 제목)에 잘못
-            # 묶이는 오분류 방지(기아: 43개 요구사항이 통째로 '상담석 규모' 탭에 오분류됨).
-            item_tab = it.get("_tab") if isinstance(it, dict) else None
+            item_tab = it.get("_tab") if (use_item_tab and isinstance(it, dict)) else None
             tab = item_tab[:40] if item_tab else base_tab
             units.append(Unit(tab=tab, marker="", title=base_title, level_path=base_level, details=[it]))
 
@@ -142,10 +153,15 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
                 # 로드맵/체크리스트(항목당 1라벨)이므로 탭 쪼개지 말고 ambient 유닛에 붙인다
                 # (기아 '고객 채널 최적화 1' 등 1행짜리 탭 폭발 방지 — 구조 신호, 키워드 아님).
                 hints = [r.get("_tab") for r in reqs if r.get("_tab")]
-                grouped = bool(hints) and len(hints) >= 3 and len(set(hints)) / len(hints) <= 0.7
+                n_cat = len(set(hints))
+                grouped = bool(hints) and len(hints) >= 3 and n_cat / len(hints) <= 0.7
                 if not grouped:
-                    # 진짜 분류표 아님 → ambient 탭 공유(탭 폭발 방지)하되 행별 독립 유닛(keep 격리).
-                    attach_isolated(reqs)
+                    # 진짜 분류표 아님(구분값이 행마다 다 다름). '고유 구분값 개수'로 갈라 처리
+                    # (reqs 총 길이 아님 — 불릿 분해로 한 구분값에서 여러 줄이 나와 부풀려짐,
+                    # 예: 성능표 6구분→11reqs였는데 reqs로 재면 잘못 '크다'고 오판했었음):
+                    # 구분값 많음(>8, SIP/CTI/챗봇 등 실제로 다른 컴포넌트) → 항목별 탭.
+                    # 구분값 적음(≤8, 평균응답시간/평균처리시간 등 한 화제의 하위항목) → ambient 탭 하나.
+                    attach_isolated(reqs, use_item_tab=n_cat > 8)
                 else:
                     # 정규화 키로 문서 전체에서 병합 — 같은 카테고리가 다른 표에 다시 나와도 한 탭 유지.
                     for r in reqs:
@@ -284,17 +300,60 @@ def _clean_toc(s: str) -> str:
     return re.sub(r"\s*(?:[.·‧]\s*){3,}.*$|\s*…+.*$", "", s or "").strip()
 
 
+def _slug_tab(t: str) -> str:
+    # 깔끔한 접두사: 대괄호 내용·번호·마커·목차점선 제거 → 한글/영문만, 짧게.
+    t = re.sub(r"[\[\(（【][^\])）】]*[\])）】]", "", t or "")   # [..](..) 제거
+    toks = re.findall(r"[A-Za-z가-힣]+", t)                     # 숫자 제외(제안서'2'→제안서)
+    return ("".join(toks)[:8]) or "REQ"
+
+
+def _consolidate_small_tabs(rows: list[dict], small_max: int = 2, large_min: int = 5) -> list[dict]:
+    """작은 탭(≤small_max행)을 괄호제거 키로 일치하는 더 큰 탭(≥large_min행)에 병합.
+
+    'SIP (Session Initiation Protocol)'(1행, 개요/글로서리 잔여) 같은 표기변형이
+    'SIP (IP-PBX)'(52행, 진짜 요구사항 그룹)와 별도 탭으로 남는 걸 방지 — 최종 탭
+    크기를 다 안 뒤에 하는 후처리라 어느게 '진짜' 큰 탭인지 안전하게 판단 가능
+    (실시간 처리 중엔 아직 크기를 모름). 병합 후 탭별 ID 재부여.
+    """
+    from collections import defaultdict
+    by_tab: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        by_tab[r["tab"]].append(r)
+    large_by_base: dict[str, str] = {}
+    for t in sorted(by_tab, key=lambda t: -len(by_tab[t])):
+        if len(by_tab[t]) >= large_min:
+            bk = _tab_base_key(t)
+            if bk and bk not in large_by_base:
+                large_by_base[bk] = t
+    changed = False
+    for t in list(by_tab):
+        if len(by_tab[t]) <= small_max:
+            target = large_by_base.get(_tab_base_key(t))
+            if target and target != t:
+                for r in by_tab[t]:
+                    r["tab"] = target
+                changed = True
+    if not changed:
+        return rows
+    tab_counter: dict[str, int] = {}
+    tab_prefix: dict[str, str] = {}
+    out = []
+    for r in rows:
+        tab = r["tab"]
+        if tab not in tab_prefix:
+            tab_prefix[tab] = _slug_tab(tab)
+        pfx = tab_prefix[tab]
+        tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
+        out.append({**r, "code": f"{pfx}-{tab_counter[pfx]:03d}"})
+    return out
+
+
 def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
     """유닛 + keep 판정 → 고정칼럼 행. junk 셀(페이지번호·날짜·기호) 제외. (공개)"""
     rows: list[dict] = []
     tab_counter: dict[str, int] = {}
     tab_prefix: dict[str, str] = {}
-
-    def _slug(t: str) -> str:
-        # 깔끔한 접두사: 대괄호 내용·번호·마커·목차점선 제거 → 한글/영문만, 짧게.
-        t = re.sub(r"[\[\(（【][^\])）】]*[\])）】]", "", t or "")   # [..](..) 제거
-        toks = re.findall(r"[A-Za-z가-힣]+", t)                     # 숫자 제외(제안서'2'→제안서)
-        return ("".join(toks)[:8]) or "REQ"
+    _slug = _slug_tab
 
     for i, u in enumerate(units):
         if not keep.get(i, True):
@@ -323,7 +382,7 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
             tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
             rows.append({"tab": tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
                          "name": it["name"], "level": it["level"], "detail": it["detail"]})
-    return rows
+    return _consolidate_small_tabs(rows)
 
 
 def extract_fixed_rows(html: str, doc_name: str) -> list[dict]:
