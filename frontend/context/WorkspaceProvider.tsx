@@ -240,7 +240,7 @@ export function WorkspaceProvider({
           });
           setSessions(loadWorkspace().sessions);
         }
-        router.push(`/review/${live.doc_id}`);
+        router.push(`/edit/${live.doc_id}`);
         touchWorkspaceSession(live.doc_id);
         setSessions(loadWorkspace().sessions);
         return;
@@ -248,7 +248,7 @@ export function WorkspaceProvider({
 
       const contentHash = item.contentHash;
       if (!contentHash) {
-        router.push(`/review/${item.docId}`);
+        router.push(`/edit/${item.docId}`);
         return;
       }
 
@@ -263,7 +263,7 @@ export function WorkspaceProvider({
           }).sessions,
         );
         void refreshServerSessions();
-        router.push(`/review/${doc_id}`);
+        router.push(`/edit/${doc_id}`);
         return;
       } catch {
         /* artifacts 삭제됨 — 원본 샘플로 새 파이프라인 */
@@ -278,7 +278,7 @@ export function WorkspaceProvider({
           }).sessions,
         );
         void refreshServerSessions();
-        router.push(`/review/${doc_id}`);
+        router.push(`/edit/${doc_id}`);
         return;
       }
 
@@ -373,7 +373,7 @@ export function WorkspaceProvider({
   }, [serverSessions]);
 
   useEffect(() => {
-    const m = pathname.match(/^\/review\/([^/]+)/);
+    const m = pathname.match(/^\/(?:review|edit)\/([^/]+)/);
     if (!m) return;
     const docId = m[1];
     const server = serverSessions.find((s) => s.doc_id === docId);
@@ -450,7 +450,7 @@ export function useWorkspaceNavItems(): WorkspaceNavItem[] {
 }
 
 export function useActiveProjectKey(pathname: string): string | null {
-  const m = pathname.match(/^\/review\/([^/]+)/);
+  const m = pathname.match(/^\/(?:review|edit)\/([^/]+)/);
   if (!m) return null;
   return m[1];
 }

@@ -258,53 +258,39 @@ def _heading_from_context(soup, table) -> str:
 
 
 def merge_consecutive_grids(grids: list[Grid]) -> list[Grid]:
-    """페이지 분할로 쪼개진 연속 표 병합 — HTML/LibreOffice 경로용."""
-    from .classify import classify, detect_header_row, is_requirement_table
+    """페이지 분할로 쪼개진 **연속 표만** 병합 — 그 외 비어있지 않은 그리드는 전부 보존(100% recall).
+
+    (구) is_requirement_table 통과 표 + 그 연속만 남기고 나머지를 드롭 → 한글(HWP/HTML) 경로에서
+    산문형 1행 표(요구사항 본문)·정보표가 통째 누락됐다(K-water 91→17, 부산 103→47).
+    (신) 비요구 판정/드롭은 downstream **섹션단위 keep**(LLM)으로 위임하고, 여기선 페이지 분할
+    연속(헤더 없음 + 직전과 동일 열수 + 다열)만 직전 표에 병합한다. 완전 빈 그리드만 제외.
+    """
+    from .classify import detect_header_row
 
     if len(grids) < 2:
         return grids
 
     out: list[Grid] = []
-    cand: Grid | None = None
-    cand_roles: dict[str, int] | None = None
-
     for grid in grids:
-        header_row = detect_header_row(grid)
-        if cand is not None and cand_roles is not None:
-            continuation = header_row < 0 and cand.ncols == grid.ncols
-            if continuation:
+        if not any(c.strip() for row in grid.cells for c in row):
+            continue  # 내용 0 인 빈 그리드만 제외(노이즈 판단 아님)
+        if out:
+            prev = out[-1]
+            header_row = detect_header_row(grid)
+            # 페이지 분할 연속표: 헤더 없고 직전과 열수 동일(다열) → 직전에 병합
+            if header_row < 0 and grid.ncols == prev.ncols and grid.ncols > 1:
                 skip = 0
-                if grid.cells and header_row < 0:
-                    # 반복 헤더 행 스킵
-                    first = " ".join(grid.cells[0]).strip()
-                    if cand.cells and first and first == " ".join(cand.cells[0]).strip():
-                        skip = 1
+                if (
+                    grid.cells and prev.cells
+                    and " ".join(grid.cells[0]).strip() == " ".join(prev.cells[0]).strip()
+                ):
+                    skip = 1  # 반복 헤더 행 스킵
                 extra = grid.cells[skip:]
-                cand.cells.extend(extra)
-                cand.row_pages.extend(grid.row_pages[skip:] or [None] * len(extra))
+                prev.cells.extend(extra)
+                prev.row_pages.extend(grid.row_pages[skip:] or [None] * len(extra))
                 continue
-
-        roles = classify(grid, header_row) if header_row >= 0 else {}
-        if header_row >= 0 and is_requirement_table(grid, roles, header_row):
-            if cand is not None:
-                out.append(cand)
-            cand = Grid(
-                cells=[row[:] for row in grid.cells],
-                table_id=grid.table_id,
-                page=grid.page,
-                row_pages=list(grid.row_pages),
-                section_heading=grid.section_heading,
-            )
-            cand_roles = roles
-            continue
-
-        if cand is not None:
-            out.append(cand)
-            cand = cand_roles = None
-
-    if cand is not None:
-        out.append(cand)
-    return out if out else grids
+        out.append(grid)
+    return out
 
 
 def grids_from_html(html: str) -> list[Grid]:

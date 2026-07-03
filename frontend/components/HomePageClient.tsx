@@ -113,14 +113,17 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const excelRef = useRef<HTMLInputElement | null>(null);
+  // v2/v_rule 두 엔진을 고르게 하던 토글은 혼란만 줘서 제거 — v4(내부명 v_rule, 구조인식+
+  // gemma keep+페이지추적)로 단일화. 새 엔진을 또 만들면 여기 값만 바꾸면 된다.
+  const engine = "v_rule";
 
   async function onUpload(file: File) {
     setBusy("upload");
     setErr("");
     try {
-      const { doc_id } = await uploadDocument(file, getStoredLlmProvider());
+      const { doc_id } = await uploadDocument(file, getStoredLlmProvider(), engine);
       startTransition(() => {
-        router.push(`/review/${doc_id}`);
+        router.push(`/edit/${doc_id}`);
       });
     } catch (e) {
       setErr(`업로드 실패: ${String(e)}`);
@@ -134,7 +137,7 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
     try {
       const { doc_id } = await importExcel(file, getStoredLlmProvider());
       startTransition(() => {
-        router.push(`/review/${doc_id}`);
+        router.push(`/edit/${doc_id}`);
       });
     } catch (e) {
       setErr(`Excel 불러오기 실패: ${String(e)}`);
@@ -176,7 +179,9 @@ export default function HomePageClient({ initialSamples, startError }: Props) {
               공공 RFP의 제안요청서·과업지시서·별첨 등을 업로드하세요
             </p>
           </div>
-          <LlmModelSelector />
+          <div className="flex items-center gap-3">
+            <LlmModelSelector />
+          </div>
         </div>
         <div
           role="button"

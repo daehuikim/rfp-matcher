@@ -100,6 +100,15 @@ function apiBase(): string {
   return process.env.NEXT_PUBLIC_API_BASE ?? "/api";
 }
 
+/**
+ * 브라우저가 직접 소비하는 URL(anchor href·img/iframe src·EventSource) 전용 base.
+ * apiBase() 는 SSR fetch 를 위해 서버에서 절대주소를 돌려주지만, href/src 는 SSR·client
+ * 가 동일 문자열이어야 하이드레이션 불일치가 없다. 브라우저는 항상 /api(rewrite)만 쓰므로 고정.
+ */
+function browserBase(): string {
+  return "/api";
+}
+
 export async function fetchExtractionProfile(docId: string): Promise<ExtractionProfile | null> {
   const r = await fetch(`${apiBase()}/documents/${docId}/extraction-profile`, { cache: "no-store" });
   if (!r.ok) return null;
@@ -128,7 +137,7 @@ export async function patchJudgement(
 }
 
 export function eventStreamUrl(docId: string): string {
-  return `${apiBase()}/documents/${docId}/events`;
+  return `${browserBase()}/documents/${docId}/events`;
 }
 
 export type JudgementUpdatedPayload = {
@@ -142,10 +151,12 @@ export type JudgementUpdatedPayload = {
 export async function uploadDocument(
   file: File,
   llmProvider?: string,
+  engine?: string,
 ): Promise<{ doc_id: string; status: string }> {
   const fd = new FormData();
   fd.append("file", file);
   if (llmProvider) fd.append("llm_provider", llmProvider);
+  if (engine) fd.append("engine", engine); // 'v_rule' 이면 룰 엔진, 미지정=기본 v2
   const r = await fetch(`${apiBase()}/documents`, { method: "POST", body: fd });
   if (!r.ok) throw new Error(`upload ${r.status}`);
   return r.json();
@@ -239,13 +250,13 @@ export function exportUrl(
   if (cols?.length) params.set("cols", cols.join(","));
   else params.set("adaptive", "true");
   if (filename && filename.trim()) params.set("filename", filename.trim());
-  return `${apiBase()}/documents/${docId}/export?${params.toString()}`;
+  return `${browserBase()}/documents/${docId}/export?${params.toString()}`;
 }
 
 /** 요건 첨부 PNG — [표]·관련 화면(안) */
 export function assetUrl(docId: string, relPath: string): string {
   const params = new URLSearchParams({ path: relPath });
-  return `${apiBase()}/documents/${docId}/asset?${params.toString()}`;
+  return `${browserBase()}/documents/${docId}/asset?${params.toString()}`;
 }
 
 export type ExportColumnInfo = {
@@ -337,7 +348,7 @@ export type DocumentMeta = {
 
 /** 원본 파일 그대로(다운로드·새 탭용). */
 export function documentSourceUrl(docId: string): string {
-  return `${apiBase()}/documents/${docId}/source`;
+  return `${browserBase()}/documents/${docId}/source`;
 }
 
 /**
@@ -346,7 +357,7 @@ export function documentSourceUrl(docId: string): string {
  * 변환 불가(HWPX 등)는 변환 HTML 로 폴백된다.
  */
 export function documentPreviewUrl(docId: string): string {
-  return `${apiBase()}/documents/${docId}/preview`;
+  return `${browserBase()}/documents/${docId}/preview`;
 }
 
 export type RfpOverview = {
@@ -455,5 +466,103 @@ export async function ensurePipeline(
     method: "POST",
   });
   if (!r.ok) throw new Error(`ensure-pipeline ${r.status}`);
+  return r.json();
+}
+
+// "AI 검토 시작" 버튼 — 사람이 카드 정리를 마친 뒤 수동 트리거. force=true(기본) 로
+// 이미 판정된 요건도 지우고 전량 재평가(편집으로 바뀐 내용 반영). 완료는 SSE
+// RECOMMENDING/RECOMMENDED 이벤트로 통지되므로 이 호출은 큐잉만 확인한다.
+export async function startAiReview(
+  docId: string,
+  force = true,
+): Promise<{ doc_id: string; queued: boolean }> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/recommend?force=${force}`, {
+    method: "POST",
+  });
+  if (!r.ok) throw new Error(`recommend ${r.status}`);
+  return r.json();
+}
+
+// ── FE 편집기능(병합/삭제/편집) — BE row-ops 엔드포인트 호출 ──
+export async function editRequirement(
+  reqId: string,
+  fields: { name?: string; definition?: string; detail?: string; code?: string },
+  editorId?: string,
+): Promise<Requirement> {
+  const r = await fetch(`${apiBase()}/requirements/${reqId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "X-Editor-Id": editorId ?? "" },
+    body: JSON.stringify(fields),
+  });
+  if (!r.ok) throw new Error(`edit ${r.status}`);
+  return r.json();
+}
+
+export async function deleteRequirement(docId: string, reqId: string): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/${reqId}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`delete ${r.status}`);
+  return r.json();
+}
+
+/** 카드(탭) 통째 삭제 — 여러 행 일괄 삭제 후 한 번만 재정렬. */
+export async function deleteRequirementsBatch(docId: string, reqIds: string[]): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/delete-batch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ req_ids: reqIds }),
+  });
+  if (!r.ok) throw new Error(`delete-batch ${r.status}`);
+  return r.json();
+}
+
+export async function mergeRequirements(
+  docId: string,
+  reqId: string,
+  withId: string,
+): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/${reqId}/merge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ with_id: withId }),
+  });
+  if (!r.ok) throw new Error(`merge ${r.status}`);
+  return r.json();
+}
+
+export function exportFixedUrl(docId: string): string {
+  return `${browserBase()}/documents/${docId}/export-fixed`;
+}
+
+/** 분해 — 상세내용을 사용자 지정 기호로 여러 행으로 쪼갬(병합의 반대). */
+export async function splitRequirement(
+  docId: string,
+  reqId: string,
+  delimiter: string,
+): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/${reqId}/split`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ delimiter }),
+  });
+  if (!r.ok) {
+    let m = `split ${r.status}`;
+    try { const j = await r.json(); if (j?.detail) m = String(j.detail); } catch { /* */ }
+    throw new Error(m);
+  }
+  return r.json();
+}
+
+/** 카드 병합 / ID 일괄지정 — 지정 행들에 같은 탭(카드)·같은 ID 접두사 적용. */
+export async function regroupRequirements(
+  docId: string,
+  reqIds: string[],
+  opts: { prefix?: string; category?: string; name?: string },
+): Promise<RequirementView[]> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/requirements/regroup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ req_ids: reqIds, prefix: opts.prefix ?? null, category: opts.category ?? null, name: opts.name ?? null }),
+  });
+  if (!r.ok) throw new Error(`regroup ${r.status}`);
   return r.json();
 }

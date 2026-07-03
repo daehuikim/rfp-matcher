@@ -221,15 +221,13 @@ def run(input_path: str | Path, gold_xlsx: str | None = None,
         if not korean_handled:
             grids = grids_from_html(html)
         if not korean_handled and mode == "llm":
-            from .classify import classify, detect_header_row, is_requirement_table
-
-            cands: list[tuple] = []
-            for g in grids:
-                hr = detect_header_row(g)
-                roles = classify(g, hr)
-                if is_requirement_table(g, roles, hr):
-                    sec = g.section_heading or ""
-                    cands.append((g, sec))
+            # 100% recall: 표 후보 게이팅 안 함 — 비어있지 않은 그리드 전부 schema 추출.
+            # 비요구 판정/드롭은 downstream 섹션단위 keep(LLM)이 담당(PDF 경로와 동일 원칙).
+            cands: list[tuple] = [
+                (g, g.section_heading or "")
+                for g in grids
+                if any(c.strip() for row in g.cells for c in row)
+            ]
             table_reqs = schema_extract_tables_sync(cands)
             for r in table_reqs:
                 r.doc = name

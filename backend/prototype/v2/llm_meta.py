@@ -108,6 +108,8 @@ async def _label_chunk(
 def _apply_labels(reqs: list[Req], labels: dict[int, tuple[str, str]]) -> int:
     n = 0
     for i, (top, mid) in labels.items():
+        if not (0 <= i < len(reqs)):  # LLM 이 범위 밖 index 를 돌려줘도 크래시 금지(방어)
+            continue
         if top != reqs[i].top:
             reqs[i].top = top
             reqs[i].gen_top = True

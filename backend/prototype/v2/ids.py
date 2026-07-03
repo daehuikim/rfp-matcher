@@ -29,13 +29,22 @@ _PREFIX_ALIASES: list[tuple[str, str]] = [
     (r"인프라.?DB|^DB$", "인프라DB"),
     (r"인프라.?아키텍처|아키텍처", "인프라아키텍처"),
     (r"인프라.?공통|인프라.?인력", "인프라공통"),
-    (r"UX|UI", "UXUI"),
+    (r"\bUX\b|\bUI\b|UX\s*/\s*UI", "UXUI"),  # 단독 UX/UI 만 — Eq(ui)pment·Req(ui)rement 등 영단어 내부 오탐 방지
 ]
 
 
 def _slug(text: str) -> str:
     m = _TOKEN.search(text or "")
     return m.group(0) if m else ""
+
+
+def _clean_slug(text: str) -> str:
+    """공백·기호를 지우고 토큰을 이어붙인 ID 접두사 — 변환기 글자간 공백('시 스템')·
+    영문코드 괄호('기능요구사항( SFR, …)')에 견고. 첫 괄호 앞 한글머리만 사용(영문코드 제외).
+    """
+    head = re.split(r"[（(]", text or "", maxsplit=1)[0]  # 영문 코드 괄호 이전(한글 항목명)
+    slug = "".join(_TOKEN.findall(head))                    # 공백/기호 제거 → 토큰 연결
+    return slug[:24]
 
 
 def _good_prefix(s: str) -> bool:
@@ -54,9 +63,9 @@ def domain_slug(domain: str) -> str:
     for pat, slug in _PREFIX_ALIASES:
         if re.search(pat, d, re.I):
             return slug
-    slug = _slug(d)
+    slug = _clean_slug(d)  # 공백·영문코드괄호 제거한 한글머리 slug (첫토큰만 쓰던 _slug 대체)
     if slug and len(slug) >= 2 and not _BAD_PREFIX.match(slug):
-        return slug[:24]
+        return slug
     return "요구사항"
 
 

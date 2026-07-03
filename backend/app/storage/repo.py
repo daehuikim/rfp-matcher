@@ -44,6 +44,41 @@ class InMemoryRepo:
             ids = self.requirements_by_doc.get(doc_id, [])
             return [self.requirements[i] for i in ids if i in self.requirements]
 
+    async def update_requirement(self, req_id: str, fields: dict) -> Requirement | None:
+        """한 요구사항의 칸 편집(요구사항명/계위/상세내용/ID 등) — FE 인라인 편집."""
+        async with self._lock:
+            r = self.requirements.get(req_id)
+            if r is None:
+                return None
+            upd = r.model_copy(update=fields)
+            self.requirements[req_id] = upd
+            return upd
+
+    async def delete_requirement(self, doc_id: str, req_id: str) -> bool:
+        """행 삭제 — 목록·요건·추천·판정에서 제거(ID 재정렬은 상위에서 renumber 호출)."""
+        async with self._lock:
+            ids = self.requirements_by_doc.get(doc_id, [])
+            if req_id not in ids:
+                return False
+            ids.remove(req_id)
+            self.requirements.pop(req_id, None)
+            self.recommendations.pop(req_id, None)
+            self.judgements.pop(req_id, None)
+            return True
+
+    async def reorder_requirements(self, doc_id: str, ordered_ids: list[str]) -> None:
+        async with self._lock:
+            self.requirements_by_doc[doc_id] = [i for i in ordered_ids if i in self.requirements]
+
+    async def insert_requirements_after(self, doc_id: str, after_id: str, reqs: list[Requirement]) -> None:
+        """분해(split) — 원본 행 바로 뒤에 새 행들을 삽입."""
+        async with self._lock:
+            for r in reqs:
+                self.requirements[r.id] = r
+            ids = self.requirements_by_doc.setdefault(doc_id, [])
+            pos = ids.index(after_id) + 1 if after_id in ids else len(ids)
+            ids[pos:pos] = [r.id for r in reqs]
+
     async def upsert_judgement(self, jud: HumanJudgement) -> None:
         async with self._lock:
             self.judgements[jud.requirement_id] = jud
@@ -80,6 +115,14 @@ class InMemoryRepo:
                 self.requirements.pop(req_id, None)
                 self.recommendations.pop(req_id, None)
                 self.judgements.pop(req_id, None)
+
+    async def clear_recommendations(self, doc_id: str) -> None:
+        """사람이 카드 정리(삭제/병합/편집)를 마친 뒤 'AI 검토 시작' 재실행 시 사용 —
+        요건/Human 판정은 그대로 두고 AI 판정만 지워 전량 재평가되게 한다."""
+        async with self._lock:
+            ids = self.requirements_by_doc.get(doc_id, [])
+            for req_id in ids:
+                self.recommendations.pop(req_id, None)
 
     async def clear_all(self) -> None:
         """모든 문서·요건·판정·추천 제거 — 워크스페이스 초기화."""

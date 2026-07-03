@@ -39,12 +39,15 @@ def test_promote_table_bullet_group_gold_style() -> None:
 
 
 def test_assign_ids_global_unique() -> None:
+    # 탭 기반 ID — 접두사는 탭명 slug. 다른 탭은 다른 접두사, 같은 탭은 동일 접두사·연속번호.
+    # rid 는 전역 유일(탭이 같으면 번호로 구분).
     reqs = [
         Req(doc="t", table_id=-1, page=1, tab="구축방향", top="지식베이스(RAG)", mid="m", detail="a"),
         Req(doc="t", table_id=1, page=18, tab="프로젝트", top="지식베이스(RAG)", mid="m", detail="b"),
         Req(doc="t", table_id=1, page=18, tab="프로젝트", top="", mid="m2", detail="c"),
     ]
     assign_ids(reqs)
-    assert reqs[0].rid == "지식베이스_001"
-    assert reqs[1].rid == "지식베이스_002"
-    assert reqs[2].rid == "지식베이스_003"
+    assert reqs[0].rid == "구축방향_001"
+    assert reqs[1].rid == "프로젝트_001"
+    assert reqs[2].rid == "프로젝트_002"
+    assert len({r.rid for r in reqs}) == 3  # 전역 유일

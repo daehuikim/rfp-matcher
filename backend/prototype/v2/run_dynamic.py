@@ -25,6 +25,10 @@ from .section_levels import assign_section_levels
 
 _LARGE_SECTION = 120  # 이 행수 이상인 단일 섹션은 병합 안 하고 자기 탭(사용자 '큰 섹션 따로')
 _SEC_MARK = re.compile(r"^\s*(?:[IVXLCDM]+|\d+(?:\.\d+)*|[가-힣]|[①-⑳])[.)]\s*")
+_LEAD_BRACKET = re.compile(r"^\s*[\[(（【][^\])）】]{0,40}[\])）】]\s*")  # 머리 프로젝트명 대괄호
+_TOC_LEADER = re.compile(r"\s*(?:·\s*){3,}.*$|\s*\.{4,}.*$|\s*…+.*$")  # TOC 점선 리더(··/…/....) 이후 제거
+# 머리 불릿/기호(□/■/❍/\uf06d 등) 제거 — 한글은 \w 라 보존, 비-단어 머리기호만 제거
+_LEAD_SYMBOL = re.compile(r"^[^\w(（\[【]+")
 
 
 def _page_key(r):
@@ -36,17 +40,23 @@ def _seg(section_path: str, idx: int) -> str:
     if not segs:
         return ""
     seg = segs[idx] if -len(segs) <= idx < len(segs) else segs[0]
-    return _SEC_MARK.sub("", seg).strip()
+    seg = _LEAD_SYMBOL.sub("", seg).strip()     # 머리 불릿/기호(□/❍/ 등) 제거 — 번호/한글은 보존
+    seg = _TOC_LEADER.sub("", seg).strip()      # TOC 점선 리더(··/…/....) 이후 제거
+    seg = _SEC_MARK.sub("", seg).strip()       # 머리 번호(2./가./II.) 제거
+    seg = _LEAD_BRACKET.sub("", seg).strip()    # 머리 프로젝트명 대괄호 제거
+    return seg[:40].strip()                      # 문장형 헤딩 과길이 컷
 
 
 def _regroup_tabs(reqs: list) -> None:
-    """상위 章 구조 그룹(연속) — 탭 = **상위(부모) 섹션**, 말단 섹션은 section_levels 가 '대분류'
-    칼럼으로 보존(depth 적응). 단일 섹션이 큰 경우(≥_LARGE_SECTION)는 자기 탭. **의미 병합 아님**
-    (구조적·페이지 연속이라 페이지순 보존).
+    """상위 **章(최상위 섹션)** 단위 그룹 — 탭 = section_path 의 **첫 세그먼트(章)**.
 
-    예) BC '2.제안요청사항 > 라.서버요구/마.스토리지...' → 탭 '제안 요청 사항'(대분류=서버요구/스토리지).
+    章은 본디 페이지 연속이라 파편화가 없다(부모 segs[-2]는 깊이 혼재 문서서 章↔하위 교차 파편화).
+    말단·중간 섹션은 section_levels 가 대분류/중분류 칼럼으로 보존. 단일 섹션이 큰 경우
+    (≥_LARGE_SECTION)만 자기 탭으로 분리(사용자 '큰 섹션 따로'). **의미 병합 아님 → 페이지순 보존**.
+
+    예) BC '2.제안요청사항 > 라.서버요구...' → 탭 '제안 요청 사항'(대분류=서버요구/스토리지).
+        하나 '1.[비정형…]제안요청 개요 > 1.4.프로젝트 범위 > 1.4.3.상세요구' → 탭 '제안요청 개요'(대분류=프로젝트 범위 등).
         woori '2.제안요청범위 > 다.제안요건'(218행, 큼) → 자기 탭 '제안요건'.
-        신한 'II>2.ICT요청사항>2.4.업무' → 탭 'ICT 요청사항'(대분류=2.4업무 등).
     """
     sp_count = Counter(r.section_path for r in reqs)
     for r in reqs:
@@ -55,8 +65,19 @@ def _regroup_tabs(reqs: list) -> None:
         if sp_count[sp] >= _LARGE_SECTION:
             r.tab = leaf or (r.tab or "요구사항")  # 큰 섹션 = 자기 탭(말단명)
         else:
-            parent = _seg(sp, -2) if sp.count(">") >= 1 else leaf  # 상위 섹션으로 그룹
-            r.tab = parent or leaf or (r.tab or "요구사항")
+            chapter = _seg(sp, 0)  # 최상위 章 으로 그룹(페이지 연속 → 파편화 없음)
+            r.tab = chapter or leaf or (r.tab or "요구사항")
+
+    # 변환기 글자간 공백차로 같은 章이 둘로 쪼개진 탭 통합('정보보호 시스템 구축'↔'정보보호시스템 구축').
+    # 공백제거 형태가 같으면 한 탭으로(시멘틱 병합 아님 — 동일명 정규화, 페이지순 유지). 대표명=최다 행수.
+    norm_groups: dict[str, Counter] = {}
+    for r in reqs:
+        norm_groups.setdefault(re.sub(r"\s+", "", r.tab or ""), Counter())[r.tab] += 1
+    canon = {k: c.most_common(1)[0][0] for k, c in norm_groups.items() if len(c) > 1}
+    for r in reqs:
+        rep = canon.get(re.sub(r"\s+", "", r.tab or ""))
+        if rep:
+            r.tab = rep
 
 
 def finalize(reqs: list, overview: Any, steps: list[str]) -> dict[str, Any]:

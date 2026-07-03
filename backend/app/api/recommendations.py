@@ -20,12 +20,17 @@ async def start_recommendation(
     doc_id: str,
     background: BackgroundTasks,
     container: ContainerDep,
+    force: bool = False,
 ) -> RecommendStartResponse:
+    """AI 검토(매칭) 시작. force=True 면 이미 판정된 요건도 지우고 전량 재평가 —
+    사람이 카드 삭제/병합/편집을 마친 뒤 FE의 'AI 검토 시작' 버튼이 쓰는 경로."""
     if doc_id not in container.repo.documents:
         raise HTTPException(404, f"document 없음: {doc_id}")
     reqs = await container.repo.list_requirements(doc_id)
     if not reqs:
         raise HTTPException(409, "추출된 요구사항 없음 — 먼저 업로드/추출 완료 필요")
+    if force:
+        await container.repo.clear_recommendations(doc_id)
     svc = RecommendationService(container)
 
     async def _runner() -> None:

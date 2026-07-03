@@ -31,5 +31,7 @@ def test_deterministic_coarsen_merges_micro_tops() -> None:
     assert reqs[0].top in ("시스템 일반", "프로젝트 범위")
     assert not reqs[1].top
     assign_ids(reqs)
-    assert reqs[0].rid.startswith("시스템_")
-    assert reqs[2].rid.startswith("시스템_")
+    # 탭 기반 ID — 같은 탭('T') 행은 top 과 무관하게 동일 접두사·연속번호
+    prefixes = {r.rid.rsplit("_", 1)[0] for r in reqs}
+    assert len(prefixes) == 1
+    assert [r.rid.rsplit("_", 1)[1] for r in reqs] == ["001", "002", "003"]

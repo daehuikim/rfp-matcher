@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from pathlib import Path
 
@@ -24,6 +25,11 @@ from app.services.artifact_cache import ArtifactCache
 from app.services.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
+
+# 병렬 업로드 시 추출 스레드(네이티브: pymupdf OCR/텍스트레이어 검사 등)의 동시 실행 상한.
+# OpenDataLoader 는 java subprocess 라 프로세스 격리로 안전하지만, in-process 네이티브가
+# 여러 스레드에서 동시에 돌면 세그폴트 위험이 있어 상한을 둔다(진짜 병렬은 유지, 폭주만 방지).
+_EXTRACT_SEM = asyncio.Semaphore(int(os.getenv("EXTRACT_CONCURRENCY", "3")))
 
 
 class ExtractionService:
@@ -52,6 +58,11 @@ class ExtractionService:
 
         disable_cache = self._c.settings.extraction_disable_cache
         cache = ArtifactCache(self._c.settings.artifact_cache_dir)
+
+        # 엔진 선택(doc별) — 'v_rule' 이면 캐시 무시하고 룰 엔진으로 강제 fresh 추출
+        # (공정 비교: 동일 문서를 v2 캐시로 복원하지 않고 v_rule 로 새로 뽑아야 함). 캐시 체크보다 앞.
+        if self._c.engine_for(document.id) == "v_rule" and not await self._c.repo.list_requirements(document.id):
+            return await self._run_v3_domain(document, "v_rule")
 
         # 이미 추출된 doc(메모리에 요건 존재) — 재추출하지 않고 추천만 이어서 진행.
         # 프로젝트 복귀 시 처음부터 재추출되는 문제 방지 (첫 추출은 요건이 없어 그대로 진행).
@@ -459,7 +470,21 @@ class ExtractionService:
 
             sample_id = (document.content_hash or document.id)[:16]
             label = document.source_filename or Path(document.src_path).stem
-            if strategy == "public_form":
+            if strategy == "v_rule":
+                # v4 엔진(구 v_rule) — PDF/HWP/HWPX → 구조인식 룰 추출 → v2 Req(어댑터)
+                from prototype.v_rule.adapter import run_v_rule_reqs
+
+                workdir = self._c.settings.storage_root / document.id / "v_rule"
+                async with _EXTRACT_SEM:   # 병렬 추출 동시성 상한(세그폴트 방지)
+                    v2_reqs = await asyncio.to_thread(run_v_rule_reqs, Path(document.src_path), workdir)
+                page_note = ""
+                if Path(document.src_path).suffix.lower() == ".pdf":
+                    from prototype.v3.pipeline_final import assign_pages_from_pdf
+                    page_note = await asyncio.to_thread(
+                        assign_pages_from_pdf, v2_reqs, Path(document.src_path))
+                overview = None
+                steps = [f"v4(구조인식 엔진): {len(v2_reqs)} rows"] + ([page_note] if page_note else [])
+            elif strategy == "public_form":
                 # 공공(요구사항 총괄표) — 기존 경로 유지(잘 동작)
                 from prototype.v3.pipeline_final import run_sample
 
@@ -693,6 +718,12 @@ class ExtractionService:
         )
 
     async def _recommend_background(self, doc_id: str, *, use_cache: bool) -> None:
+        # 운영 플래그: EXTRACT_ONLY=1 이면 AI 추천(임베딩·BM25S) 단계를 건너뛴다(기본 off).
+        # 다건 동시 업로드 시 추천 파이프라인의 네이티브(BM25S 멀티프로세싱·임베딩) 동시 실행으로
+        # 인한 세그폴트를 피하고, 추출 카드만 빠르게 확인하려는 용도. 카드/편집 뷰엔 영향 없음.
+        if os.getenv("EXTRACT_ONLY", "").lower() in ("1", "true", "yes"):
+            logger.info("EXTRACT_ONLY — AI 추천 스킵 doc=%s", doc_id)
+            return
         from app.services.recommendation import RecommendationService
 
         try:
