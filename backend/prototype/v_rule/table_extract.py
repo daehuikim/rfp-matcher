@@ -16,8 +16,8 @@ import re
 # 숫자/기호만(현황·배점 셀) — 단위·연도 등 포함
 _NUM_ONLY = re.compile(r"^[\s\d.,%~/()\-–—:·+*°]+(?:[가-힣A-Za-z]{0,3})?$")
 _ID_PAT = re.compile(r"[A-Z]{2,5}[-–]?\d{2,4}")            # ECR-001, SFR001 등 요구사항 ID
-# 한 셀/문자열 안 복수 항목 구분자(불릿·개행-대시·<br>)
-_ITEM_SPLIT = re.compile(r"\s*(?:[❍○●◦▪▫◆◇▶▷▸‣⁃∙•⦁]|<br\s*/?>)\s*")
+# 한 셀/문자열 안 복수 항목 구분자(불릿·개행-대시·<br>·공백으로 둘러싼 ㅇ 하위불릿)
+_ITEM_SPLIT = re.compile(r"\s*(?:[❍○●◦▪▫◆◇▶▷▸‣⁃∙•⦁]|<br\s*/?>)\s*|\s+ㅇ\s+")
 
 
 def _norm(c: str) -> str:
@@ -69,7 +69,11 @@ def is_junk_table(grid: list[list[str]]) -> bool:
 
 def _is_vertical_card(grid: list[list[str]], ncol: int, stats: list[dict]) -> bool:
     """세로 라벨-값 카드(HWP 요구사항 정의표): 좌열이 짧은 라벨(고유번호/명칭/세부내용…),
-    우측에 값. 일부 행이 3열(라벨|소라벨|값)이어도 허용."""
+    우측에 값. 일부 행이 3열(라벨|소라벨|값)이어도 허용.
+
+    주의: [구분|내용|비고] 같은 평범한 가로표도 '좌열 짧고 우열에 긴 값'을 만족해 예전엔
+    오분류됐다(성능요구사항표 다중 행 중 1행만 남고 나머지 행이 통째로 드롭됨). HWP 세로카드는
+    반드시 고유번호(ECR-001 등) 값을 갖는다는 구조 신호로 실제 요구사항 카드만 골라낸다."""
     if ncol not in (2, 3):
         return False
     rows2 = [r for r in grid if len(r) >= 2 and _norm(r[0])]
@@ -78,7 +82,8 @@ def _is_vertical_card(grid: list[list[str]], ncol: int, stats: list[dict]) -> bo
     left = [_norm(r[0]) for r in rows2]
     short = sum(1 for x in left if len(x) <= 18) / len(left)
     has_long = any(len(_norm(c)) >= 15 for r in grid for c in r[1:])   # 세부내용 같은 서술값
-    return short > 0.7 and has_long
+    has_id = any(_ID_PAT.search(_norm(c)) for r in grid[:3] for c in r)  # 고유번호(ECR-001 등)
+    return short > 0.7 and has_long and has_id
 
 
 def _vertical_to_reqs(grid: list[list[str]]) -> list[dict]:
