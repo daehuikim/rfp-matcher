@@ -16,12 +16,18 @@ import {
   eventStreamUrl,
   ensurePipeline,
   fetchDocumentMeta,
+  startAiReview,
 } from "@/lib/api";
 import { PdfViewerPane } from "@/components/PdfViewerPane";
 
-type ColKey = "code" | "name" | "level" | "source" | "action";
-const DEFAULT_W: Record<ColKey, number> = { code: 120, name: 150, level: 130, source: 60, action: 236 };
+type ColKey = "code" | "name" | "level" | "source" | "ai" | "action";
+const DEFAULT_W: Record<ColKey, number> = { code: 120, name: 150, level: 130, source: 60, ai: 40, action: 236 };
 type Card = { category: string; prefix: string; name: string; reqIds: string[]; count: number };
+const AI_BADGE: Record<string, { bg: string; fg: string }> = {
+  O: { bg: "#e6f4ea", fg: "#1e7e34" },
+  X: { bg: "#fdecea", fg: "#c8102e" },
+  "△": { bg: "#fff8e1", fg: "#9a7300" },
+};
 
 export default function EditTableClient({ docId }: { docId: string }) {
   const [rows, setRows] = useState<RequirementView[]>([]);
@@ -43,6 +49,16 @@ export default function EditTableClient({ docId }: { docId: string }) {
   const [viewerAnchor, setViewerAnchor] = useState<string | null>(null);
   const [jumpNonce, setJumpNonce] = useState(0);
   useEffect(() => { void fetchDocumentMeta(docId).then(setDocMeta).catch(() => {}); }, [docId]);
+
+  // "AI 검토 시작" — 사람이 카드 정리를 마친 뒤 수동으로 누르는 버튼(자동 실행 아님).
+  const [aiReviewing, setAiReviewing] = useState(false);
+  const [aiProgress, setAiProgress] = useState<{ done: number; total: number } | null>(null);
+  async function onStartAiReview() {
+    setAiReviewing(true);
+    setAiProgress(null);
+    try { await startAiReview(docId, true); flash("AI 검토 시작됨"); }
+    catch (e) { setMsg(`AI 검토 시작 실패: ${String(e)}`); setAiReviewing(false); }
+  }
   function jumpTo(r: RequirementView["requirement"]) {
     const p = r.source_page != null ? Number(r.source_page) : null;
     setViewerPage(p && !Number.isNaN(p) ? p : null);
@@ -103,6 +119,22 @@ export default function EditTableClient({ docId }: { docId: string }) {
       } catch { /* ignore */ }
     });
     src.addEventListener("REQUIREMENTS_CHANGED", () => { void load(); });
+    // AI 검토 진행 — RECOMMENDING 은 진행률만 갱신(행 재조회 없음, 잦은 이벤트라 무겁다),
+    // RECOMMENDED 에서 최종 1회 재조회해 각 행의 ai_risk(O/X/△) 를 반영.
+    src.addEventListener("RECOMMENDING", (e: MessageEvent) => {
+      try {
+        const p = JSON.parse(e.data);
+        setAiReviewing(true);
+        if (typeof p.payload?.done === "number" && typeof p.payload?.total === "number") {
+          setAiProgress({ done: p.payload.done, total: p.payload.total });
+        }
+      } catch { /* ignore */ }
+    });
+    src.addEventListener("RECOMMENDED", () => {
+      setAiReviewing(false);
+      setAiProgress(null);
+      void load();
+    });
     return () => src.close();
   }, [docId, editorId, load]);
 
@@ -205,7 +237,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
     vref.current?.scrollToIndex({ index: idx, align: "start" });
   }
 
-  const gridCols = `${w.code}px ${w.name}px ${w.level}px 1fr ${w.source}px ${w.action}px`;
+  const gridCols = `${w.code}px ${w.name}px ${w.level}px 1fr ${w.source}px ${w.ai}px ${w.action}px`;
   const hdrCell: React.CSSProperties = { padding: "5px 6px", fontSize: 12, fontWeight: 700, color: "#fff", position: "relative", borderRight: "1px solid #555" };
   const handle: React.CSSProperties = { position: "absolute", right: 0, top: 0, width: 6, height: "100%", cursor: "col-resize" };
   const gi_of = useMemo(() => { const m = new Map(cards.map((c, i) => [c.category, i])); return m; }, [cards]);
@@ -230,7 +262,13 @@ export default function EditTableClient({ docId }: { docId: string }) {
         {!viewerOpen && canPreview && (
           <button onClick={() => setViewerOpen(true)} style={{ marginLeft: "auto", padding: "6px 12px", borderRadius: 6, fontSize: 13 }}>◂ 원문 뷰어</button>
         )}
-        <a href={exportFixedUrl(docId)} style={{ marginLeft: viewerOpen || !canPreview ? "auto" : undefined, background: "#c8102e", color: "#fff", padding: "6px 14px", borderRadius: 6, fontSize: 13, textDecoration: "none" }}>Excel 다운로드</a>
+        {/* AI 검토 — 자동 실행 아님. 카드 정리를 마친 뒤 사람이 직접 눌러 시작(강제 재평가). */}
+        <button onClick={() => void onStartAiReview()} disabled={aiReviewing}
+          title="편집을 마친 뒤 눌러 AI 판정(O/X/△)을 최신 상태로 재평가합니다"
+          style={{ marginLeft: viewerOpen || !canPreview ? "auto" : undefined, padding: "6px 12px", borderRadius: 6, fontSize: 13, opacity: aiReviewing ? 0.6 : 1 }}>
+          {aiReviewing ? `AI 검토 중… ${aiProgress ? `${aiProgress.done}/${aiProgress.total}` : ""}` : "AI 검토 시작"}
+        </button>
+        <a href={exportFixedUrl(docId)} style={{ background: "#c8102e", color: "#fff", padding: "6px 14px", borderRadius: 6, fontSize: 13, textDecoration: "none" }}>Excel 다운로드</a>
         <button onClick={() => void load()} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13 }}>새로고침</button>
       </div>
 
@@ -253,6 +291,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
         <div style={hdrCell}>계위<span style={handle} onMouseDown={(e) => startResize("level", e)} /></div>
         <div style={hdrCell}>상세내용</div>
         <div style={hdrCell} title="원문 페이지 — 클릭하면 우측 뷰어로 이동">출처<span style={handle} onMouseDown={(e) => startResize("source", e)} /></div>
+        <div style={hdrCell} title="AI 판정(O=적합/△=일부/X=부적합) — 'AI 검토 시작' 버튼으로 갱신">AI<span style={handle} onMouseDown={(e) => startResize("ai", e)} /></div>
         <div style={{ ...hdrCell, borderRight: "none" }}>작업</div>
       </div>
       {loading ? <p>불러오는 중…</p> : (
@@ -297,6 +336,17 @@ export default function EditTableClient({ docId }: { docId: string }) {
                       style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #c8d0e0", background: "#eef3ff", color: "#2a4d8f", cursor: "pointer" }}>
                       {r.source_page != null ? `p.${r.source_page}` : "원문"}
                     </button>
+                  ) : <span style={{ fontSize: 11, color: "#ccc" }}>-</span>}
+                </div>
+                <div style={{ padding: "2px 4px", borderRight: "1px solid #eee", display: "flex", alignItems: "flex-start", justifyContent: "center" }}>
+                  {v.recommendation?.ai_risk ? (
+                    <span title={v.recommendation.ai_reason || ""}
+                      style={{ fontSize: 11, fontWeight: 700, width: 20, height: 20, borderRadius: "50%",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: AI_BADGE[v.recommendation.ai_risk]?.bg ?? "#eee",
+                        color: AI_BADGE[v.recommendation.ai_risk]?.fg ?? "#888" }}>
+                      {v.recommendation.ai_risk}
+                    </span>
                   ) : <span style={{ fontSize: 11, color: "#ccc" }}>-</span>}
                 </div>
                 <div style={{ padding: "3px 4px", display: "flex", gap: 3, flexWrap: "wrap", alignItems: "flex-start" }}>

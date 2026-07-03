@@ -116,6 +116,14 @@ class InMemoryRepo:
                 self.recommendations.pop(req_id, None)
                 self.judgements.pop(req_id, None)
 
+    async def clear_recommendations(self, doc_id: str) -> None:
+        """사람이 카드 정리(삭제/병합/편집)를 마친 뒤 'AI 검토 시작' 재실행 시 사용 —
+        요건/Human 판정은 그대로 두고 AI 판정만 지워 전량 재평가되게 한다."""
+        async with self._lock:
+            ids = self.requirements_by_doc.get(doc_id, [])
+            for req_id in ids:
+                self.recommendations.pop(req_id, None)
+
     async def clear_all(self) -> None:
         """모든 문서·요건·판정·추천 제거 — 워크스페이스 초기화."""
         async with self._lock:

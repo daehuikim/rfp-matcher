@@ -469,6 +469,20 @@ export async function ensurePipeline(
   return r.json();
 }
 
+// "AI 검토 시작" 버튼 — 사람이 카드 정리를 마친 뒤 수동 트리거. force=true(기본) 로
+// 이미 판정된 요건도 지우고 전량 재평가(편집으로 바뀐 내용 반영). 완료는 SSE
+// RECOMMENDING/RECOMMENDED 이벤트로 통지되므로 이 호출은 큐잉만 확인한다.
+export async function startAiReview(
+  docId: string,
+  force = true,
+): Promise<{ doc_id: string; queued: boolean }> {
+  const r = await fetch(`${apiBase()}/documents/${docId}/recommend?force=${force}`, {
+    method: "POST",
+  });
+  if (!r.ok) throw new Error(`recommend ${r.status}`);
+  return r.json();
+}
+
 // ── FE 편집기능(병합/삭제/편집) — BE row-ops 엔드포인트 호출 ──
 export async function editRequirement(
   reqId: string,
