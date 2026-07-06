@@ -53,6 +53,49 @@ def _tab_base_key(t: str) -> str:
 _SECTION_SYM = re.compile(r"^\s*[■▣◈◆◇□▷▶◎]")
 
 
+def _toc_piece(p) -> bool:
+    """짧은 헤딩형 조각(마커+비문장, ≤25자) — 목차 항목의 형태. str/dict 상세 모두 허용."""
+    t = _detail_text(p).strip()
+    return (bool(t) and len(t) <= 25 and marker_level(t) is not None
+            and not _SENT_END.search(strip_marker(t)))
+
+
+def _drop_toc_unit_runs(units: list) -> list:
+    """같은 제목(ambient) 아래 '한 줄짜리 헤딩형 상세' 유닛이 5개 이상 연속되면 목차
+    나열로 판정해 제거. 변환기가 목차를 개별 <p> 블록으로 쪼개 들어오면(대한항공 실측)
+    블록 단위 _looks_toc_run 으로는 못 잡는다 — 유닛 레벨 후처리로 보완. 목차 항목은
+    본문에 같은 제목으로 재등장하므로 recall 손실 없음. 구조 신호만 사용."""
+    drop: set[int] = set()
+    n = len(units)
+    i = 0
+    while i < n:
+        u = units[i]
+        if not (len(u.details) == 1 and _toc_piece(u.details[0])):
+            i += 1
+            continue
+        j = i
+        while (j < n and units[j].title == u.title
+               and len(units[j].details) == 1 and _toc_piece(units[j].details[0])):
+            j += 1
+        if j - i >= 5:
+            drop.update(range(i, j))
+        i = j
+    return [u for k, u in enumerate(units) if k not in drop]
+
+
+def _looks_toc_run(pieces: list[str]) -> bool:
+    """분해 결과가 '목차 나열'인지 — 다수(≥5) 조각의 80%↑가 짧은 헤딩형(마커+비문장)이면
+    본문이 아니라 목차/색인 덩어리다(대한항공 실측: 'Ⅰ 사업안내 1. 사업목적 2. 사업범위…'
+    338자 한 덩어리가 28개 헤딩 조각으로 분해되어 junk 폭증). 목차 항목은 본문에서 같은
+    제목으로 재등장하므로 상세로 올리지 않아도 recall 손실이 없다. 구조 신호만 사용."""
+    if len(pieces) < 5:
+        return False
+    short_head = sum(1 for p in pieces
+                     if len(p) <= 25 and marker_level(p) is not None
+                     and not _SENT_END.search(strip_marker(p)))
+    return short_head / len(pieces) >= 0.8
+
+
 def _is_section_bullet(text: str) -> bool:
     # ■/▣/◈ 로 시작하는 섹션 헤더는 다소 길어도(예: '■ 기능 요구사항 (SFR, System
     # Function Requirement) – 13. 보이는 ARS') 헤딩으로 인정. 완결 문장만 제외.
@@ -97,6 +140,7 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
     if blocks is None:
         blocks = iter_blocks(html or "")
     stack: list[tuple[int, str]] = []   # (level, title)
+    li_stack: list[tuple[int, str]] = []   # (li_depth, 항목텍스트) — 리스트 계위 복원용
     units: list[Unit] = []
     cur: Unit | None = None
     # 가로 요구표에서 뽑은 카테고리(구분열) 탭 — 가까운 거리(창 이내)에서 정규화 키로 병합.
@@ -114,7 +158,7 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
             units.append(cur)
         return cur
 
-    def attach_isolated(items: list, use_item_tab: bool = True) -> None:
+    def attach_isolated(items: list, use_item_tab: bool = True, level_suffix: str = "") -> None:
         """ambient(cur) 탭/계위를 공유하되 항목마다 독립 유닛(keep 판정 격리).
         표·다항목 셀은 본질적으로 여러 요구사항이라, 한 유닛에 몰아넣으면 그중
         하나가 junk 라 판정될 때 옆의 진짜 요구사항까지 통째로 drop된다(대한항공 recall 원인).
@@ -124,10 +168,15 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
         기아 43행이 '상담석 규모' 같은 무관 ambient 헤딩에 오분류되지 않는다. 반대로 작은
         표(≤8행, 평균응답시간/평균처리시간/동시처리 같은 한 화제의 하위항목)까지 항목마다
         탭을 쪼개면 사람이 안 만들 만큼 탭이 폭발한다(기아 161탭) — 이런 경우는 False 로
-        ambient 탭 하나에 묶되, keep 판정 격리는 그대로 유지."""
+        ambient 탭 하나에 묶되, keep 판정 격리는 그대로 유지.
+
+        level_suffix: 리스트 계위(조상 <li> 텍스트 경로) — 헤딩 계위 뒤에 붙여 JB/신한처럼
+        리스트로 쓰인 요구사항의 부모 항목을 계위로 복원(구조 신호만, 키워드 없음)."""
         base_tab = cur.tab if cur else "요구사항"
         base_title = cur.title if cur else ""
         base_level = cur.level_path if cur else ""
+        if level_suffix:
+            base_level = f"{base_level} > {level_suffix}" if base_level else level_suffix
         for it in items:
             item_tab = it.get("_tab") if (use_item_tab and isinstance(it, dict)) else None
             tab = item_tab[:40] if item_tab else base_tab
@@ -158,7 +207,8 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
                 # 요구표 판정 불가(1열 요구표 등) → 행마다 독립 유닛(표는 본질적으로 다중
                 # 요구사항 나열이라 한 유닛에 몰아넣으면 keep 판정이 콜래터럴 드롭을 낸다).
                 pieces = [p for line in _table_details(b.grid) for p in split_items(line)]
-                attach_isolated(pieces)
+                if not _looks_toc_run(pieces):
+                    attach_isolated(pieces)
             elif reqs and any("_tab" in r for r in reqs):
                 # 구분(카테고리)열 반복도 확인 — 여러 행이 같은 구분을 공유해야 '진짜 분류표'
                 # (예: SFR 20행이 'SIP' 공유). 행마다 구분값이 거의 다 다르면 분류표가 아니라
@@ -210,6 +260,16 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
         sparse_label = (len(strip_marker(b.text).strip()) <= 40 and nxt_is_table
                         and not _SENT_END.search(strip_marker(b.text)))
         marker_head = lvl is not None and lvl <= _HEAD_MAX and _is_heading_line(b.text)
+        # 리스트 계위: <li> 블록이면 조상 li 텍스트 경로가 계위 접미가 된다(JB/신한 —
+        # 요구사항이 표가 아닌 중첩 리스트로 옴). 리스트가 끝나면(li 아닌 텍스트) 스택 클리어.
+        li_depth = getattr(b, "li_depth", 0)
+        if li_depth:
+            li_anc = [(d, t) for (d, t) in li_stack if d < li_depth]
+            li_stack[:] = li_anc   # 같은/더 깊은 깊이의 이전 형제 항목 제거(스택 최신화)
+        else:
+            li_anc = []
+            li_stack.clear()       # 리스트 밖 텍스트 → 리스트 종료
+        li_suffix = " > ".join(t for _, t in li_anc)
         if marker_head:
             open_heading(b.text, lvl)
             continue
@@ -223,14 +283,19 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
             base = strip_marker(b.text) if lvl is not None else b.text
             pieces = split_items(base)              # ⦁/❍/• 다항목 분해
             if len(pieces) > 1:
-                attach_isolated(pieces)              # 다항목 한 블록 → 항목별 독립 유닛(keep 격리)
-            elif lvl is not None and lvl >= 4:
-                # 레벨4/5 마커(가)/나)/1)/2)/❍/- 등)는 나열형 리스트의 개별 항목이다.
-                # 마커 없는 연속 평문과 달리 방치하면 여러 항목이 한 유닛에 쌓여, 그중
-                # 하나가 junk 판정될 때 옆의 진짜 요구사항까지 통째로 drop된다(신한은행/경기도 실측).
-                attach_isolated([base])
+                if not _looks_toc_run(pieces):       # 목차 나열 덩어리는 상세로 안 올림
+                    attach_isolated(pieces, level_suffix=li_suffix)   # 항목별 독립 유닛(keep 격리)
+            elif (lvl is not None and lvl >= 4) or li_depth:
+                # 레벨4/5 마커(가)/나)/1)/2)/❍/- 등) 또는 <li> 항목은 나열형 리스트의
+                # 개별 항목이다(li 는 텍스트 마커가 없어도 구조적으로 이미 항목).
+                # 방치하면 여러 항목이 한 유닛에 쌓여, 그중 하나가 junk 판정될 때
+                # 옆의 진짜 요구사항까지 통째로 drop된다(신한은행/경기도 실측).
+                attach_isolated([base], level_suffix=li_suffix)
             else:
                 ensure_cur().details.append(base)
+            if li_depth:                             # 이 li 가 다음 자식 li 들의 부모가 될 수 있음
+                li_stack[:] = li_anc + [(li_depth, re.sub(r"\s+", " ", base)[:40])]
+    units = _drop_toc_unit_runs(units)
     # 헤딩 자체는 상세가 비어(바로 표가 이어지므로) 필터에서 빠지지만, 형제계열 인식엔
     # 헤딩이 필요하므로 필터 전에 돌린다 — 산하 표/본문 유닛(level_path 로 추적)의 탭도
     # 함께 정정되므로 필터 후에도 효과가 남는다.
@@ -571,8 +636,8 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
                 continue
             if isinstance(d, dict):
                 cleaned.append({"detail": txt,
-                                "name": _clean_toc(d.get("name") or u.title),
-                                "level": _clean_toc(d.get("level") or u.level_path)})
+                                "name": _clean_toc(re.sub(r"\s+", " ", d.get("name") or u.title or "")),
+                                "level": _clean_toc(re.sub(r"\s+", " ", d.get("level") or u.level_path or ""))})
             else:
                 cleaned.append({"detail": txt, "name": _clean_toc(u.title),
                                 "level": _clean_toc(u.level_path)})

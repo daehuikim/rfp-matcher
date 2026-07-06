@@ -52,7 +52,6 @@ def _markdown_to_html(md: str) -> str:
     <table> 로 방출하고, 아니면 각 줄을 원문 그대로 <p> 로 남긴다(내용 소실 없음).
     """
     import html as _h
-    from collections import Counter
     out: list[str] = ["<html><body>"]
     tbl: list[tuple[list[str], str]] = []   # (cells, 원문 줄)
 
@@ -60,11 +59,10 @@ def _markdown_to_html(md: str) -> str:
         nonlocal tbl
         if not tbl:
             return
-        counts = Counter(len(cells) for cells, _ in tbl)
-        modal_cols, modal_n = counts.most_common(1)[0]
-        is_table = (len(tbl) >= 2 and modal_cols >= 2
-                    and modal_n / len(tbl) >= 0.8)
-        if is_table:
+        # 진짜 표 = 파이프 행 2개 이상. 외톨이 파이프 한 줄(다이어그램 라벨 'A | B | C')만
+        # 문단으로 보존 — 표를 통째로 문단화하면 진짜 요구표(구분|상세내역|요구수준)까지
+        # 깨진다(스캔 신한카드 실측). 열수 비일관은 그대로 둠(_col_stats 가 ragged 허용).
+        if len(tbl) >= 2 and max(len(c) for c, _ in tbl) >= 2:
             out.append("<table>")
             for cells, _ in tbl:
                 out.append("<tr>" + "".join(f"<td>{_h.escape(c)}</td>" for c in cells) + "</tr>")
@@ -82,6 +80,15 @@ def _markdown_to_html(md: str) -> str:
             continue
         if ln.count("|") >= 2:                   # 파이프 표 행 후보
             tbl.append(([c.strip() for c in ln.strip("|").split("|")], ln))
+            continue
+        if tbl:
+            # 표 진행 중 파이프 없는 줄 = VLM 이 긴 셀을 줄바꿈한 랩핑 → 직전 행 마지막
+            # 셀에 이어붙임(표를 1행 조각들로 파편화시키던 원인). 줄 경계는 \n 으로 보존해
+            # 셀 내 항목 분해(split_items)가 작동하게 한다.
+            cells, rawln = tbl[-1]
+            if cells:
+                cells[-1] = (cells[-1] + "\n" + ln).strip()
+            tbl[-1] = (cells, rawln + " " + ln)
             continue
         flush_tbl()
         t = re.sub(r"^#+\s*", "", ln)            # markdown heading 기호 제거(제목 텍스트 유지)

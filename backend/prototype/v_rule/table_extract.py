@@ -17,18 +17,52 @@ import re
 _NUM_ONLY = re.compile(r"^[\s\d.,%~/()\-–—:·+*°]+(?:[가-힣A-Za-z]{0,3})?$")
 _ID_PAT = re.compile(r"[A-Z]{2,5}[-–]?\d{2,4}")            # ECR-001, SFR001 등 요구사항 ID
 # 한 셀/문자열 안 복수 항목 구분자(불릿·개행-대시·<br>·공백으로 둘러싼 ㅇ 하위불릿)
-_ITEM_SPLIT = re.compile(r"\s*(?:[❍○●◦▪▫◆◇▶▷▸‣⁃∙•⦁]|<br\s*/?>)\s*|\s+ㅇ\s+")
+_ITEM_SPLIT = re.compile(r"\s*(?:[❍○●◦▪▫◆◇▶▷▸‣⁃∙•⦁☞]|<br\s*/?>)\s*|\s+ㅇ\s+")
+# 줄 시작 항목 마커 — 셀 안 여러 줄(_cell 이 \n 보존) 중 '새 항목'의 시작 판정.
+# 마커 없는 줄은 직전 항목의 연속(PDF 줄바꿈 아티팩트)으로 이어붙인다.
+# 숫자는 1-2자리만(연도 2026. 오탐 방지), 대시는 뒤 공백 필수(하이픈 단어 오탐 방지).
+_LINE_ITEM = re.compile(
+    r"^(?:[❍○●◦▪▫◆◇■□▣◈▶▷▸‣⁃∙•⦁☞※]|[-–—]\s|\d{1,2}\s*[.)]\s?|[가-힣]\s*[.)]\s|"
+    r"\([0-9가-힣]+\)|[①-⑳]|ㅇ\s)")
 
 
 def _norm(c: str) -> str:
-    return re.sub(r"\s+", " ", (c or "").strip())
+    """줄 내 공백만 정리, 줄 경계(\\n)는 보존 — 셀 내 항목 분해(split_items)의 원천 신호."""
+    c = (c or "").strip()
+    if "\n" not in c:
+        return re.sub(r"\s+", " ", c)
+    return "\n".join(re.sub(r"[ \t]+", " ", ln).strip() for ln in c.split("\n") if ln.strip())
+
+
+def _split_inline(text: str) -> list[str]:
+    parts = [p.strip(" ·-–—\t") for p in _ITEM_SPLIT.split(text or "")]
+    return [p for p in parts if p and len(p) >= 3]
 
 
 def split_items(text: str) -> list[str]:
-    """한 문자열 안에 불릿(❍/•/⦁)·<br>로 나열된 복수 항목을 개별로 분해. 하나면 그대로 1개."""
-    parts = [p.strip(" ·-–—\t") for p in _ITEM_SPLIT.split(text or "")]
-    parts = [p for p in parts if p and len(p) >= 3]
-    return parts or ([text.strip()] if text and text.strip() else [])
+    """한 문자열 안에 나열된 복수 항목을 개별로 분해. 하나면 그대로 1개.
+
+    줄 경계(\\n)가 있으면 줄 단위 우선: 마커로 시작하는 줄=새 항목, 마커 없는 줄=직전
+    항목에 연속(줄바꿈 아티팩트 vs 항목 경계 구분). 각 항목 안 인라인 불릿은 재분해.
+    줄 경계 없으면 기존 인라인 분해 그대로(기존 호출처 동작 불변).
+    """
+    text = text or ""
+    if "\n" in text:
+        items: list[str] = []
+        for ln in text.split("\n"):
+            ln = ln.strip()
+            if not ln:
+                continue
+            if _LINE_ITEM.match(ln) or not items:
+                items.append(ln)
+            else:
+                items[-1] = items[-1] + " " + ln
+        out: list[str] = []
+        for it in items:
+            out.extend(_split_inline(it) or ([it.strip(" ·-–—\t")] if len(it.strip()) >= 3 else []))
+        return out or ([re.sub(r"\s+", " ", text).strip()] if text.strip() else [])
+    parts = _split_inline(text)
+    return parts or ([text.strip()] if text.strip() else [])
 
 
 def _col_stats(grid: list[list[str]]) -> tuple[int, list[dict]]:
@@ -155,9 +189,10 @@ def _horizontal_reqs(grid: list[list[str]], ncol: int, stats: list[dict]) -> lis
         det = cell(row, content)
         if not det or len(det) < 3:
             continue
-        cat = cell(row, cat_col) or cat_fill
+        # 구분/명 열은 한 줄로(개행이 탭명/계위에 새면 안 됨) — 상세(det)만 줄 보존.
+        cat = re.sub(r"\s+", " ", cell(row, cat_col)) or cat_fill
         cat_fill = cat or cat_fill
-        nm = cell(row, name_col) or name_fill
+        nm = re.sub(r"\s+", " ", cell(row, name_col)) or name_fill
         name_fill = nm or name_fill
         # _tab = 구분(계위)열 값 → 이 요구표를 ambient 헤딩이 아닌 자기 카테고리로 그룹핑
         # (기아처럼 요구표가 '상담석 규모' 같은 junk 헤딩 아래 misfiled 되는 것 방지)

@@ -52,6 +52,7 @@ class Block:
     text: str = ""       # text 블록 원문(마커 포함)
     grid: list[list[str]] = field(default_factory=list)  # table 블록
     htag: int = 0        # HTML 헤딩 태그 레벨(h1=1..h6=6, 0=아님) — DOCX/HWP 순수제목 헤딩용
+    li_depth: int = 0    # <li> 중첩 깊이(ul/ol 조상 수, 0=리스트 아님) — 리스트 계위 복원용
 
 
 @dataclass
@@ -70,8 +71,65 @@ class Card:
         return [b.text for b in self.blocks if b.kind == "text"]
 
 
-def _cell(td: Tag) -> str:
-    return re.sub(r"\s+", " ", td.get_text(" ", strip=True)).strip()
+def _cell(td: Tag, owner: Tag | None = None) -> str:
+    """셀 텍스트 — **줄 경계 보존**. 셀 안 <p>/<li> 는 각각 한 줄, 중첩표는 행당 한 줄
+    (셀 " | " join), <img> 는 [그림] 플레이스홀더 한 줄.
+
+    기존 get_text(" ")는 셀 내부 모든 줄을 공백으로 이어붙여 불릿 여러 개가 대시로 연결된
+    2000자짜리 '뚱뚱한 행'이 됐다(기아 실측 최대 2,286자). 줄 경계가 살아야 표추출의
+    split_items 가 의미단위(불릿 1개=행 1개)로 분해할 수 있다. 구조가 없는 평문 셀은
+    기존과 동일하게 한 줄로 나온다.
+    """
+    owner = owner if owner is not None else td.find_parent("table")
+
+    def _one(el: Tag) -> str:
+        return re.sub(r"\s+", " ", el.get_text(" ", strip=True)).strip()
+
+    def _flat(el: Tag) -> str:
+        """평문 폴백 — 텍스트 노드 **안의 실제 개행**만 줄 경계로 보존(스캔 셀 랩핑).
+        태그 경계는 공백 join(개행으로 하면 <b>등 인라인 태그마다 가짜 줄이 생김)."""
+        raw = el.get_text(" ")
+        if "\n" not in raw:
+            return re.sub(r"\s+", " ", raw).strip()
+        return "\n".join(re.sub(r"[ \t]+", " ", ln).strip()
+                         for ln in raw.split("\n") if ln.strip())
+
+    lines: list[str] = []
+    for el in td.find_all(["p", "li", "table", "img"]):   # 문서순
+        if el.name == "table":
+            if el.find_parent("table") is not owner:
+                continue                     # 표안표안표 — 직속 중첩표 처리에 포함됨
+            for tr in el.find_all("tr"):
+                if tr.find_parent("table") is not el:
+                    continue
+                cells = [_one(c) for c in tr.find_all(["td", "th"], recursive=False)]
+                row = " | ".join(c for c in cells if c)
+                if row:
+                    lines.append(row)
+            continue
+        if el.find_parent("table") is not owner:
+            continue                         # 중첩표 내부 p/li/img — 위 표 라인으로 처리됨
+        if el.name == "img":
+            lines.append("[그림]")
+        elif el.name == "p":
+            if el.find_parent("li") is not None:
+                continue                     # li 안 p 는 li 줄로 처리(중복 방지)
+            t = _one(el)
+            if t:
+                lines.append(t)
+        else:                                # li — 직계 텍스트만(중첩 하위 li 는 자기 줄로)
+            t = re.sub(r"\s+", " ", " ".join(
+                s.strip() for s in el.find_all(string=True)
+                if s.find_parent("li") is el and s.strip())).strip()
+            if t:
+                lines.append(t)
+    if not lines:                            # 구조 요소 없는 평문 셀 → 줄 보존 폴백
+        return _flat(td)
+    # p/li 밖 직계 텍스트(NavigableString) 유실 방지
+    direct = " ".join(s.strip() for s in td.find_all(string=True, recursive=False) if s.strip())
+    if direct:
+        lines.insert(0, re.sub(r"\s+", " ", direct))
+    return "\n".join(lines)
 
 
 def _table_grid(tbl: Tag) -> list[list[str]]:
@@ -79,7 +137,7 @@ def _table_grid(tbl: Tag) -> list[list[str]]:
     for tr in tbl.find_all("tr"):
         if tr.find_parent("table") is not tbl:
             continue
-        rows.append([_cell(td) for td in tr.find_all(["td", "th"], recursive=False)])
+        rows.append([_cell(td, tbl) for td in tr.find_all(["td", "th"], recursive=False)])
     return rows
 
 
@@ -100,13 +158,24 @@ def iter_blocks(html: str) -> list[Block]:
                 out.append(Block(kind="table", grid=grid))
                 seen_recent = []
             continue
-        t = re.sub(r"\s+", " ", el.get_text(" ", strip=True)).strip()
+        li_depth = 0
+        if el.name == "li":
+            # 직계 텍스트만(하위 중첩 리스트·중첩 표 제외) — 부모 li 가 자식 li/표 전체
+            # 텍스트를 중복 방출하던 문제 해결(JB 실측: li 252개 중 부모/자식 이중 방출로
+            # 중복행 다수). 자식 li·표는 자기 블록으로 따로 나오므로 내용 소실 없음.
+            t = re.sub(r"\s+", " ", " ".join(
+                s.strip() for s in el.find_all(string=True)
+                if s.find_parent("li") is el and s.find_parent("table") is None
+                and s.strip())).strip()
+            li_depth = len(el.find_parents(["ul", "ol"]))
+        else:
+            t = re.sub(r"\s+", " ", el.get_text(" ", strip=True)).strip()
         if not t:
             continue
         if t in seen_recent:               # 직전 몇 블록과 동일 텍스트 → hwp5html 중복 제거
             continue
         htag = int(el.name[1]) if el.name in ("h1", "h2", "h3", "h4", "h5", "h6") else 0
-        out.append(Block(kind="text", text=t, htag=htag))
+        out.append(Block(kind="text", text=t, htag=htag, li_depth=li_depth))
         seen_recent = ([t] + seen_recent)[:3]
     return out
 
