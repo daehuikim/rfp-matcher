@@ -9,6 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 import os
 os.chdir(Path(__file__).resolve().parents[1] / "backend")
+# 결정적 측정 기본 — LLM 분해 폴백까지 포함해 재려면 VRULE_LLM_SPLIT=1 로 실행.
+os.environ.setdefault("VRULE_LLM_SPLIT", "0")
 
 RAW = Path("../data_real/raw")
 FILES = {

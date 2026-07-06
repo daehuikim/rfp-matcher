@@ -524,6 +524,11 @@ def _consolidate_small_tabs(rows: list[dict], small_max: int = 2, large_min: int
                 changed = True
     if not changed:
         return rows
+    return _reassign_codes(rows)
+
+
+def _reassign_codes(rows: list[dict]) -> list[dict]:
+    """탭 구성 변경 후 요구사항ID(code) 재부여 — 탭 접두사-일련번호(공통 유틸)."""
     tab_counter: dict[str, int] = {}
     tab_prefix: dict[str, str] = {}
     out = []
@@ -535,6 +540,107 @@ def _consolidate_small_tabs(rows: list[dict], small_max: int = 2, large_min: int
         tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
         out.append({**r, "code": f"{pfx}-{tab_counter[pfx]:03d}"})
     return out
+
+
+class _SplitItem(BaseModel):
+    index: int
+    pieces: list[str]
+
+
+class _SplitResult(BaseModel):
+    items: list[_SplitItem]
+
+
+def _llm_split_long_details(rows: list[dict], max_len: int = 300, cap: int = 120) -> list[dict]:
+    """마커 없는 긴 상세(>max_len자)를 gemma 가 의미단위로 분해 — 충실전사 강제.
+
+    줄/불릿 마커 분해(split_items)가 못 자르는 '개행 없는 인라인 뭉침'(하나 928자·JB
+    703자 실측)의 마지막 폴백. **반환 조각이 (공백 무시) 원문의 연속 부분문자열이고
+    조각 ≥2개, 원문 커버리지 ≥80% 일 때만 채택** — 하나라도 어기면 그 행은 원문 통째
+    유지(LLM 재작성 원천 차단, recall 구조 보장). 배치 ≤5건/≤4000자, 문서당 상한 cap.
+    VRULE_LLM_SPLIT=0 으로 비활성(결정적 측정용).
+    """
+    import os
+    if os.environ.get("VRULE_LLM_SPLIT", "1") == "0":
+        return rows
+    targets = [i for i, r in enumerate(rows) if len(r["detail"]) > max_len][:cap]
+    if not targets:
+        return rows
+
+    from app.core.config import Settings
+    from app.llm.base import Message
+    from app.llm.factory import build_llm_client
+    from app.llm.fake_client import FakeLlmClient
+    from prototype.v2.async_run import run_coro
+
+    client = build_llm_client(Settings())
+    if isinstance(client, FakeLlmClient):
+        return rows
+
+    def _z(s: str) -> str:
+        return re.sub(r"\s+", "", s or "")
+
+    split_map: dict[int, list[str]] = {}
+    batch: list[int] = []
+    bchars = 0
+
+    def flush() -> None:
+        nonlocal batch, bchars
+        if not batch:
+            return
+        listing = "\n\n".join(f"[{k}]\n{rows[k]['detail']}" for k in batch)
+        prompt = (
+            "다음은 RFP 조견표에서 한 행에 뭉쳐 들어간 긴 요구사항 텍스트들이다. 각각을 "
+            "사람이 조견표 행으로 나눌 법한 **의미단위(개별 요구/항목)**로 분해하라.\n"
+            "규칙(엄수):\n"
+            "1) 각 조각은 원문에서 **연속된 구간을 글자 그대로 복사**한다 — 요약·수정·"
+            "재배열·추가 금지(공백/줄바꿈 차이만 허용).\n"
+            "2) 조각들을 이어붙이면 원문 대부분(80% 이상)이 복원되어야 한다(중요 내용 누락 금지).\n"
+            "3) 의미 있게 나눌 수 없으면 그 index 는 조각 1개(원문 전체)로 반환.\n\n"
+            f"[텍스트들]\n{listing}\n\n"
+            'JSON: {"items":[{"index":<int>,"pieces":["<원문 그대로 조각1>","<조각2>",...]}]} — 모든 index 포함.'
+        )
+        try:
+            res = run_coro(client.structured_output(
+                [Message(role="user", content=prompt)], _SplitResult,
+                purpose="detail_split", max_tokens=8000))
+            for it in res.items:
+                if it.index not in batch:
+                    continue
+                orig = rows[it.index]["detail"]
+                zorig = _z(orig)
+                pieces = [p.strip() for p in (it.pieces or []) if p and p.strip()]
+                if len(pieces) < 2:
+                    continue
+                zp = [_z(p) for p in pieces]
+                if not all(z and z in zorig for z in zp):
+                    continue                          # 재작성/환각 조각 → 통째 유지
+                if sum(len(z) for z in zp) < 0.8 * len(zorig):
+                    continue                          # 내용 누락 → 통째 유지
+                split_map[it.index] = pieces
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "gemma 상세 분해 호출 실패(배치 %s) — 해당 행들 원문 유지", batch, exc_info=True)
+        batch = []
+        bchars = 0
+
+    for k in targets:
+        if len(batch) >= 5 or bchars > 4000:
+            flush()
+        batch.append(k)
+        bchars += len(rows[k]["detail"])
+    flush()
+
+    if not split_map:
+        return rows
+    out: list[dict] = []
+    for i, r in enumerate(rows):
+        if i in split_map:
+            out.extend({**r, "detail": p} for p in split_map[i])
+        else:
+            out.append(r)
+    return _reassign_codes(out)
 
 
 class _TabGroup(BaseModel):
@@ -604,17 +710,7 @@ def _consolidate_tabs_llm(rows: list[dict], target_max: int = 20) -> list[dict]:
             changed = True
     if not changed:
         return rows
-    tab_counter: dict[str, int] = {}
-    tab_prefix: dict[str, str] = {}
-    out = []
-    for r in rows:
-        tab = r["tab"]
-        if tab not in tab_prefix:
-            tab_prefix[tab] = _slug_tab(tab)
-        pfx = tab_prefix[tab]
-        tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
-        out.append({**r, "code": f"{pfx}-{tab_counter[pfx]:03d}"})
-    return out
+    return _reassign_codes(rows)
 
 
 def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
@@ -651,7 +747,7 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
             tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
             rows.append({"tab": tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
                          "name": it["name"], "level": it["level"], "detail": it["detail"]})
-    return _consolidate_tabs_llm(_consolidate_small_tabs(rows))
+    return _consolidate_tabs_llm(_consolidate_small_tabs(_llm_split_long_details(rows)))
 
 
 def extract_fixed_rows(html: str, doc_name: str) -> list[dict]:
