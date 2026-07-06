@@ -120,9 +120,30 @@ def _is_vertical_card(grid: list[list[str]], ncol: int, stats: list[dict]) -> bo
     return short > 0.7 and has_long and has_id
 
 
+def _split_vertical_cards(grid: list[list[str]]) -> list[list[list[str]]]:
+    """한 <table> 에 요구사항 카드 여러 개가 이어붙은 HWP 패턴 분할 — 고유번호 값 행마다
+    새 카드 시작. (법제처 실측: 카드 21개가 한 표에 연속 → 첫 카드만 인식되고 나머지가
+    최장값 병합으로 소실돼 원문ID 7/21 만 나오던 원인)."""
+    def _is_id_row(r) -> bool:
+        return any(_ID_PAT.search(_norm(c)) and len(_norm(c)) <= 16 for c in r[1:] if _norm(c))
+    bounds = [i for i, r in enumerate(grid) if _is_id_row(r)]
+    if len(bounds) <= 1:
+        return [grid]
+    segs: list[list[list[str]]] = []
+    for k, s in enumerate(bounds):
+        e = bounds[k + 1] if k + 1 < len(bounds) else len(grid)
+        seg = grid[(0 if k == 0 else s):e]     # 첫 카드는 앞머리(구분행 등) 포함
+        if seg:
+            segs.append(seg)
+    return segs
+
+
 def _vertical_to_reqs(grid: list[list[str]]) -> list[dict]:
-    """세로 라벨-값 카드 → 1요구. name=제목값(요구사항 명칭), code=ID값(고유번호),
-    detail=최장값(세부 내용, ❍ 분해). 값이 없는 라벨행(관련 요구사항/산출정보 빈칸)은 무시."""
+    """세로 라벨-값 카드 → 1요구. name=제목값(요구사항 명칭), code=ID값(고유번호).
+
+    **고유번호가 있는 카드는 문서가 요구사항 단위를 스스로 선언한 것 — 카드 = 1행.**
+    (사람 정답과 동일: 법제처 SFR-001 = 1행, 셀 안 불릿은 줄바꿈으로 담김. 반대로 기아
+    정답은 카드 선언이 없는 뚱뚱 셀이라 불릿 1개=1행 — 분해는 무선언 카드에만 적용.)"""
     pairs = [(_norm(r[0]), " ".join(_norm(c) for c in r[1:] if _norm(c))) for r in grid if len(r) > 0]
     vals = [(lab, val) for lab, val in pairs if val]
     if not vals:
@@ -136,6 +157,11 @@ def _vertical_to_reqs(grid: list[list[str]]) -> list[dict]:
                         if any(k in lab for k in ("명칭", "항목명", "제목")) and v != code and v != detail_val), None)
     name_cand = [v for _, v in vals if v != code and v != detail_val and not _NUM_ONLY.match(v)]
     name = name_labeled or (min(name_cand, key=len) if name_cand else "")
+    if code:
+        # 정의/세부내용 등 서술 값들을 줄바꿈으로 이어 카드 1행에 담는다(고유번호/명 제외).
+        body = "\n".join(v for _, v in vals
+                         if v != code and v != name and len(v) >= 8) or detail_val
+        return [{"level": name or code, "name": name, "detail": body, "code_hint": code}]
     out = []
     for piece in split_items(detail_val):
         out.append({"level": name or code, "name": name, "detail": piece, "code_hint": code})
@@ -226,7 +252,7 @@ def table_to_reqs(grid: list[list[str]]) -> list[dict] | None:
         return []
     ncol, stats = _col_stats(grid)
     if _is_vertical_card(grid, ncol, stats):
-        return _vertical_to_reqs(grid)
+        return [r for seg in _split_vertical_cards(grid) for r in _vertical_to_reqs(seg)]
     if ncol >= 2:
         rows = _horizontal_reqs(grid, ncol, stats)
         if rows and not _rows_look_like_data_dump(rows):

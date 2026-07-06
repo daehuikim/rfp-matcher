@@ -462,6 +462,11 @@ def _judge_keep(units: list[Unit]) -> dict[int, bool]:
 
 _JUNK_DETAIL = re.compile(r"^[\s\d.\-–—()·:;%~]+$")   # 숫자·기호·점만(페이지번호·날짜)
 _TOC_LINE = re.compile(r"(?:[.·‧]\s*){4,}\s*\d*\s*$|…{2,}\s*\d*\s*$")  # 목차 점선리더+페이지번호
+# 요구사항 총괄표 에코 — 'SFR-OOO'(ID부여규칙 셀), 'System Function Requirement'(영문 라벨만).
+# 총괄표는 집계표라 조견표 행이 아니다(정답지도 별도 시트). canonical 감지에는 유닛 단계
+# 신호를 이미 썼으므로 행에서 지워도 감지 무손실.
+_SUMMARY_ECHO = re.compile(r"^[A-Za-z][A-Za-z ,&/()\-]{2,60}[Rr]equirement s?$|"
+                           r"^[A-Za-z][A-Za-z ,&/()\-]{2,60}[Rr]equirement$")
 
 
 def _is_junk_detail(d: str) -> bool:
@@ -474,6 +479,10 @@ def _is_junk_detail(d: str) -> bool:
     if re.match(r"^\d{4}\s*[.\-]\s*\d{1,2}", d):   # 날짜류
         return True
     if _TOC_LINE.search(d):                          # 목차 라인(제목 …… 12)
+        return True
+    if _SUMMARY_ECHO.match(d):                       # 총괄표 영문라벨 에코('System Function Requirement')
+        return True
+    if _ID_RULE.search(d) and len(d) <= 40:          # 총괄표 ID부여규칙 셀('SFR-OOO 21')
         return True
     return False
 
@@ -657,7 +666,10 @@ def _llm_split_long_details(rows: list[dict], max_len: int = 300, cap: int = 120
     import os
     if os.environ.get("VRULE_LLM_SPLIT", "1") == "0":
         return rows
-    targets = [i for i, r in enumerate(rows) if len(r["detail"]) > max_len][:cap]
+    # 고유번호 카드(문서 선언 단위)는 분해 대상에서 제외 — 카드 = 1행 원칙(정답지 동일).
+    targets = [i for i, r in enumerate(rows)
+               if len(r["detail"]) > max_len
+               and not _DOC_ID.match((r.get("code_hint") or "").strip())][:cap]
     if not targets:
         return rows
 
@@ -794,7 +806,8 @@ def _classify_rows_llm(rows: list[dict], canon: list[dict]) -> list[dict]:
             "조견표 탭은 이 분류를 그대로 따른다.\n\n"
             f"[문서 선언 분류]\n{allowed}\n* 일반사항\n\n"
             "아래 각 행을 내용 기준으로 위 분류 중 정확히 하나에 배정하라. 제안사가 이행할 "
-            "요구가 아닌 내용(사업개요·입찰/계약 안내·행정·평가기준·목차)은 '일반사항'.\n"
+            "요구가 아닌 내용(사업개요·입찰/계약 안내·행정·평가기준·목차·현황/문제점 서술·"
+            "예시 질문·추진 로드맵/일정 설명)은 요구사항 분류에 넣지 말고 '일반사항'.\n"
             "**분류 이름은 위 목록 표기 그대로**(새 이름 금지).\n\n"
             f"[행 목록]\n{listing}\n\n"
             'JSON: {"items":[{"index":<int>,"category":"<분류>"}]} — 모든 index 포함.'
@@ -942,17 +955,29 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool],
         items = u.details or [u.title]
         cleaned: list[dict] = []
         for d in items:
-            txt = re.sub(r"\s+", " ", _detail_text(d)).strip()
-            if not txt or _is_junk_detail(txt):
+            # 줄바꿈 보존(고유번호 카드=1행에 불릿들이 줄로 담김 — 정답지 형식과 동일).
+            # 줄 내 공백만 정리.
+            raw = _detail_text(d)
+            txt = "\n".join(re.sub(r"[ \t]+", " ", ln).strip()
+                            for ln in raw.split("\n") if ln.strip()).strip()
+            if not txt or _is_junk_detail(re.sub(r"\s+", " ", txt)):
                 continue
             if isinstance(d, dict):
-                cleaned.append({"detail": txt,
-                                "name": _clean_toc(re.sub(r"\s+", " ", d.get("name") or u.title or "")),
-                                "level": _clean_toc(re.sub(r"\s+", " ", d.get("level") or u.level_path or "")),
-                                "code_hint": (d.get("code_hint") or "").strip()})
+                nm = _clean_toc(re.sub(r"\s+", " ", d.get("name") or u.title or ""))
+                lv = _clean_toc(re.sub(r"\s+", " ", d.get("level") or u.level_path or ""))
             else:
-                cleaned.append({"detail": txt, "name": _clean_toc(u.title),
-                                "level": _clean_toc(u.level_path), "code_hint": ""})
+                nm = _clean_toc(u.title)
+                lv = _clean_toc(u.level_path)
+            # 요구사항명 품질 가드 — 명은 사람 정답 기준 짧은 라벨(수십자)이지 본문이 아니다.
+            # 상세 전문이 명에 복제되거나(법제처 실측) 과도하게 길면, 짧은 카드 제목으로
+            # 대체하고 그것도 길면 비워둔다(사람이 채움; 엉뚱한 긴 텍스트보다 낫다).
+            def _z24(s):
+                return re.sub(r"\W", "", s or "")[:24]
+            if nm and (len(nm) > 60 or (_z24(nm) and _z24(nm) == _z24(txt))):
+                alt = _clean_toc((u.title or "").strip())
+                nm = alt if (0 < len(alt) <= 60 and _z24(alt) != _z24(txt)) else ""
+            cleaned.append({"detail": txt, "name": nm, "level": lv,
+                            "code_hint": (d.get("code_hint") or "").strip() if isinstance(d, dict) else ""})
         if not cleaned:               # 실내용 없는 카드(표지·페이지번호뿐)는 올리지 않음
             continue
         if u.tab not in tab_prefix:
@@ -960,10 +985,15 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool],
         pfx = tab_prefix[u.tab]
         tab = _clean_toc(u.tab) or "요구사항"
         for it in cleaned:
-            tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
-            rows.append({"tab": tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
+            hint = it["code_hint"]
+            if _DOC_ID.match(hint):
+                code = hint                # 문서 부여 고유번호 우선(원문 맵핑성)
+            else:
+                tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
+                code = f"{pfx}-{tab_counter[pfx]:03d}"
+            rows.append({"tab": tab, "code": code,
                          "name": it["name"], "level": it["level"], "detail": it["detail"],
-                         "code_hint": it["code_hint"]})
+                         "code_hint": hint})
     rows = _consolidate_small_tabs(_llm_split_long_details(rows))
     canon = canonical if canonical is not None else []
     if canon:
