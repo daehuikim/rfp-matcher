@@ -44,7 +44,7 @@ def run_v_rule_reqs(src_path: str | Path, workdir: str | Path, *, keep: bool = T
     매핑: 요구사항ID=code(탭별), 요구사항명=name(카드제목), 계위=level, 상세내용=detail.
     """
     from .preprocess import preprocess
-    from .card_extract import build_units, _judge_keep, rows_from_units
+    from .card_extract import build_units, _judge_keep, rows_from_units, detect_canonical_categories
 
     src = Path(src_path)
     conv = convert_any(src, workdir)
@@ -54,7 +54,9 @@ def run_v_rule_reqs(src_path: str | Path, workdir: str | Path, *, keep: bool = T
     blocks, _tr = preprocess(html)
     units = build_units(blocks=blocks)
     keep_map = _judge_keep(units) if keep else {i: True for i in range(len(units))}
-    rows = rows_from_units(units, keep_map)
+    # 문서 자체 선언 분류(총괄표/R-헤딩: SFR/ECR/DAR…) 감지 → 조견표 탭의 정본으로 사용
+    canon = detect_canonical_categories(units)
+    rows = rows_from_units(units, keep_map, canonical=canon)
     reqs: list[Req] = []
     for r in rows:
         reqs.append(Req(

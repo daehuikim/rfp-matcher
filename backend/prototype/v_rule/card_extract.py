@@ -17,7 +17,8 @@ from .table_extract import split_items, table_to_reqs
 
 # 헤딩 오인 방지: 마커가 붙어도 '긴 완결 문장'은 헤딩이 아니라 내용(상세)이다.
 # 예: '다. 제출한 제안서와 발표내용은 동일해야 하며…' → 헤딩 아님(스캔 catch-all 방지)
-_SENT_END = re.compile(r"(?:한다|하다|해야|하며|되며|바람|함|음|됨|된다|같다|없다|있다|한다\.|것|임)\s*[.]?\s*$")
+_SENT_END = re.compile(
+    r"(?:한다|하다|해야|하며|되며|바람|함|음|됨|된다|는다|간다|온다|않다|같다|없다|있다|것|임)\s*[.]?\s*$")
 
 
 def _is_heading_line(text: str) -> bool:
@@ -143,13 +144,6 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
     li_stack: list[tuple[int, str]] = []   # (li_depth, 항목텍스트) — 리스트 계위 복원용
     units: list[Unit] = []
     cur: Unit | None = None
-    # 가로 요구표에서 뽑은 카테고리(구분열) 탭 — 가까운 거리(창 이내)에서 정규화 키로 병합.
-    # (표 블록마다 새로 만들면 같은 카테고리가 다른 위치의 표에 다시 나올 때 별도 탭이 됨)
-    # 단, 문서 전체 무제한 병합은 페이지 순서를 깨버린다(개요에서 스친 언급 vs 훨씬 뒤
-    # 본편 섹션이 한 탭으로 묶여 카드가 문서 위치와 무관하게 뒤섞임) — 창을 벗어나면
-    # 같은 이름이라도 새 탭으로 다시 시작(사람은 항상 페이지순으로 본다).
-    tab_units: dict[str, tuple[Unit, int]] = {}
-    _TAB_MERGE_WINDOW = 80
 
     def ensure_cur() -> Unit:
         nonlocal cur
@@ -225,23 +219,23 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
                     # 구분값 적음(≤8, 평균응답시간/평균처리시간 등 한 화제의 하위항목) → ambient 탭 하나.
                     attach_isolated(reqs, use_item_tab=n_cat > 8)
                 else:
-                    # 정규화 키로 근접 구간에서만 병합 — 같은 카테고리가 가까운 다른 표에
-                    # 다시 나오면 한 탭 유지하되, 창(_TAB_MERGE_WINDOW)을 벗어나면 새 탭.
+                    # **문서순서 절대 보존** — 이 표 블록 안에서만 카테고리 유닛을 만들고,
+                    # 멀리 떨어진 이전 블록의 동명 유닛에 절대 append 하지 않는다(예전 창(80유닛)
+                    # 병합이 p.13 유닛에 p.92 행을 이어붙여 조견표 순서가 점프하던 실측 버그).
+                    # 같은 카테고리가 뒤에 다시 나오면 같은 '탭 이름'의 새 유닛이 되고, Excel
+                    # 시트/FE 카드 병합은 이름 기준으로 순서 그대로 이뤄진다.
+                    block_units: dict[str, Unit] = {}
                     for r in reqs:
                         t = (r.get("_tab") or (cur.tab if cur else "요구사항"))[:40] or "요구사항"
                         key = _norm_tab_key(t)
-                        entry = tab_units.get(key)
-                        if entry is not None and len(units) - entry[1] > _TAB_MERGE_WINDOW:
-                            entry = None
-                        if entry is None:
+                        tu = block_units.get(key)
+                        if tu is None:
                             # 구분열이 'N-M)' 형제번호를 가지면(예: '1-1)~1-6) 통합 상담
                             # 시스템 ...') 마커를 실어 _merge_sibling_numbered_tabs 가 인식.
                             tu = Unit(tab=t, marker=(r.get("_tab_marker") or ""), title=t,
                                       level_path=(cur.level_path + " > " + t if cur and cur.level_path else t))
                             units.append(tu)
-                        else:
-                            tu = entry[0]
-                        tab_units[key] = (tu, len(units))
+                            block_units[key] = tu
                         tu.details.append(r)
             elif reqs:                              # 세로 카드 등 → ambient 탭 공유 + 항목별 독립 유닛
                 attach_isolated(reqs)
@@ -528,11 +522,18 @@ def _consolidate_small_tabs(rows: list[dict], small_max: int = 2, large_min: int
 
 
 def _reassign_codes(rows: list[dict]) -> list[dict]:
-    """탭 구성 변경 후 요구사항ID(code) 재부여 — 탭 접두사-일련번호(공통 유틸)."""
+    """탭 구성 변경 후 요구사항ID(code) 재부여 — 탭 접두사-일련번호(공통 유틸).
+
+    단, 문서가 부여한 고유번호(SFR-001 등, code_hint)가 있으면 그걸 그대로 쓴다 —
+    조견표의 존재 이유가 원문 요구사항과의 맵핑이므로 원문 ID 가 항상 우선(충실전사)."""
     tab_counter: dict[str, int] = {}
     tab_prefix: dict[str, str] = {}
     out = []
     for r in rows:
+        hint = (r.get("code_hint") or "").strip()
+        if _DOC_ID.match(hint):
+            out.append({**r, "code": hint})
+            continue
         tab = r["tab"]
         if tab not in tab_prefix:
             tab_prefix[tab] = _slug_tab(tab)
@@ -540,6 +541,99 @@ def _reassign_codes(rows: list[dict]) -> list[dict]:
         tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
         out.append({**r, "code": f"{pfx}-{tab_counter[pfx]:03d}"})
     return out
+
+
+# 문서가 스스로 선언하는 요구사항 분류 신호(도메인 키워드가 아니라 문서 자신의 선언을 읽음)
+_ID_RULE = re.compile(r"\b([A-Z]{2,4})\s*[-–]\s*[O0Ø]{2,3}\b")          # 총괄표 ID부여규칙 'SFR-OOO'
+_R_HEADING = re.compile(r"([가-힣A-Za-z·/ ]{0,24}(?:요구\s*사항|제약\s*사항))\s*[\(（]\s*([A-Z]{2,4})\s*[,，)]")
+# 약어 없는 R-헤딩: '성능 요구사항 (Performance Requirement)' / 탭이 '…요구사항'으로 끝남
+_R_HEADING_NOPFX = re.compile(r"^([가-힣·/ ]{0,20}(?:요구\s*사항|제약\s*사항))\s*(?:[\(（].{0,40})?$")
+_DOC_ID = re.compile(r"^[A-Z]{2,4}[-–]?\d{2,4}$")                        # 본문 고유번호 SFR-001
+
+
+def detect_canonical_categories(units: list) -> list[dict]:
+    """문서 자체 선언 분류 체계 감지 — 요구사항 총괄표(ID부여규칙 XXX-OOO 행)·
+    R-헤딩('기능 요구사항(SFR, ...)' 및 약어 없는 '성능 요구사항(Performance…)')·
+    세로카드 고유번호(SFR-001) 접두사 다수 등장.
+
+    감지되면 이 분류가 곧 조견표 탭이 된다(사람이 만든 정답과 동일한 원칙 —
+    법제처 정답 시트 = 총괄표의 10개 분류 그대로). 반환 [{name, prefix}] 문서 등장순.
+    """
+    from collections import OrderedDict
+    canon: "OrderedDict[str, str]" = OrderedDict()    # prefix -> name
+    nopfx: "OrderedDict[str, None]" = OrderedDict()   # 약어 없는 분류명(등장순)
+
+    def _texts(u):
+        yield u.tab or ""
+        yield u.title or ""
+        yield u.level_path or ""
+        for d in u.details:
+            yield _detail_text(d)[:200]
+
+    id_hint_counts: dict[str, int] = {}
+    for u in units:
+        for t in _texts(u):
+            for m in _R_HEADING.finditer(t):
+                name, pfx = m.group(1).strip(), m.group(2)
+                if pfx not in canon:
+                    canon[pfx] = f"{re.sub(r'요구 사항', '요구사항', name)}({pfx})"
+            for m in _ID_RULE.finditer(t):
+                canon.setdefault(m.group(1), "")
+        # 약어 없는 R-헤딩은 '헤딩 유래 탭'(tab==title 접두)에서만 — 본문 문장 오탐 방지
+        tt = (u.title or "").strip()
+        if tt and (u.tab or "").strip() == tt[:40].strip():
+            m2 = _R_HEADING_NOPFX.match(re.sub(r"\s+", " ", tt))
+            if m2:
+                nm = re.sub(r"요구 사항", "요구사항", m2.group(1).strip())
+                nopfx.setdefault(nm, None)
+        for d in u.details:
+            if isinstance(d, dict):
+                h = (d.get("code_hint") or "").strip()
+                mm = re.match(r"^([A-Z]{2,4})[-–]?\d{2,4}$", h)
+                if mm:
+                    id_hint_counts[mm.group(1)] = id_hint_counts.get(mm.group(1), 0) + 1
+    for pfx, cnt in id_hint_counts.items():
+        if cnt >= 3:
+            canon.setdefault(pfx, "")
+    out = [{"name": (nm or pfx), "prefix": pfx} for pfx, nm in canon.items()]
+    known = {c["name"] for c in out}
+    for nm in nopfx:
+        # 접두사형과 같은 분류의 무접두 표기(예: '기능 요구사항' vs '기능 요구사항(SFR)') 중복 방지
+        if not any(nm in k for k in known):
+            out.append({"name": nm, "prefix": ""})
+    # 접두사(ID체계) 신호가 하나도 없으면 '자체 분류 선언'으로 보지 않는다 —
+    # 단순히 '…요구사항' 제목이 몇 개 있는 문서(금융 RFP 등)까지 canonical 강제하면
+    # LLM 이 못 묶고 '일반사항'만 비대해짐. 총괄표/약어가 있는 공공형에서만 발동.
+    return out if len(canon) >= 2 else []
+
+
+def _apply_canonical_tabs(rows: list[dict], canon: list[dict]) -> list[dict]:
+    """룰 매핑(구조 신호): (1) 고유번호 code_hint 접두사(SFR-001), (2) 탭/계위/명의
+    '(SFR' 헤딩 패턴, (3) 행 텍스트 안 고유번호 언급('PMR-003 …') — 셋 중 하나가
+    canonical 분류와 일치하면 그 분류명으로. 나머지는 LLM 배정에 맡긴다."""
+    by_pfx = {c["prefix"]: c["name"] for c in canon if c["prefix"]}
+    for r in rows:
+        hint = (r.get("code_hint") or "").strip()
+        mm = re.match(r"^([A-Z]{2,4})[-–]?\d{2,4}$", hint)
+        if mm and mm.group(1) in by_pfx:
+            r["tab"] = by_pfx[mm.group(1)]
+            continue
+        blob = " ".join([r.get("tab") or "", r.get("level") or "", r.get("name") or ""])
+        hit = None
+        for pfx in by_pfx:
+            if re.search(rf"[\(（]\s*{pfx}\s*[,，)]|\b{pfx}\b\s*[,，)]", blob):
+                hit = pfx
+                break
+        if hit is None:
+            # 세로카드 감지가 놓친 카드도 텍스트에 고유번호가 남아있으면 그걸로 소속 결정
+            # (법제처 실측: code_hint 잡힌 행 111 vs 정답 ID 151 — 갭은 텍스트 언급으로 복구)
+            m3 = re.search(r"\b([A-Z]{2,4})[-–]\d{2,4}\b",
+                           blob + " " + (r.get("detail") or "")[:120])
+            if m3 and m3.group(1) in by_pfx:
+                hit = m3.group(1)
+        if hit:
+            r["tab"] = by_pfx[hit]
+    return _reassign_codes(rows)
 
 
 class _SplitItem(BaseModel):
@@ -643,6 +737,88 @@ def _llm_split_long_details(rows: list[dict], max_len: int = 300, cap: int = 120
     return _reassign_codes(out)
 
 
+class _RowCat(BaseModel):
+    index: int
+    category: str
+
+
+class _RowCatResult(BaseModel):
+    items: list[_RowCat]
+
+
+def _classify_rows_llm(rows: list[dict], canon: list[dict]) -> list[dict]:
+    """canonical 모드 행 단위 분류 — 룰(_apply_canonical_tabs)로 못 정한 행을 gemma 가
+    **내용(명/상세/계위)을 보고** 문서 선언 분류 중 하나(또는 '일반사항')로 배정.
+
+    탭 '이름'만 보고 묶는 방식은 상류 탭명 노이즈('요구사항 내용', 문장형 탭 등)에
+    취약했다(법제처 실측 76탭 잔존) — 행 내용 기반이라 노이즈에 면역. 행 순서/내용은
+    절대 불변(탭 필드만 변경). 호출 실패 배치는 원래 탭 유지(정보 손실 없음)."""
+    canon_names = [c["name"] for c in canon]
+    canon_set = set(canon_names)
+    targets = [i for i, r in enumerate(rows) if r["tab"] not in canon_set]
+    if not targets:
+        return rows
+
+    from app.core.config import Settings
+    from app.llm.base import Message
+    from app.llm.factory import build_llm_client
+    from app.llm.fake_client import FakeLlmClient
+    from prototype.v2.async_run import run_coro
+
+    client = build_llm_client(Settings())
+    if isinstance(client, FakeLlmClient):
+        return rows
+
+    allowed = "\n".join(f"* {n}" for n in canon_names)
+    # 퍼지 스냅 — gemma 가 '기능 요구사항(SFR)'을 '기능 요구사항'/'SFR' 로 축약해 답해도
+    # 정본 표기로 붙인다(정확 일치만 받으면 응답 상당수가 탈락해 분류가 부분 적용됨, 실측).
+    snap: dict[str, str] = {}
+    for c in canon:
+        n = c["name"]
+        snap[_norm_tab_key(n)] = n
+        snap.setdefault(_norm_tab_key(_tab_base_key(n)), n)
+        if c.get("prefix"):
+            snap.setdefault(_norm_tab_key(c["prefix"]), n)
+    for alias in ("일반사항", "일반 사항", "기타", "기타사항", "해당없음"):
+        snap.setdefault(_norm_tab_key(alias), "일반사항")
+    assigned: dict[int, str] = {}
+    B = 30
+    for s in range(0, len(targets), B):
+        chunk = targets[s:s + B]
+        listing = "\n".join(
+            f"[{k}] 섹션='{(rows[k]['tab'] or '')[:30]}' 명='{(rows[k]['name'] or '')[:30]}' "
+            f"내용='{(rows[k]['detail'] or '')[:110]}'"
+            for k in chunk)
+        prompt = (
+            "이 RFP 문서는 요구사항 분류 체계를 스스로 선언했다(요구사항 총괄표/섹션 헤딩). "
+            "조견표 탭은 이 분류를 그대로 따른다.\n\n"
+            f"[문서 선언 분류]\n{allowed}\n* 일반사항\n\n"
+            "아래 각 행을 내용 기준으로 위 분류 중 정확히 하나에 배정하라. 제안사가 이행할 "
+            "요구가 아닌 내용(사업개요·입찰/계약 안내·행정·평가기준·목차)은 '일반사항'.\n"
+            "**분류 이름은 위 목록 표기 그대로**(새 이름 금지).\n\n"
+            f"[행 목록]\n{listing}\n\n"
+            'JSON: {"items":[{"index":<int>,"category":"<분류>"}]} — 모든 index 포함.'
+        )
+        try:
+            res = run_coro(client.structured_output(
+                [Message(role="user", content=prompt)], _RowCatResult,
+                purpose="row_classify", max_tokens=4000))
+            for it in res.items:
+                nm = snap.get(_norm_tab_key(it.category or ""))
+                if it.index in chunk and nm:
+                    assigned[it.index] = nm
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "gemma 행 분류 배치 실패(%d~%d) — 원래 탭 유지", s, s + len(chunk) - 1, exc_info=True)
+
+    if not assigned:
+        return rows
+    for i, nm in assigned.items():
+        rows[i]["tab"] = nm
+    return _reassign_codes(rows)
+
+
 class _TabGroup(BaseModel):
     new_tab: str
     old_tabs: list[str]
@@ -652,16 +828,22 @@ class _TabGroupResult(BaseModel):
     groups: list[_TabGroup]
 
 
-def _consolidate_tabs_llm(rows: list[dict], target_max: int = 20) -> list[dict]:
+def _consolidate_tabs_llm(rows: list[dict], target_max: int = 20,
+                          canonical: list[dict] | None = None) -> list[dict]:
     """구조 규칙만으론 못 잡는 과분할(예: SFR 하위 20+개 서비스가 각자 탭)을 gemma 가
     사람이 쓸 법한 상위 카테고리로 묶는다. **탭 이름과 그에 따른 code 재부여만 하고,
     detail/name/level(요구사항 본문)은 절대 건드리지 않는다** — 원문 충실 전사 원칙 유지.
-    탭이 이미 충분히 적으면(target_max 이하) 호출 자체를 생략. 실패/미매핑 탭은 원래
-    이름 그대로 유지(안전 폴백) — 통합에 실패해도 정보 손실은 없다."""
+
+    canonical 이 있으면(문서가 총괄표/R-헤딩으로 분류를 스스로 선언) 새 이름 발명을
+    금지하고 **그 분류 + '일반사항'** 으로만 배정하게 강제한다 — 사람 정답(법제처 등)이
+    총괄표 분류 그대로 시트를 만드는 원칙과 동일. 실패/미매핑 탭은 원래 이름 유지."""
     from collections import Counter, OrderedDict
 
+    canon_names = [c["name"] for c in (canonical or [])]
     order = list(OrderedDict.fromkeys(r["tab"] for r in rows))
-    if len(order) <= target_max:
+    # canonical 있으면 비-canonical 탭이 남아있는 한 항상 배정 시도, 없으면 기존 상한 기준.
+    pending = [t for t in order if t not in canon_names]
+    if (not canon_names and len(order) <= target_max) or (canon_names and not pending):
         return rows
 
     from app.core.config import Settings
@@ -675,45 +857,78 @@ def _consolidate_tabs_llm(rows: list[dict], target_max: int = 20) -> list[dict]:
         return rows
 
     counts = Counter(r["tab"] for r in rows)
-    listing = "\n".join(f"- '{t}' ({counts[t]}행)" for t in order)
-    prompt = (
-        "아래는 한 RFP 문서에서 자동 추출된 탭(섹션) 목록이다(문서 등장 순서, 괄호는 행수).\n"
-        "탭이 지나치게 잘게 쪼개져 있다 — 사람이 조견표를 만들 때 쓸 법한 상위 카테고리로 "
-        "묶어라. 예를 들어 'SIP','CTI','챗봇','CS Plaza','옴니채널상담' 처럼 하나의 상위 "
-        "기능요구사항 목록 아래 나열되는 개별 서비스/컴포넌트들은 그 상위 카테고리 이름으로 "
-        "하나의 탭에 묶는다. 이미 명확히 독립적인 대분류(예: 보안요구사항, 데이터요구사항, "
-        "품질/하자보수 요구사항 등)는 그대로 유지해도 된다.\n"
-        "목표 탭 개수는 문서 규모에 맞게 대략 10~20개 내외(사람이 실제로 조견표 시트를 "
-        "나눌 법한 개수). 모든 원본 탭을 정확히 하나의 새 그룹에 배정해야 한다(누락 금지).\n\n"
-        f"[탭 목록]\n{listing}\n\n"
-        'JSON: {"groups":[{"new_tab":"<새 탭 이름>","old_tabs":["<원본 탭1>","<원본 탭2>",...]}]}'
-    )
-    try:
-        res = run_coro(client.structured_output(
-            [Message(role="user", content=prompt)], _TabGroupResult,
-            purpose="tab_consolidate", max_tokens=6000))
-        mapping: dict[str, str] = {}
-        for g in res.groups:
-            for old in g.old_tabs:
-                mapping[old] = g.new_tab
-    except Exception:
-        import logging
-        logging.getLogger(__name__).warning(
-            "gemma 탭 통합 호출 실패 — 원본 탭 구조 그대로 유지", exc_info=True)
+    mapping: dict[str, str] = {}
+
+    def _call(prompt: str) -> None:
+        try:
+            res = run_coro(client.structured_output(
+                [Message(role="user", content=prompt)], _TabGroupResult,
+                purpose="tab_consolidate", max_tokens=6000))
+            for g in res.groups:
+                for old in g.old_tabs:
+                    mapping[old.strip()] = g.new_tab
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "gemma 탭 통합 호출 실패(일부 배치) — 해당 탭 원본 유지", exc_info=True)
+
+    if canon_names:
+        allowed = "\n".join(f"* {n}" for n in canon_names)
+        # 탭이 많으면(문장형 탭 등) 한 번에 다 못 다룸 — 25개씩 배치.
+        for s in range(0, len(pending), 25):
+            chunk = pending[s:s + 25]
+            listing = "\n".join(f"- '{t}' ({counts[t]}행)" for t in chunk)
+            _call(
+                "이 RFP 문서는 요구사항 분류 체계를 **문서 스스로 선언**했다(요구사항 총괄표/"
+                "섹션 헤딩). 조견표 탭은 이 분류를 그대로 따라야 한다(사람이 만드는 방식).\n\n"
+                f"[문서 선언 분류(이것만 사용)]\n{allowed}\n* 일반사항\n\n"
+                "아래 각 탭을 위 분류 중 정확히 하나로 배정하라. 요구사항이 아닌 내용(사업개요·"
+                "입찰/계약 안내·행정·평가기준 등)은 '일반사항'으로. **새 분류 이름을 만들지 말고 "
+                "위 목록의 표기를 그대로 써라.**\n\n"
+                f"[배정할 탭 목록]\n{listing}\n\n"
+                'JSON: {"groups":[{"new_tab":"<위 분류 중 하나>","old_tabs":["<원본 탭1>",...]}]} — 모든 탭 포함.'
+            )
+    else:
+        listing = "\n".join(f"- '{t}' ({counts[t]}행)" for t in order)
+        _call(
+            "아래는 한 RFP 문서에서 자동 추출된 탭(섹션) 목록이다(문서 등장 순서, 괄호는 행수).\n"
+            "탭이 지나치게 잘게 쪼개져 있다 — 사람이 조견표를 만들 때 쓸 법한 상위 카테고리로 "
+            "묶어라. 예를 들어 'SIP','CTI','챗봇','CS Plaza','옴니채널상담' 처럼 하나의 상위 "
+            "기능요구사항 목록 아래 나열되는 개별 서비스/컴포넌트들은 그 상위 카테고리 이름으로 "
+            "하나의 탭에 묶는다. 이미 명확히 독립적인 대분류(예: 보안요구사항, 데이터요구사항, "
+            "품질/하자보수 요구사항 등)는 그대로 유지해도 된다.\n"
+            "목표 탭 개수는 문서 규모에 맞게 대략 10~20개 내외(사람이 실제로 조견표 시트를 "
+            "나눌 법한 개수). 모든 원본 탭을 정확히 하나의 새 그룹에 배정해야 한다(누락 금지).\n\n"
+            f"[탭 목록]\n{listing}\n\n"
+            'JSON: {"groups":[{"new_tab":"<새 탭 이름>","old_tabs":["<원본 탭1>","<원본 탭2>",...]}]}'
+        )
+    if not mapping:
         return rows
 
     changed = False
-    for r in rows:
-        nt = mapping.get(r["tab"])
-        if nt and nt.strip() and nt != r["tab"]:
-            r["tab"] = nt.strip()[:40]
-            changed = True
+    if canon_names:
+        # 표기 변형(공백/괄호) 흡수 — 정규화 키로 canonical 정본 표기에 스냅.
+        canon_by_key = {_norm_tab_key(n): n for n in canon_names}
+        canon_by_key[_norm_tab_key("일반사항")] = "일반사항"
+        for r in rows:
+            nt = (mapping.get(r["tab"]) or "").strip()
+            snap = canon_by_key.get(_norm_tab_key(nt)) if nt else None
+            if snap and snap != r["tab"]:
+                r["tab"] = snap
+                changed = True
+    else:
+        for r in rows:
+            nt = (mapping.get(r["tab"]) or "").strip()
+            if nt and nt != r["tab"]:
+                r["tab"] = nt[:40]
+                changed = True
     if not changed:
         return rows
     return _reassign_codes(rows)
 
 
-def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
+def rows_from_units(units: list[Unit], keep: dict[int, bool],
+                    canonical: list[dict] | None = None) -> list[dict]:
     """유닛 + keep 판정 → 고정칼럼 행. junk 셀(페이지번호·날짜·기호) 제외. (공개)"""
     rows: list[dict] = []
     tab_counter: dict[str, int] = {}
@@ -733,10 +948,11 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
             if isinstance(d, dict):
                 cleaned.append({"detail": txt,
                                 "name": _clean_toc(re.sub(r"\s+", " ", d.get("name") or u.title or "")),
-                                "level": _clean_toc(re.sub(r"\s+", " ", d.get("level") or u.level_path or ""))})
+                                "level": _clean_toc(re.sub(r"\s+", " ", d.get("level") or u.level_path or "")),
+                                "code_hint": (d.get("code_hint") or "").strip()})
             else:
                 cleaned.append({"detail": txt, "name": _clean_toc(u.title),
-                                "level": _clean_toc(u.level_path)})
+                                "level": _clean_toc(u.level_path), "code_hint": ""})
         if not cleaned:               # 실내용 없는 카드(표지·페이지번호뿐)는 올리지 않음
             continue
         if u.tab not in tab_prefix:
@@ -746,15 +962,23 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool]) -> list[dict]:
         for it in cleaned:
             tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
             rows.append({"tab": tab, "code": f"{pfx}-{tab_counter[pfx]:03d}",
-                         "name": it["name"], "level": it["level"], "detail": it["detail"]})
-    return _consolidate_tabs_llm(_consolidate_small_tabs(_llm_split_long_details(rows)))
+                         "name": it["name"], "level": it["level"], "detail": it["detail"],
+                         "code_hint": it["code_hint"]})
+    rows = _consolidate_small_tabs(_llm_split_long_details(rows))
+    canon = canonical if canonical is not None else []
+    if canon:
+        # 문서 자체 선언 분류 모드: 룰(고유번호/헤딩 패턴) → 행 내용 기반 gemma 분류.
+        # 탭이름 기반 통합은 상류 탭명 노이즈에 취약해 쓰지 않는다.
+        rows = _apply_canonical_tabs(rows, canon)
+        return _classify_rows_llm(rows, canon)
+    return _consolidate_tabs_llm(rows, canonical=canon)
 
 
 def extract_fixed_rows(html: str, doc_name: str) -> list[dict]:
     """HTML → 고정칼럼 행 dict 리스트: {tab, code, name, level, detail}. gemma keep 적용."""
     units = build_units(html)
     keep = _judge_keep(units)
-    return rows_from_units(units, keep)
+    return rows_from_units(units, keep, canonical=detect_canonical_categories(units))
 
 
 def _extract_fixed_rows_legacy(html: str, doc_name: str) -> list[dict]:
