@@ -36,21 +36,36 @@ def load_gold_xlsx(path: Path) -> list[str]:
     import openpyxl
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     out = []
+    id_rule_pat = re.compile(r"\b[A-Z]{2,4}[-–][O0Ø]{2,3}\b")   # 'SFR-OOO' 총괄표 ID부여규칙 신호
     for sn in wb.sheetnames:
         ws = wb[sn]
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             continue
-        # 요건/요구사항 열 찾기(헤더), 없으면 평균 최장 열
+        flat = " ".join(str(c) for r in rows for c in r if c)
+        if len(id_rule_pat.findall(flat)) >= 3:
+            continue   # 요구사항 총괄표(집계/범례 시트) — 실제 요구사항 행이 아니므로 제외
+        # 요건/요구사항 열 찾기(헤더). 여러 열이 매칭되면(예: '요구사항 분류' vs '요구사항
+        # 상세설명-세부내용') **평균 셀 길이가 가장 긴 열**을 채택 — 분류/라벨열은 짧고
+        # 반복적(시트당 거의 동일값)이라 그걸 고르면 중복제거 후 gold 가 왕창 사라진다
+        # (법제처 실측: '요구사항 분류'열 선택 시 151개→14개로 붕괴).
         hdr = [str(c or "") for c in rows[0]]
-        col = next((i for i, h in enumerate(hdr) if re.search(r"요건|요구사항|요구 사항|내용|상세", h)), None)
+        ncol = max((len(r) for r in rows), default=0)
+
+        def _avglen(c: int) -> float:
+            vals = [str(r[c]) for r in rows[1:] if c < len(r) and r[c]]
+            return sum(len(v) for v in vals) / len(vals) if vals else 0.0
+
+        # '상세/세부내용' 같은 구체적 신호를 '요구사항/요건'(분류열에도 흔함)보다 우선 후보로.
+        specific = [i for i, h in enumerate(hdr) if re.search(r"상세|세부\s*내용", h)]
+        generic = [i for i, h in enumerate(hdr) if re.search(r"요건|요구사항|요구 사항|내용", h)]
+        candidates = specific or generic
+        col = max(candidates, key=_avglen) if candidates else None
         body = rows[1:] if col is not None else rows
         if col is None:
-            ncol = max((len(r) for r in rows), default=0)
             if not ncol:
                 continue
-            avg = [sum(len(str(r[c])) for r in rows if c < len(r) and r[c]) for c in range(ncol)]
-            col = max(range(ncol), key=lambda c: avg[c])
+            col = max(range(ncol), key=_avglen)
         for r in body:
             if col < len(r) and r[col] and len(str(r[col]).strip()) >= 6:
                 out.append(str(r[col]).strip())
