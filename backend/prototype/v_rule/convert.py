@@ -45,19 +45,34 @@ def _html_to_txt(html: str) -> str:
 
 
 def _markdown_to_html(md: str) -> str:
-    """OCR markdown → 최소 HTML. 파이프 표는 <table>, 나머지 줄은 <p>(카드 마커는 텍스트로 유지)."""
+    """OCR markdown → 최소 HTML. 파이프 표는 <table>, 나머지 줄은 <p>(카드 마커는 텍스트로 유지).
+
+    가짜 표 방지: VLM 이 다이어그램/그림을 'A | B | C' 한 줄로 뱉는 경우가 있어, 파이프
+    줄이 모였을 때 **진짜 표 형태(데이터행 ≥2 + 최빈 열수 ≥2 + 열수 일관성 ≥0.8)**일 때만
+    <table> 로 방출하고, 아니면 각 줄을 원문 그대로 <p> 로 남긴다(내용 소실 없음).
+    """
     import html as _h
+    from collections import Counter
     out: list[str] = ["<html><body>"]
-    tbl: list[list[str]] = []
+    tbl: list[tuple[list[str], str]] = []   # (cells, 원문 줄)
 
     def flush_tbl():
         nonlocal tbl
-        if tbl:
+        if not tbl:
+            return
+        counts = Counter(len(cells) for cells, _ in tbl)
+        modal_cols, modal_n = counts.most_common(1)[0]
+        is_table = (len(tbl) >= 2 and modal_cols >= 2
+                    and modal_n / len(tbl) >= 0.8)
+        if is_table:
             out.append("<table>")
-            for r in tbl:
-                out.append("<tr>" + "".join(f"<td>{_h.escape(c)}</td>" for c in r) + "</tr>")
+            for cells, _ in tbl:
+                out.append("<tr>" + "".join(f"<td>{_h.escape(c)}</td>" for c in cells) + "</tr>")
             out.append("</table>")
-            tbl = []
+        else:
+            for _, raw_ln in tbl:            # 표 아님(다이어그램 파편 등) → 원문 보존
+                out.append(f"<p>{_h.escape(raw_ln)}</p>")
+        tbl = []
 
     for raw in md.splitlines():
         ln = raw.strip()
@@ -65,8 +80,8 @@ def _markdown_to_html(md: str) -> str:
             if "|" not in ln:
                 flush_tbl()
             continue
-        if ln.count("|") >= 2:                   # 파이프 표 행
-            tbl.append([c.strip() for c in ln.strip("|").split("|")])
+        if ln.count("|") >= 2:                   # 파이프 표 행 후보
+            tbl.append(([c.strip() for c in ln.strip("|").split("|")], ln))
             continue
         flush_tbl()
         t = re.sub(r"^#+\s*", "", ln)            # markdown heading 기호 제거(제목 텍스트 유지)
