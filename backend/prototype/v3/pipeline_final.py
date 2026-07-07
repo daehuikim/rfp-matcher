@@ -42,8 +42,15 @@ def assign_pages_from_pdf(reqs: list, pdf_path: Path) -> str:
     """원본 PDF를 페이지 오라클로 — 각 요건 텍스트를 PDF 페이지에 매칭해 req.page 부여.
 
     HWPX로 추출한 공공 RFP는 페이지가 없어, 동일 내용의 PDF(우측 미리보기 원본)에서
-    페이지를 찾아준다. pymupdf로 페이지별 텍스트를 뽑고 요건 텍스트 prefix로 순방향
-    (문서 순서) 매칭 → req.page 설정 + 출처에 'p.N' 추가.
+    페이지를 찾아준다. pymupdf로 페이지별 텍스트를 뽑고 요건 텍스트 prefix로 매칭 →
+    req.page 설정 + 출처에 'p.N' 추가.
+
+    본문과 별첨/부록에 같은 문구가 반복되는 RFP가 있어(예: 요구사항 목록이 본문과
+    별첨에 재수록), 순수 순방향 스캔만 쓰면 어쩌다 더 뒤쪽 중복을 먼저 집어버린 뒤
+    다음 요건들이 그 지점부터 앞으로 못 가 계속 폴백(처음부터 재탐색)에 걸려 페이지
+    번호가 앞뒤로 요동치는 문제가 있었다. 그래서 매 요건마다 전체 페이지에서 스니펫이
+    등장하는 모든 위치를 찾고, 직전 매칭 위치(last_i)에서 가장 가까운 등장을 선택한다
+    (동률이면 순방향 우선) — 중복 문구가 있어도 문서 진행 순서를 크게 벗어나지 않는다.
     """
     try:
         import fitz  # pymupdf
@@ -58,44 +65,78 @@ def assign_pages_from_pdf(reqs: list, pdf_path: Path) -> str:
     if not pages:
         return "페이지 매칭: PDF 텍스트 없음 — 스킵"
     matched = 0
+    eligible = 0
+    hit = [False] * len(reqs)          # 오라클이 직접 매칭한 행
     last_i = 0
-    for r in reqs:
+    for ri, r in enumerate(reqs):
         snip = _norm_page_text(
             getattr(r, "detail", "") or getattr(r, "mid", "") or getattr(r, "top", "")
         )[:40]
         if len(snip) < 6:
             continue
-        found = None
-        for i in range(last_i, len(pages)):  # 순방향(문서 순서) 우선 — 반복 텍스트는 다음 등장으로
+        eligible += 1
+        best_i = None
+        best_key = None
+        for i in range(len(pages)):
             if snip in page_text[pages[i]]:
-                found = pages[i]
-                last_i = i
-                break
-        if found is None:  # 폴백: 처음부터
-            for i in range(len(pages)):
-                if snip in page_text[pages[i]]:
-                    found = pages[i]
-                    last_i = i
-                    break
-        if found is not None:
-            r.page = found
-            src = getattr(r, "source", "") or ""
-            if not src.startswith("p."):
-                r.source = f"p.{found} · {src}" if src else f"p.{found}"
+                dist = i - last_i
+                key = (abs(dist), 0 if dist >= 0 else 1)  # 거리 우선, 동률이면 순방향 우선
+                if best_key is None or key < best_key:
+                    best_key = key
+                    best_i = i
+        if best_i is not None:
+            last_i = best_i
+            r.page = pages[best_i]
+            hit[ri] = True
             matched += 1
-    # 미매칭 요건([표]·이미지 placeholder·텍스트 처리차이 등)은 직전 매칭 페이지로 보간 — 점프 타깃 확보
+    # 매칭률이 충분하면(스캔 PDF 가 아니면 실측 95%+) 오라클이 페이지의 유일한 권위 —
+    # 짧아서 스킵됐거나 미매칭인 행의 native data-page 는 신뢰하지 않고 이웃 매칭으로
+    # 보간한다. 기아 실측: 변환단계 표 페이지 드리프트로 오염된 native(p54)가 '변경 이력'
+    # 같은 4자 행에 살아남아 p25 행들 사이에 끼는 interleave 가 발생했었다 — carry 는
+    # None 만 채우므로 '틀렸지만 존재하는' 값을 못 고쳐, 여기서 명시적으로 지운다.
+    authoritative = eligible > 0 and matched / eligible >= 0.7
+    if authoritative:
+        for ri, r in enumerate(reqs):
+            if not hit[ri]:
+                r.page = None
+    # 미매칭 행 보간: 직전 매칭 페이지 carry-forward + 선두(첫 매칭 전)는 첫 매칭 페이지로
     carry = None
     filled = 0
+    first_page = next((r.page for r in reqs if getattr(r, "page", None)), None)
     for r in reqs:
         if getattr(r, "page", None):
             carry = r.page
-        elif carry is not None:
-            r.page = carry
-            src = getattr(r, "source", "") or ""
-            if not src.startswith("p."):
-                r.source = f"p.{carry} · {src}" if src else f"p.{carry}"
+        elif carry is not None or first_page is not None:
+            r.page = carry if carry is not None else first_page
             filled += 1
-    return f"페이지 매칭(PDF 오라클): 정확 {matched} + 보간 {filled} / {len(reqs)}건"
+    if authoritative:
+        # 고립 스파이크 제거: 양쪽 이웃이 같은 페이지인데 자신만 다르면(별첨 중복문구
+        # 오매칭 등) 이웃 값으로 스냅 — 진짜 페이지 전환(이웃끼리 다름)은 건드리지 않음
+        pg = [getattr(r, "page", None) for r in reqs]
+        for i in range(1, len(reqs) - 1):
+            if pg[i - 1] is not None and pg[i - 1] == pg[i + 1] and pg[i] != pg[i - 1]:
+                pg[i] = pg[i - 1]
+                reqs[i].page = pg[i - 1]
+        # 단조 클램프: 추출은 문서순이므로 올바른 페이지열은 비감소여야 한다 — 뒤로
+        # 점프하는 잔여 오류는 직전 최대 페이지로 끌어올려 "1p부터 쭉" 표시를 보장
+        run_max = None
+        for r in reqs:
+            p = getattr(r, "page", None)
+            if p is None:
+                continue
+            if run_max is not None and p < run_max:
+                r.page = run_max
+            else:
+                run_max = p
+    # 출처 문자열 갱신(페이지 확정 후 일괄)
+    for r in reqs:
+        p = getattr(r, "page", None)
+        if p:
+            src = getattr(r, "source", "") or ""
+            src = re.sub(r"^p\.\d+\s*(?:·\s*)?", "", src)
+            r.source = f"p.{p} · {src}" if src else f"p.{p}"
+    mode = "오라클 권위" if authoritative else "native 보존"
+    return f"페이지 매칭(PDF 오라클·{mode}): 정확 {matched} + 보간 {filled} / {len(reqs)}건"
 
 
 def _find_cached_html(workdir: Path) -> Path | None:

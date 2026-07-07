@@ -5,13 +5,33 @@ v_rule 의 룰 추출 결과를 앱의 v2 Req 포맷으로 변환해, FE 업로�
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from prototype.v2.extract import Req
 from prototype.v2.ids import assign_ids
 
+from .cards import IMG_MARKER_RE
 from .convert import convert_any
 from .pipeline import _walk
+
+
+def _extract_cell_images(detail: str, img_dir: Path) -> tuple[list[str], str]:
+    """상세문 안 "[표이미지:파일명]" 마커를 뽑아 실제 파일 경로 목록으로, 텍스트에선 제거.
+
+    표를 이미지로 렌더링해 셀에 넣는다는 요청 반영 — 다운스트림(gemma 분류·길이체크)에는
+    짧은 마커 텍스트로만 보였다가, 여기서 Req.detail_images 로 옮겨 엑셀 writer 가
+    실제 이미지로 삽입한다(기존 v2 컨벤션 재사용). 파일이 없으면(렌더 실패) 마커만 지운다.
+    """
+    names = IMG_MARKER_RE.findall(detail or "")
+    if not names:
+        return [], detail or ""
+    paths = [str(img_dir / n) for n in names if (img_dir / n).is_file()]
+    stripped = IMG_MARKER_RE.sub("", detail or "").strip()
+    stripped = re.sub(r"\n{2,}", "\n", stripped).strip()
+    if not stripped and paths:
+        stripped = "[표]"   # v2 컨벤션: detail=="[표]" → 이미지가 내용을 담는 캡션
+    return paths, stripped
 
 
 def rows_to_v2reqs(rows: list, doc_name: str) -> list[Req]:
@@ -44,23 +64,34 @@ def run_v_rule_reqs(src_path: str | Path, workdir: str | Path, *, keep: bool = T
     매핑: 요구사항ID=code(탭별), 요구사항명=name(카드제목), 계위=level, 상세내용=detail.
     """
     from .preprocess import preprocess
-    from .card_extract import build_units, _judge_keep, rows_from_units
+    from .card_extract import build_units, _judge_keep, rows_from_units, detect_canonical_categories
 
     src = Path(src_path)
     conv = convert_any(src, workdir)
     if "html" not in conv:
         return []
-    html = conv["html"].read_text(encoding="utf-8", errors="replace")
-    blocks, _tr = preprocess(html)
+    html_path = conv["html"]
+    html = html_path.read_text(encoding="utf-8", errors="replace")
+    img_dir = Path(workdir) / "cell_images"
+    blocks, _tr = preprocess(html, img_dir=img_dir, base_dir=html_path.parent)
     units = build_units(blocks=blocks)
     keep_map = _judge_keep(units) if keep else {i: True for i in range(len(units))}
-    rows = rows_from_units(units, keep_map)
+    # 문서 자체 선언 분류(총괄표/R-헤딩: SFR/ECR/DAR…) 감지 → 조견표 탭의 정본으로 사용.
+    # 원문 텍스트도 함께 — 표 추출이 총괄표의 ID부여규칙/건수 열을 떨어뜨려도 선언 보존.
+    import re as _re
+    canon = detect_canonical_categories(units, raw_text=_re.sub(r"<[^>]+>", " ", html))
+    if canon and src.suffix.lower() == ".pdf":
+        # 러닝헤더 섹션 라벨은 opendataloader 가 제거하므로 원본 PDF 에서 직접 수집
+        from .card_extract import merge_pdf_label_pages
+        merge_pdf_label_pages(canon, src)
+    rows = rows_from_units(units, keep_map, canonical=canon)
     reqs: list[Req] = []
     for r in rows:
+        images, detail = _extract_cell_images(r["detail"], img_dir)
         reqs.append(Req(
-            doc=src.stem, table_id=-1, page=None, rid=r["code"],
-            top=r["name"], mid=r["level"], detail=r["detail"], tab=r["tab"],
+            doc=src.stem, table_id=r.get("table_index"), page=r.get("page"), rid=r["code"],
+            top=r["name"], mid=r["level"], detail=detail, tab=r["tab"],
             section_path=r["level"], levels=[r["name"], r["level"]],
-            level_names=["요구사항명", "계위"],
+            level_names=["요구사항명", "계위"], detail_images=images,
         ))
     return reqs

@@ -30,6 +30,12 @@ class OpenAIClient(AsyncLlmClient):
             import httpx
 
             client_kwargs["http_client"] = httpx.AsyncClient(verify=False)
+        # SDK 기본 timeout(600s)+max_retries(2)는 응답 없는 요청 1건이 최대 30분을 먹어
+        # 배치 파이프라인 전체를 막을 수 있다(실측: 기아처럼 큰 문서에서 한 배치가 응답
+        # 없이 멈춰 이후 순차 배치가 전부 대기). 120s×2회로 상한(최악 4분)을 둬 그 이후는
+        # 기존 except 폴백(원본 유지/keep=True 등)으로 넘어가게 한다.
+        client_kwargs["timeout"] = 120.0
+        client_kwargs["max_retries"] = 1
         self._client = AsyncOpenAI(**client_kwargs)
         self._model = model
 

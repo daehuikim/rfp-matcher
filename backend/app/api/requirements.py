@@ -77,18 +77,29 @@ async def update_judgement(
 import re as _re
 
 
+# 문서 부여 고유번호(SFR-001, SFR-LDA-001 3단 포함) — 편집/삭제 후 재번호에서 보호.
+# 조견표의 존재 이유가 원문 요구사항과의 맵핑이라, 행 하나 지웠다고 문서 ID 를
+# 일련번호로 덮어쓰면 안 된다(실측: 삭제 1회에 SFR-NSS-006 → 기능요구사항-016 파괴).
+_DOC_CODE = _re.compile(r"^[A-Z]{2,4}(?:[-–][A-Z]{2,6})?(?:[-–]\d{1,4}|\d{2,4})$")
+
+
 def _renumber_codes(reqs: list[Requirement]) -> dict[str, str]:
-    """탭(category)별로 ID 접두사 유지 + 001,002… 재정렬. 반환: {req_id: 새 code}."""
+    """탭(category)별 자동번호 행만 001,002… 재정렬. 반환: {req_id: 새 code}.
+
+    문서 부여 고유번호(_DOC_CODE 형태)는 절대 재번호하지 않고 그대로 둔다."""
     by_tab: dict[str, list[Requirement]] = {}
     for r in reqs:
         by_tab.setdefault(r.category or "요구사항", []).append(r)
     out: dict[str, str] = {}
     for group in by_tab.values():
-        first = group[0].code or ""
+        auto = [r for r in group if not _DOC_CODE.match((r.code or "").strip())]
+        if not auto:
+            continue
+        first = auto[0].code or ""
         m = _re.match(r"^(.*?)([-_])?(\d+)\s*$", first)
-        prefix = (m.group(1) if m and m.group(1) else (first or group[0].category or "REQ"))
+        prefix = (m.group(1) if m and m.group(1) else (first or auto[0].category or "REQ"))
         sep = (m.group(2) if m and m.group(2) else "-")
-        for i, r in enumerate(group, 1):
+        for i, r in enumerate(auto, 1):
             out[r.id] = f"{prefix}{sep}{i:03d}"
     return out
 
