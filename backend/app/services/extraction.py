@@ -59,10 +59,14 @@ class ExtractionService:
         disable_cache = self._c.settings.extraction_disable_cache
         cache = ArtifactCache(self._c.settings.artifact_cache_dir)
 
-        # 엔진 선택(doc별) — 'v_rule' 이면 캐시 무시하고 룰 엔진으로 강제 fresh 추출
-        # (공정 비교: 동일 문서를 v2 캐시로 복원하지 않고 v_rule 로 새로 뽑아야 함). 캐시 체크보다 앞.
-        if self._c.engine_for(document.id) == "v_rule" and not await self._c.repo.list_requirements(document.id):
-            return await self._run_v3_domain(document, "v_rule")
+        # 엔진 선택(doc별) — 'v_rule'/'rfpmatch' 면 캐시 무시하고 룰 엔진으로 강제 fresh 추출
+        # (공정 비교: 동일 문서를 v2 캐시로 복원하지 않고 선택된 엔진으로 새로 뽑아야 함).
+        # 캐시 체크보다 앞.
+        selected_engine = self._c.engine_for(document.id)
+        if selected_engine in ("v_rule", "rfpmatch") and not await self._c.repo.list_requirements(
+            document.id
+        ):
+            return await self._run_v3_domain(document, selected_engine)
 
         # 이미 추출된 doc(메모리에 요건 존재) — 재추출하지 않고 추천만 이어서 진행.
         # 프로젝트 복귀 시 처음부터 재추출되는 문제 방지 (첫 추출은 요건이 없어 그대로 진행).
@@ -477,13 +481,62 @@ class ExtractionService:
                 workdir = self._c.settings.storage_root / document.id / "v_rule"
                 async with _EXTRACT_SEM:   # 병렬 추출 동시성 상한(세그폴트 방지)
                     v2_reqs = await asyncio.to_thread(run_v_rule_reqs, Path(document.src_path), workdir)
+                # 뷰어/오라클 PDF — PDF 원본은 그대로, 비-PDF(HWP/DOCX)는 파생 PDF 생성.
+                # 파생 PDF 를 페이지 오라클로 쓰면 비-PDF 문서도 행마다 뷰어 좌표계
+                # 페이지(source_page)를 얻어 FE 원문 점프가 PDF 와 동일하게 동작한다.
                 page_note = ""
-                if Path(document.src_path).suffix.lower() == ".pdf":
+                from app.services.view_pdf import ensure_view_pdf
+                bucket = (self._c.settings.artifact_cache_dir / document.content_hash[:16]
+                          if document.content_hash else None)
+                async with _EXTRACT_SEM:
+                    oracle_pdf = await asyncio.to_thread(
+                        ensure_view_pdf, Path(document.src_path),
+                        workdir / f"{Path(document.src_path).stem}.html", bucket, workdir)
+                if oracle_pdf is not None:
                     from prototype.v3.pipeline_final import assign_pages_from_pdf
                     page_note = await asyncio.to_thread(
-                        assign_pages_from_pdf, v2_reqs, Path(document.src_path))
+                        assign_pages_from_pdf, v2_reqs, oracle_pdf)
+                # 탭 순서 = 원문 섹션 순서. 행 순서는 지금까지 문서순(페이지 단조)인데,
+                # 본문 앞쪽에서 SFR-xxx 를 언급하는 행이 SFR 탭 첫 등장을 앞당겨 탭바가
+                # 총괄표 순서(ECR→COM→SFR…)와 어긋난다(양형 실측). 탭별 **중앙값 페이지**
+                # (소수 혼입 행에 강건)로 탭을 정렬하고, 탭 안에서는 문서순(페이지 오름차순)
+                # 을 안정정렬로 보존한다 — "페이지가 뒤로 갈 바엔 차라리 다른 탭" 원칙.
+                if any(getattr(r, "page", None) for r in v2_reqs):
+                    from statistics import median
+                    by_tab_pages: dict[str, list[int]] = {}
+                    for r in v2_reqs:
+                        by_tab_pages.setdefault(getattr(r, "tab", "") or "", []).append(r.page or 0)
+                    tab_med = {t: median(p) for t, p in by_tab_pages.items()}
+                    v2_reqs.sort(key=lambda r: tab_med.get(getattr(r, "tab", "") or "", 0))
                 overview = None
                 steps = [f"v4(구조인식 엔진): {len(v2_reqs)} rows"] + ([page_note] if page_note else [])
+            elif strategy == "rfpmatch":
+                # rfpmatch 엔진 — TOC/섹션 카드분할 → 규칙+LLM 자동QA 요구사항표 → v2 Req(어댑터)
+                from prototype.rfpmatch.adapter import run_rfpmatch_reqs
+
+                workdir = self._c.settings.storage_root / document.id / "rfpmatch"
+                async with _EXTRACT_SEM:  # 병렬 추출 동시성 상한(세그폴트 방지)
+                    v2_reqs = await asyncio.to_thread(
+                        run_rfpmatch_reqs, Path(document.src_path), workdir
+                    )
+                page_note = ""
+                from app.services.view_pdf import ensure_view_pdf
+                bucket = (self._c.settings.artifact_cache_dir / document.content_hash[:16]
+                          if document.content_hash else None)
+                async with _EXTRACT_SEM:
+                    oracle_pdf = await asyncio.to_thread(
+                        ensure_view_pdf, Path(document.src_path),
+                        workdir / f"{Path(document.src_path).stem}.html", bucket, workdir)
+                if oracle_pdf is not None:
+                    from prototype.v3.pipeline_final import assign_pages_from_pdf
+
+                    page_note = await asyncio.to_thread(
+                        assign_pages_from_pdf, v2_reqs, oracle_pdf
+                    )
+                overview = None
+                steps = [f"rfpmatch(TOC/섹션 엔진): {len(v2_reqs)} rows"] + (
+                    [page_note] if page_note else []
+                )
             elif strategy == "public_form":
                 # 공공(요구사항 총괄표) — 기존 경로 유지(잘 동작)
                 from prototype.v3.pipeline_final import run_sample

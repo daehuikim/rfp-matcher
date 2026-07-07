@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from .cards import iter_blocks, marker_level, strip_marker
+from .cards import IMG_MARKER_RE, iter_blocks, marker_level, strip_marker
 from .table_extract import split_items, table_to_reqs
 
 
@@ -113,6 +113,8 @@ class Unit:
     title: str                       # 요구사항명 후보
     level_path: str                  # 계위(마커 경로)
     details: list = field(default_factory=list)   # 상세내용: str 또는 dict{level,name,detail}
+    page: int | None = None          # 원본 페이지(원문뷰어 #page=N 점프용) — 유닛 생성 시점 블록에서
+    table_index: int | None = None   # 변환 HTML 안 <table> 문서순 인덱스(원문뷰어 표 스크롤용)
 
 
 def _table_details(grid: list[list[str]]) -> list[str]:
@@ -144,11 +146,14 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
     li_stack: list[tuple[int, str]] = []   # (li_depth, 항목텍스트) — 리스트 계위 복원용
     units: list[Unit] = []
     cur: Unit | None = None
+    cur_page: int | None = None       # 현재 순회 중인 블록의 페이지/표인덱스(원문뷰어용)
+    cur_tbl_idx: int | None = None    # attach_isolated/open_heading 등 클로저가 읽기전용 참조
 
     def ensure_cur() -> Unit:
         nonlocal cur
         if cur is None:
-            cur = Unit(tab="요구사항", marker="", title="", level_path="")
+            cur = Unit(tab="요구사항", marker="", title="", level_path="",
+                       page=cur_page, table_index=cur_tbl_idx)
             units.append(cur)
         return cur
 
@@ -179,7 +184,8 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
             tab_marker = it.get("_tab_marker") if isinstance(it, dict) else None
             mk = tab_marker if (tab_marker and item_tab) else ""
             title = item_tab[:60] if (tab_marker and item_tab) else base_title
-            units.append(Unit(tab=tab, marker=mk, title=title, level_path=base_level, details=[it]))
+            units.append(Unit(tab=tab, marker=mk, title=title, level_path=base_level, details=[it],
+                              page=cur_page, table_index=cur_tbl_idx))
 
     def open_heading(text: str, lvl: int) -> None:
         nonlocal cur, stack
@@ -190,17 +196,56 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
         # "N"만 잡혀 형제묶음(_merge_sibling_numbered_tabs)이 인식 못 한다 — 패턴 전체를 캡처.
         sib = re.match(r"^\s*\d+\s*-\s*\d+\)", text or "")
         mk = re.sub(r"\s+", "", sib.group()) if sib else (text.split()[0] if text.split() else "")
-        cur = Unit(tab=tab, marker=mk, title=title, level_path=" > ".join(t for _, t in stack))
+        cur = Unit(tab=tab, marker=mk, title=title, level_path=" > ".join(t for _, t in stack),
+                  page=cur_page, table_index=cur_tbl_idx)
         units.append(cur)
 
+    def _card_head_fragment(grid: list[list[str]]) -> bool:
+        """페이지 경계에서 잘린 '카드 머리' 조각인지 — '고유번호' 라벨 + ID값 행 보유.
+
+        법제처 실측: [요구사항 분류|데이터][요구사항 고유번호|DAR-013] 2행 조각이
+        junk 표로 드롭되며 선언 ID 가 통째로 유실됐다(몸통은 다음 표 조각에 있음)."""
+        from .table_extract import _ID_CELL as _IDC
+        if len(grid) > 8:
+            return False
+        for row in grid:
+            cells = [re.sub(r"\s+", "", c or "") for c in row]
+            if any("고유번호" in c for c in cells) and any(_IDC.match(c) for c in cells if c):
+                return True
+        return False
+
     n = len(blocks)
+    pending_head: list | None = None   # 잘린 카드 머리 조각(다음 표에 이어붙임)
+    pending_ttl = 0
     for i, b in enumerate(blocks):
+        cur_page = getattr(b, "page", None)
+        cur_tbl_idx = getattr(b, "table_index", None) if b.kind == "table" else None
+        if b.kind != "table" and pending_head is not None:
+            # 조각 사이에 끼는 건 페이지 머리글/바닥글 정도 — 헤딩이 오거나 멀어지면 포기
+            pending_ttl -= 1
+            if pending_ttl <= 0 or getattr(b, "htag", None):
+                pending_head = None
         if b.kind == "table":
-            reqs = table_to_reqs(b.grid)
+            grid = list(b.grid)
+            merged_head = None
+            if pending_head is not None:
+                merged_head = pending_head
+                grid = pending_head + grid
+                pending_head = None
+            reqs = table_to_reqs(grid)
+            if merged_head is not None and reqs == []:
+                # 머리 조각을 붙였더니 통째 junk — 무관한 표에 잘못 붙인 것(법제처 실측:
+                # 부록 법령목록 32행이 같이 증발). 원본 표만으로 재시도해 콜래터럴 방지.
+                grid = list(b.grid)
+                reqs = table_to_reqs(grid)
+            if reqs == [] and _card_head_fragment(grid):
+                pending_head = grid
+                pending_ttl = 3
+                continue
             if reqs is None:
                 # 요구표 판정 불가(1열 요구표 등) → 행마다 독립 유닛(표는 본질적으로 다중
                 # 요구사항 나열이라 한 유닛에 몰아넣으면 keep 판정이 콜래터럴 드롭을 낸다).
-                pieces = [p for line in _table_details(b.grid) for p in split_items(line)]
+                pieces = [p for line in _table_details(grid) for p in split_items(line)]
                 if not _looks_toc_run(pieces):
                     attach_isolated(pieces)
             elif reqs and any("_tab" in r for r in reqs):
@@ -233,7 +278,8 @@ def build_units(html: str | None = None, blocks: list | None = None) -> list[Uni
                             # 구분열이 'N-M)' 형제번호를 가지면(예: '1-1)~1-6) 통합 상담
                             # 시스템 ...') 마커를 실어 _merge_sibling_numbered_tabs 가 인식.
                             tu = Unit(tab=t, marker=(r.get("_tab_marker") or ""), title=t,
-                                      level_path=(cur.level_path + " > " + t if cur and cur.level_path else t))
+                                      level_path=(cur.level_path + " > " + t if cur and cur.level_path else t),
+                                      page=cur_page, table_index=cur_tbl_idx)
                             units.append(tu)
                             block_units[key] = tu
                         tu.details.append(r)
@@ -537,15 +583,25 @@ def _reassign_codes(rows: list[dict]) -> list[dict]:
     조견표의 존재 이유가 원문 요구사항과의 맵핑이므로 원문 ID 가 항상 우선(충실전사)."""
     tab_counter: dict[str, int] = {}
     tab_prefix: dict[str, str] = {}
+    # 관측된 문서 ID 접두사 — 자동번호가 진짜 문서 ID 네임스페이스와 충돌하면
+    # ("SFR" 탭명 → SFR-001 자동번호 = 가짜 ID) 원문 맵핑이 무너지므로 접두사를 바꾼다
+    doc_prefixes = set()
+    for r in rows:
+        mm = _DOC_ID.match(_norm_hint(r.get("code_hint")))
+        if mm:
+            doc_prefixes.add(mm.group(1))
     out = []
     for r in rows:
-        hint = (r.get("code_hint") or "").strip()
+        hint = _norm_hint(r.get("code_hint"))
         if _DOC_ID.match(hint):
             out.append({**r, "code": hint})
             continue
         tab = r["tab"]
         if tab not in tab_prefix:
-            tab_prefix[tab] = _slug_tab(tab)
+            slug = _slug_tab(tab)
+            if slug in doc_prefixes:
+                slug = f"{slug}일반"
+            tab_prefix[tab] = slug
         pfx = tab_prefix[tab]
         tab_counter[pfx] = tab_counter.get(pfx, 0) + 1
         out.append({**r, "code": f"{pfx}-{tab_counter[pfx]:03d}"})
@@ -557,13 +613,30 @@ _ID_RULE = re.compile(r"\b([A-Z]{2,4})\s*[-–]\s*[O0Ø]{2,3}\b")          # 총
 _R_HEADING = re.compile(r"([가-힣A-Za-z·/ ]{0,24}(?:요구\s*사항|제약\s*사항))\s*[\(（]\s*([A-Z]{2,4})\s*[,，)]")
 # 약어 없는 R-헤딩: '성능 요구사항 (Performance Requirement)' / 탭이 '…요구사항'으로 끝남
 _R_HEADING_NOPFX = re.compile(r"^([가-힣·/ ]{0,20}(?:요구\s*사항|제약\s*사항))\s*(?:[\(（].{0,40})?$")
-_DOC_ID = re.compile(r"^[A-Z]{2,4}[-–]?\d{2,4}$")                        # 본문 고유번호 SFR-001
+# 본문 고유번호 — 'SFR-001'(2단) 또는 'SFR-LDA-001'처럼 대분류 안에 하위도메인 코드를
+# 끼워넣는 3단 체계도 쓴다(양형 실측: SFR만 SFR-LDA-001/SFR-NSS-001/SFR-SCF-001 식,
+# 다른 분류는 PMR-001 처럼 2단) — group(1)은 항상 맨 앞 대분류 접두사만 잡는다.
+# 대시가 있으면 1자리 번호(SFR-1)도 허용, 대시 없는 축약형(SFR001)은 2자리 이상만.
+_DOC_ID = re.compile(r"^([A-Z]{2,4})(?:[-–][A-Z]{2,6})?(?:[-–]\d{1,4}|\d{2,4})$")
 
 
-def detect_canonical_categories(units: list) -> list[dict]:
+def _norm_hint(h: str) -> str:
+    """code_hint 매칭 전 정규화 — 변환기가 'SFR - 001'처럼 벌려놓은 내부 공백 제거.
+
+    strip 만으로는 내부 공백이 남아 _DOC_ID 전체일치가 깨지고, 그 순간 문서 부여
+    ID 가 버려진 채 자동번호로 대체된다(분할행 동일-ID 유지 원칙 위반). 매칭과
+    최종 code 표기 모두 이 정규화본을 쓴다."""
+    return re.sub(r"\s+", "", h or "")
+
+
+def detect_canonical_categories(units: list, raw_text: str | None = None) -> list[dict]:
     """문서 자체 선언 분류 체계 감지 — 요구사항 총괄표(ID부여규칙 XXX-OOO 행)·
     R-헤딩('기능 요구사항(SFR, ...)' 및 약어 없는 '성능 요구사항(Performance…)')·
     세로카드 고유번호(SFR-001) 접두사 다수 등장.
+
+    raw_text(태그 제거한 원문)를 함께 주면 총괄표를 원문에서 직접 스캔한다 —
+    표 추출 단계가 ID부여규칙/건수 열을 떨어뜨려도(법제처 실측: 유닛에 'SIR-OOO'와
+    '10'이 아예 없음) 선언 정보를 잃지 않는다.
 
     감지되면 이 분류가 곧 조견표 탭이 된다(사람이 만든 정답과 동일한 원칙 —
     법제처 정답 시트 = 총괄표의 10개 분류 그대로). 반환 [{name, prefix}] 문서 등장순.
@@ -571,23 +644,63 @@ def detect_canonical_categories(units: list) -> list[dict]:
     from collections import OrderedDict
     canon: "OrderedDict[str, str]" = OrderedDict()    # prefix -> name
     nopfx: "OrderedDict[str, None]" = OrderedDict()   # 약어 없는 분류명(등장순)
+    declared_counts: dict[str, int] = {}              # prefix -> 총괄표 선언 건수
 
     def _texts(u):
         yield u.tab or ""
         yield u.title or ""
         yield u.level_path or ""
         for d in u.details:
-            yield _detail_text(d)[:200]
+            # 총괄표가 한 detail 로 뭉쳐 오면 200자 절단 시 뒷 분류(선언 건수 포함)가
+            # 통째로 안 보인다(법제처 실측: COR 14 건수 미파싱) — 넉넉히 본다.
+            yield _detail_text(d)[:1500]
 
-    id_hint_counts: dict[str, int] = {}
+    id_hint_ids: dict[str, set[str]] = {}
+    pfx_alias: dict[str, str] = {}                    # 헤딩 접두사 -> ID규칙 접두사
+
+    def _scan(t: str) -> None:
+        for m in _R_HEADING.finditer(t):
+            # 원문(raw_text)은 태그 제거 자리의 공백 런이 남는다 — 탭명 오염 방지 정규화
+            name, pfx = re.sub(r"\s+", " ", m.group(1)).strip(), m.group(2)
+            # 헤딩 괄호 접두사와 ID부여규칙 접두사가 다른 문서가 있다(법제처 실측:
+            # '인터페이스 요구사항(INR) … SIR-OOO'). 실제 카드 ID 가 쓰는 건
+            # ID부여규칙 쪽이므로, 헤딩 직후 ~80자 안의 ID규칙 접두사를 정본으로
+            # 삼고, 헤딩 접두사는 별칭으로 기억한다(본문 섹션 헤딩 '(INR' 매칭용).
+            m2 = _ID_RULE.search(t, m.end(), min(len(t), m.end() + 80))
+            if m2 and m2.group(1) != pfx:
+                pfx_alias[pfx] = m2.group(1)
+                pfx = m2.group(1)
+            elif pfx in pfx_alias:
+                pfx = pfx_alias[pfx]
+            # 총괄표 _ID_RULE 이 먼저 등장해 빈 이름으로 등록됐어도 R-헤딩을 만나면
+            # 채운다 — 이름이 영영 빈 채면 탭명이 맨접두사("SFR")가 되고, 그 탭의
+            # 자동번호 슬러그가 진짜 문서 ID 와 충돌하는 가짜 ID 경로가 된다.
+            if pfx not in canon or not canon[pfx]:
+                canon[pfx] = f"{re.sub(r'요구 사항', '요구사항', name)}({pfx})"
+        for m in _ID_RULE.finditer(t):
+            canon.setdefault(m.group(1), "")
+            # 총괄표의 선언 건수('SFR-OOO 21') — ID규칙 바로 뒤 숫자. 전-무ID 분류
+            # 순번 부여의 신뢰성 게이트로 쓴다(선언 건수 초과 조작 방지).
+            m3 = re.match(r"\s*(\d{1,3})\b", t[m.end():m.end() + 12])
+            if m3:
+                declared_counts.setdefault(m.group(1), int(m3.group(1)))
+
+    # 원문 스캔을 먼저 — 총괄표(헤딩·ID규칙·건수가 한 자리에 모임)가 가장 권위 있는
+    # 선언이라 별칭/건수를 유닛 스캔 전에 확보한다(유닛 스캔이 INR 를 따로 만들기 전에).
+    if raw_text:
+        _scan(raw_text)
+    label_pages: dict[str, set[int]] = {}   # prefix -> 섹션 라벨이 찍힌 페이지들
     for u in units:
         for t in _texts(u):
-            for m in _R_HEADING.finditer(t):
-                name, pfx = m.group(1).strip(), m.group(2)
-                if pfx not in canon:
-                    canon[pfx] = f"{re.sub(r'요구 사항', '요구사항', name)}({pfx})"
-            for m in _ID_RULE.finditer(t):
-                canon.setdefault(m.group(1), "")
+            _scan(t)
+            # 섹션 라벨 페이지 수집 — 기아처럼 '■기능요구사항(SFR…)'을 러닝헤더로
+            # 매 페이지 반복하는 문서는 헤딩 트리(길이 제한)로 못 잡아도, "이 페이지는
+            # 이 분류 섹션"이라는 구조 신호로 쓸 수 있다(_apply_canonical_tabs 최후 폴백).
+            if u.page:
+                for m in _R_HEADING.finditer(t):
+                    p2 = m.group(2)
+                    p2 = pfx_alias.get(p2, p2)
+                    label_pages.setdefault(p2, set()).add(u.page)
         # 약어 없는 R-헤딩은 '헤딩 유래 탭'(tab==title 접두)에서만 — 본문 문장 오탐 방지
         tt = (u.title or "").strip()
         if tt and (u.tab or "").strip() == tt[:40].strip():
@@ -597,14 +710,24 @@ def detect_canonical_categories(units: list) -> list[dict]:
                 nopfx.setdefault(nm, None)
         for d in u.details:
             if isinstance(d, dict):
-                h = (d.get("code_hint") or "").strip()
-                mm = re.match(r"^([A-Z]{2,4})[-–]?\d{2,4}$", h)
+                h = _norm_hint(d.get("code_hint"))
+                mm = _DOC_ID.match(h)
                 if mm:
-                    id_hint_counts[mm.group(1)] = id_hint_counts.get(mm.group(1), 0) + 1
-    for pfx, cnt in id_hint_counts.items():
-        if cnt >= 3:
+                    id_hint_ids.setdefault(mm.group(1), set()).add(h)
+    # 실제 고유 ID(예: PMR-001, PMR-002) 개수로 판단 — 카드=1행 초과분해(위 body 분해)로
+    # 같은 카드가 여러 detail-dict 로 나뉘어도 부풀려지지 않는다. 엄격한 ID 형식 매치 자체가
+    # 이미 강한 신호라 문턱을 낮게(≥1) 둬도 안전 — 우연 오탐은 서로 다른 접두사 2개가 각각
+    # 우연히 나타나야 하는데(전체 활성화 문턱 len(canon)>=2), 실측상 극히 드묾. 경기도 실측:
+    # 이 문턱이 3이면 PSR/TER/SIR/QUR/PER/CUR(각 1~2장)이 전부 빠져 '일반사항'에 뭉침.
+    for pfx, ids in id_hint_ids.items():
+        if len(ids) >= 1:
             canon.setdefault(pfx, "")
-    out = [{"name": (nm or pfx), "prefix": pfx} for pfx, nm in canon.items()]
+    out = [{"name": (nm or pfx), "prefix": pfx,
+            "ids": sorted(id_hint_ids.get(pfx, set())),
+            "declared": declared_counts.get(pfx),
+            "aliases": sorted(a for a, p in pfx_alias.items() if p == pfx),
+            "label_pages": sorted(label_pages.get(pfx, set()))}
+           for pfx, nm in canon.items()]
     known = {c["name"] for c in out}
     for nm in nopfx:
         # 접두사형과 같은 분류의 무접두 표기(예: '기능 요구사항' vs '기능 요구사항(SFR)') 중복 방지
@@ -616,18 +739,89 @@ def detect_canonical_categories(units: list) -> list[dict]:
     return out if len(canon) >= 2 else []
 
 
+def merge_pdf_label_pages(canon: list[dict], pdf_path) -> None:
+    """원본 PDF 텍스트층에서 페이지별 섹션 라벨을 수집해 canon[*].label_pages 에 병합.
+
+    opendataloader 는 매 페이지 반복되는 러닝헤더('■기능요구사항(SFR…)')를 페이지
+    헤더로 판단해 변환 HTML 에서 제거한다(기아 실측: 본문 p17-66 라벨 전멸) — 그러면
+    본문 요구표들이 섹션 우산을 잃고 일반사항에 뭉친다. 원본 PDF 에는 그대로 있으므로
+    페이지 상단(선두 6줄)에서 분류명으로 시작하는 줄을 찾아 그 페이지를 라벨링한다."""
+    try:
+        import fitz
+    except ImportError:
+        return
+    names: list[tuple[str, dict]] = []
+    for c in canon:
+        kor = re.sub(r"[\(（].*?[\)）]", "", c.get("name") or "")
+        kor = re.sub(r"\s+", "", kor)
+        if len(kor) >= 4:
+            names.append((kor, c))
+    if not names:
+        return
+    try:
+        with fitz.open(str(pdf_path)) as doc:
+            for i, pg in enumerate(doc, 1):
+                # PPT 유래 PDF 는 라벨이 텍스트 스트림 후반부에 올 수 있어(기아 실측:
+                # 표가 먼저, 슬라이드 타이틀이 나중) 전체 줄을 본다. 다만 본문 불릿
+                # (•/-) 오탐을 막기 위해 박스형 글리프(■ 등)만 벗기고, 분류명으로
+                # 시작하는 짧은 줄만 라벨로 인정한다.
+                for ln in (pg.get_text() or "").split("\n"):
+                    z = re.sub(r"\s+", "", ln).lstrip("■□◆◇▣")
+                    if not z or len(z) > 120:
+                        continue
+                    for kor, c in names:
+                        if z.startswith(kor):
+                            lp = c.setdefault("label_pages", [])
+                            if i not in lp:
+                                lp.append(i)
+                            break
+    except Exception:  # noqa: BLE001 — 라벨 수집 실패는 배정 폴백만 잃을 뿐
+        return
+    for c in canon:
+        if c.get("label_pages"):
+            c["label_pages"] = sorted(c["label_pages"])
+
+
 def _apply_canonical_tabs(rows: list[dict], canon: list[dict]) -> list[dict]:
     """룰 매핑(구조 신호): (1) 고유번호 code_hint 접두사(SFR-001), (2) 탭/계위/명의
-    '(SFR' 헤딩 패턴, (3) 행 텍스트 안 고유번호 언급('PMR-003 …') — 셋 중 하나가
-    canonical 분류와 일치하면 그 분류명으로. 나머지는 LLM 배정에 맡긴다."""
+    '(SFR' 헤딩 패턴, (3) 행 텍스트 안 고유번호 언급('PMR-003 …'), (4) 문서가 선언한
+    분류명 별칭('성능 요구사항(PER)' → '성능요구사항') — 하나라도 canonical 분류와
+    일치하면 그 분류명으로. 나머지는 LLM 배정에 맡긴다."""
     by_pfx = {c["prefix"]: c["name"] for c in canon if c["prefix"]}
+    # 헤딩 접두사 별칭(INR→SIR): 본문 섹션 헤딩이 '(INR)'로 쓰여 있어도 같은 분류로
+    for c in canon:
+        for a in c.get("aliases") or []:
+            by_pfx.setdefault(a, c["name"])
+    # 분류명 별칭: 접두사 괄호를 뗀 한글명(공백 제거). 법제처 실측 — PER/SIR/COR 는
+    # 개별 카드의 고유번호 셀이 텍스트층에 비어 있어(이미지/공란) hint 로 못 잡지만,
+    # 섹션 헤딩('성능 요구사항')은 총괄표 선언명과 그대로 일치한다.
+    alias: dict[str, str] = {}
+    for c in canon:
+        if not c["prefix"]:
+            continue
+        kor = re.sub(r"[\(（].*?[\)）]", "", c["name"] or "")
+        kor = re.sub(r"\s+", "", kor)
+        if len(kor) >= 4:
+            alias[c["prefix"]] = kor
+    canon_names = {c["name"] for c in canon}
+    # 페이지 → 섹션 라벨 탭명 (무접두 분류 포함, 모호한 페이지 = 라벨 2개 이상 → 제외)
+    page_name: dict[int, str] = {}
+    _page_seen: dict[int, str] = {}
+    for c in canon:
+        for pg in c.get("label_pages") or []:
+            if pg in _page_seen and _page_seen[pg] != c["name"]:
+                page_name.pop(pg, None)
+                continue
+            _page_seen[pg] = c["name"]
+            page_name[pg] = c["name"]
     for r in rows:
-        hint = (r.get("code_hint") or "").strip()
-        mm = re.match(r"^([A-Z]{2,4})[-–]?\d{2,4}$", hint)
+        hint = _norm_hint(r.get("code_hint"))
+        mm = _DOC_ID.match(hint)
         if mm and mm.group(1) in by_pfx:
             r["tab"] = by_pfx[mm.group(1)]
             continue
-        blob = " ".join([r.get("tab") or "", r.get("level") or "", r.get("name") or ""])
+        blob = " ".join([r.get("tab") or "", r.get("level") or "", r.get("name") or "",
+                         r.get("_lp") or ""])
         hit = None
         for pfx in by_pfx:
             if re.search(rf"[\(（]\s*{pfx}\s*[,，)]|\b{pfx}\b\s*[,，)]", blob):
@@ -636,12 +830,57 @@ def _apply_canonical_tabs(rows: list[dict], canon: list[dict]) -> list[dict]:
         if hit is None:
             # 세로카드 감지가 놓친 카드도 텍스트에 고유번호가 남아있으면 그걸로 소속 결정
             # (법제처 실측: code_hint 잡힌 행 111 vs 정답 ID 151 — 갭은 텍스트 언급으로 복구)
-            m3 = re.search(r"\b([A-Z]{2,4})[-–]\d{2,4}\b",
+            m3 = re.search(r"\b([A-Z]{2,4})(?:[-–][A-Z]{2,6})?[-–]\d{2,4}\b",
                            blob + " " + (r.get("detail") or "")[:120])
             if m3 and m3.group(1) in by_pfx:
                 hit = m3.group(1)
+        if hit is None:
+            blob2 = re.sub(r"\s+", "", blob)
+            for pfx, kor in alias.items():
+                if kor and kor in blob2:
+                    hit = pfx
+                    break
+        if hit is None:
+            # 최후 폴백 — 섹션 라벨 페이지: 이 행의 페이지에 특정 분류의 섹션 라벨
+            # ('■기능요구사항(SFR…)')이 찍혀 있으면 그 분류 소속(기아처럼 라벨을 매
+            # 페이지 반복하는 러닝헤더 문서용, 무접두 분류 포함). 두 분류 라벨이
+            # 겹치는 전환 페이지는 모호하므로 건드리지 않고, 이미 정본 탭에 배정된
+            # 행(무접두 R-헤딩 유닛: '데이터 이관 요구사항' 등)도 덮어쓰지 않는다.
+            pg = r.get("page")
+            if (pg is not None and pg in page_name
+                    and r.get("tab") not in canon_names):
+                r["tab"] = page_name[pg]
+                continue
         if hit:
             r["tab"] = by_pfx[hit]
+    # 전-무ID 분류 순번 부여: 문서가 ID부여규칙(PER-OOO)과 건수를 총괄표에 선언했는데
+    # 그 분류의 개별 카드 ID 가 텍스트층 어디에도 없으면(법제처 PER/SIR/COR 실측:
+    # 고유번호 셀 공란), 선언 규칙대로 문서순 순번을 부여한다. 같은 카드(_unit)에서
+    # 나뉜 행들은 같은 번호를 공유(분할행 동일-ID 원칙 — 재번호 금지).
+    # 안전장치 2중: (1) 진짜 ID 가 하나라도 관측된 분류(SFR 등)는 절대 건드리지 않고,
+    # (2) 유닛 수가 총괄표 선언 건수를 초과하면(과분절 신호) 번호를 아예 붙이지 않는다
+    # — 선언에 없는 COR-015… 같은 가짜 ID 를 만드느니 탭 소속만 유지(충실전사 원칙).
+    observed: set[str] = set()
+    for r in rows:
+        mm = _DOC_ID.match(_norm_hint(r.get("code_hint")))
+        if mm:
+            observed.add(mm.group(1))
+    declared = {c["prefix"]: c.get("declared") for c in canon if c["prefix"]}
+    for c in canon:                        # 별칭(INR) 제외, 정본 접두사만 순회
+        pfx, name = c["prefix"], c["name"]
+        if not pfx or pfx in observed:
+            continue
+        units_in_tab: list = []
+        for r in rows:
+            if r["tab"] == name and r.get("_unit") not in units_in_tab:
+                units_in_tab.append(r.get("_unit"))
+        want = declared.get(pfx)
+        if not units_in_tab or (want and len(units_in_tab) > want):
+            continue
+        unit_no = {u: k + 1 for k, u in enumerate(units_in_tab)}
+        for r in rows:
+            if r["tab"] == name:
+                r["code_hint"] = f"{pfx}-{unit_no[r.get('_unit')]:03d}"
     return _reassign_codes(rows)
 
 
@@ -667,9 +906,13 @@ def _llm_split_long_details(rows: list[dict], max_len: int = 300, cap: int = 120
     if os.environ.get("VRULE_LLM_SPLIT", "1") == "0":
         return rows
     # 고유번호 카드(문서 선언 단위)는 분해 대상에서 제외 — 카드 = 1행 원칙(정답지 동일).
+    # 표이미지 마커가 있는 행도 제외 — gemma 의미분해가 마커를 "요구사항 아님"으로 보고
+    # 조각에서 빠뜨려도 커버리지(80%) 체크를 통과할 수 있어(마커는 전체의 일부일 뿐)
+    # 이미지 유실 위험이 있다. 이런 행은 split_items(줄 마커 기반)만으로 충분.
     targets = [i for i, r in enumerate(rows)
                if len(r["detail"]) > max_len
-               and not _DOC_ID.match((r.get("code_hint") or "").strip())][:cap]
+               and not _DOC_ID.match(_norm_hint(r.get("code_hint")))
+               and not IMG_MARKER_RE.search(r["detail"])][:cap]
     if not targets:
         return rows
 
@@ -749,87 +992,10 @@ def _llm_split_long_details(rows: list[dict], max_len: int = 300, cap: int = 120
     return _reassign_codes(out)
 
 
-class _RowCat(BaseModel):
-    index: int
-    category: str
-
-
-class _RowCatResult(BaseModel):
-    items: list[_RowCat]
-
-
-def _classify_rows_llm(rows: list[dict], canon: list[dict]) -> list[dict]:
-    """canonical 모드 행 단위 분류 — 룰(_apply_canonical_tabs)로 못 정한 행을 gemma 가
-    **내용(명/상세/계위)을 보고** 문서 선언 분류 중 하나(또는 '일반사항')로 배정.
-
-    탭 '이름'만 보고 묶는 방식은 상류 탭명 노이즈('요구사항 내용', 문장형 탭 등)에
-    취약했다(법제처 실측 76탭 잔존) — 행 내용 기반이라 노이즈에 면역. 행 순서/내용은
-    절대 불변(탭 필드만 변경). 호출 실패 배치는 원래 탭 유지(정보 손실 없음)."""
-    canon_names = [c["name"] for c in canon]
-    canon_set = set(canon_names)
-    targets = [i for i, r in enumerate(rows) if r["tab"] not in canon_set]
-    if not targets:
-        return rows
-
-    from app.core.config import Settings
-    from app.llm.base import Message
-    from app.llm.factory import build_llm_client
-    from app.llm.fake_client import FakeLlmClient
-    from prototype.v2.async_run import run_coro
-
-    client = build_llm_client(Settings())
-    if isinstance(client, FakeLlmClient):
-        return rows
-
-    allowed = "\n".join(f"* {n}" for n in canon_names)
-    # 퍼지 스냅 — gemma 가 '기능 요구사항(SFR)'을 '기능 요구사항'/'SFR' 로 축약해 답해도
-    # 정본 표기로 붙인다(정확 일치만 받으면 응답 상당수가 탈락해 분류가 부분 적용됨, 실측).
-    snap: dict[str, str] = {}
-    for c in canon:
-        n = c["name"]
-        snap[_norm_tab_key(n)] = n
-        snap.setdefault(_norm_tab_key(_tab_base_key(n)), n)
-        if c.get("prefix"):
-            snap.setdefault(_norm_tab_key(c["prefix"]), n)
-    for alias in ("일반사항", "일반 사항", "기타", "기타사항", "해당없음"):
-        snap.setdefault(_norm_tab_key(alias), "일반사항")
-    assigned: dict[int, str] = {}
-    B = 30
-    for s in range(0, len(targets), B):
-        chunk = targets[s:s + B]
-        listing = "\n".join(
-            f"[{k}] 섹션='{(rows[k]['tab'] or '')[:30]}' 명='{(rows[k]['name'] or '')[:30]}' "
-            f"내용='{(rows[k]['detail'] or '')[:110]}'"
-            for k in chunk)
-        prompt = (
-            "이 RFP 문서는 요구사항 분류 체계를 스스로 선언했다(요구사항 총괄표/섹션 헤딩). "
-            "조견표 탭은 이 분류를 그대로 따른다.\n\n"
-            f"[문서 선언 분류]\n{allowed}\n* 일반사항\n\n"
-            "아래 각 행을 내용 기준으로 위 분류 중 정확히 하나에 배정하라. 제안사가 이행할 "
-            "요구가 아닌 내용(사업개요·입찰/계약 안내·행정·평가기준·목차·현황/문제점 서술·"
-            "예시 질문·추진 로드맵/일정 설명)은 요구사항 분류에 넣지 말고 '일반사항'.\n"
-            "**분류 이름은 위 목록 표기 그대로**(새 이름 금지).\n\n"
-            f"[행 목록]\n{listing}\n\n"
-            'JSON: {"items":[{"index":<int>,"category":"<분류>"}]} — 모든 index 포함.'
-        )
-        try:
-            res = run_coro(client.structured_output(
-                [Message(role="user", content=prompt)], _RowCatResult,
-                purpose="row_classify", max_tokens=4000))
-            for it in res.items:
-                nm = snap.get(_norm_tab_key(it.category or ""))
-                if it.index in chunk and nm:
-                    assigned[it.index] = nm
-        except Exception:
-            import logging
-            logging.getLogger(__name__).warning(
-                "gemma 행 분류 배치 실패(%d~%d) — 원래 탭 유지", s, s + len(chunk) - 1, exc_info=True)
-
-    if not assigned:
-        return rows
-    for i, nm in assigned.items():
-        rows[i]["tab"] = nm
-    return _reassign_codes(rows)
+    # 예전엔 여기서 룰로 못 정한 행을 gemma 가 "내용이 비슷해 보여서" 정본 탭(SFR 등)에
+    # 배정했으나(_classify_rows_llm, 삭제됨), 이는 문서 총괄표에 없는 가짜 ID("SFR-048"
+    # 등)를 만들어 정본 탭이 실제 ID 목록과 어긋나는 문제가 있었다 — 이제
+    # rows_from_units 에서 룰 매칭 실패 시 바로 '일반사항'으로 보낸다(추측 배정 금지).
 
 
 class _TabGroup(BaseModel):
@@ -985,7 +1151,7 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool],
         pfx = tab_prefix[u.tab]
         tab = _clean_toc(u.tab) or "요구사항"
         for it in cleaned:
-            hint = it["code_hint"]
+            hint = _norm_hint(it["code_hint"])
             if _DOC_ID.match(hint):
                 code = hint                # 문서 부여 고유번호 우선(원문 맵핑성)
             else:
@@ -993,14 +1159,27 @@ def rows_from_units(units: list[Unit], keep: dict[int, bool],
                 code = f"{pfx}-{tab_counter[pfx]:03d}"
             rows.append({"tab": tab, "code": code,
                          "name": it["name"], "level": it["level"], "detail": it["detail"],
-                         "code_hint": hint})
+                         "code_hint": hint, "page": u.page, "table_index": u.table_index,
+                         "_unit": i,    # 같은 카드에서 나뉜 행 식별(분할행 동일-ID 부여용)
+                         # 섹션 경로 — canonical 탭 매칭용. 표에서 뽑힌 행은 level 이
+                         # 구분열 값으로 대체돼 조상 섹션('기능 요구사항(SFR)')이 사라지고,
+                         # 그러면 SFR 섹션 전체가 증거 없음으로 일반사항에 뭉친다(기아 실측).
+                         "_lp": u.level_path or ""})
     rows = _consolidate_small_tabs(_llm_split_long_details(rows))
     canon = canonical if canonical is not None else []
     if canon:
-        # 문서 자체 선언 분류 모드: 룰(고유번호/헤딩 패턴) → 행 내용 기반 gemma 분류.
-        # 탭이름 기반 통합은 상류 탭명 노이즈에 취약해 쓰지 않는다.
+        # 문서 자체 선언 분류 모드: SFR/DAR 같은 정본 탭은 문서가 실제로 그 ID를 부여했다는
+        # 구조적 증거(고유번호 code_hint·"(SFR" 헤딩 패턴·본문 내 ID 언급)가 있을 때만 배정
+        # 한다(_apply_canonical_tabs). 증거 없는 행을 gemma가 "내용이 비슷해 보여서" SFR로
+        # 추측 배정하면, 총괄표에 없는 가짜 "SFR-048" 같은 코드가 생겨 정본 탭이 실제
+        # ID 목록과 안 맞게 된다("SFR-001 처럼 진짜 ID만 들어가야" 피드백) — 증거 없으면
+        # 일반사항으로 보수적으로 내린다(추측 금지, 재번호는 _reassign_codes 가 처리).
         rows = _apply_canonical_tabs(rows, canon)
-        return _classify_rows_llm(rows, canon)
+        canon_set = {c["name"] for c in canon}
+        for r in rows:
+            if r["tab"] not in canon_set:
+                r["tab"] = "일반사항"
+        return _reassign_codes(rows)
     return _consolidate_tabs_llm(rows, canonical=canon)
 
 
@@ -1008,7 +1187,9 @@ def extract_fixed_rows(html: str, doc_name: str) -> list[dict]:
     """HTML → 고정칼럼 행 dict 리스트: {tab, code, name, level, detail}. gemma keep 적용."""
     units = build_units(html)
     keep = _judge_keep(units)
-    return rows_from_units(units, keep, canonical=detect_canonical_categories(units))
+    return rows_from_units(
+        units, keep,
+        canonical=detect_canonical_categories(units, raw_text=re.sub(r"<[^>]+>", " ", html)))
 
 
 def _extract_fixed_rows_legacy(html: str, doc_name: str) -> list[dict]:

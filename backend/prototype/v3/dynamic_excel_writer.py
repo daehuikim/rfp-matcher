@@ -23,6 +23,8 @@ from prototype.v2.excel_writer import (
     _WRAP_TOP,
     _ZEBRA_FILL,
     append_ai_columns,
+    _embed_detail_images,
+    _expand_image_rows,
     _row_height,
     _safe_sheet,
     _write_overview,

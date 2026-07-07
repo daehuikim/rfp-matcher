@@ -145,6 +145,161 @@ def convert_any(src_path: str | Path, workdir: str | Path) -> dict[str, Path]:
     return {"html": html_p, "txt": txt_p}
 
 
+def _flatten_json_text_items(kids: list[dict]) -> list[tuple[str, int]]:
+    """opendataloader JSON kids → (정규화텍스트, page) 문서순 리스트(표 셀 안 문단도 흡수)."""
+    out: list[tuple[str, int]] = []
+
+    def _norm(s: str) -> str:
+        return re.sub(r"\s+", "", s or "")
+
+    def walk(node: dict) -> None:
+        if node.get("type") == "table":
+            for row in node.get("rows", []) or []:
+                for cell in row.get("cells", []) or []:
+                    for k in cell.get("kids", []) or []:
+                        walk(k)
+            return
+        content = node.get("content")
+        pg = node.get("page number")
+        if content and pg:
+            try:
+                out.append((_norm(content), int(pg)))
+            except (TypeError, ValueError):
+                pass
+        for k in node.get("kids", []) or []:
+            walk(k)
+
+    for k in kids:
+        walk(k)
+    return out
+
+
+def _flatten_json_tables(kids: list[dict]) -> list[tuple[str, int]]:
+    """표 노드 → (머리텍스트 정규화 ≤80자, page) 문서순 리스트.
+
+    표는 순번만으로 HTML 과 정렬하면 안 된다 — opendataloader 가 여러 페이지에 걸친
+    표를 JSON 에선 1노드로 합치고 HTML 에선 페이지별 <table> 조각으로 쪼개서(기아 실측
+    JSON 179 vs HTML 266) 순번이 누적으로 밀려 수십 페이지 오차가 났다. 내용(머리텍스트)
+    기반 매칭용으로 각 표의 앞부분 텍스트를 함께 뽑는다.
+    """
+    out: list[tuple[str, int]] = []
+
+    def _head_text(node: dict) -> str:
+        parts: list[str] = []
+
+        def walk_txt(n: dict) -> None:
+            if sum(len(p) for p in parts) >= 80:
+                return
+            c = n.get("content")
+            if c:
+                parts.append(re.sub(r"\s+", "", c))
+            for row in n.get("rows", []) or []:
+                for cell in row.get("cells", []) or []:
+                    for k in cell.get("kids", []) or []:
+                        walk_txt(k)
+            for k in n.get("kids", []) or []:
+                walk_txt(k)
+
+        walk_txt(node)
+        return "".join(parts)[:80]
+
+    def walk(node: dict) -> None:
+        if node.get("type") == "table":
+            pg = node.get("page number")
+            try:
+                out.append((_head_text(node), int(pg)))
+            except (TypeError, ValueError):
+                pass
+            return
+        for k in node.get("kids", []) or []:
+            walk(k)
+
+    for k in kids:
+        walk(k)
+    return out
+
+
+def _inject_page_data(html: str, json_path: Path) -> str:
+    """opendataloader JSON 의 page number 를 HTML 요소에 data-page 속성으로 역주입.
+
+    HTML 출력엔 페이지 경계 표식이 전혀 없다(grep 실측 0건) — 반면 JSON 의 모든 요소엔
+    'page number'가 있다. 같은 문서를 같은 도구가 만든 두 출력물이라 **문서순 텍스트
+    매칭**으로 정렬한다(완전일치 실패 시 포함관계로 재시도, 그마저 실패하면 직전 매치
+    페이지를 이어써 최소한 근사값은 남긴다 — 표 구조 차이로 100% 정확할 순 없지만
+    "몇 페이지 근처"를 찾는 원문뷰어 용도로는 충분).
+    """
+    import json as _json
+    try:
+        data = _json.loads(json_path.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return html
+    kids = data.get("kids") or []
+    text_items = _flatten_json_text_items(kids)
+    json_tables = _flatten_json_tables(kids)
+    if not text_items and not json_tables:
+        return html
+
+    def _norm(s: str) -> str:
+        return re.sub(r"\s+", "", s or "")
+
+    soup = BeautifulSoup(html, "lxml")
+    body = soup.body or soup
+    ptr = 0
+    last_page = json_tables[0][1] if json_tables else (text_items[0][1] if text_items else None)
+    WINDOW = 60
+    for el in body.find_all(["p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table"]):
+        if el.name != "table" and el.find_parent("table"):
+            continue
+        if el.name == "table":
+            if el.find_parent("table") is not None:
+                continue
+            # 표도 순번이 아니라 **텍스트 앵커**(전방 포인터)로 정렬한다. 순번 매칭은
+            # opendataloader 가 여러 페이지 표를 JSON 1노드 vs HTML 페이지별 조각으로
+            # 다르게 쪼개(기아 실측 179 vs 266) 수십 페이지 드리프트를 만들었다.
+            # JSON 의 셀 문단 조각(jt)이 이 표의 셀 전체 텍스트(ctext) 안에 포함되는지로
+            # 매칭 — 같은 내용의 표가 여러 벌 있어도(p25/p27 사본) 문서순 전방 탐색이라
+            # 등장 순서대로 올바른 사본에 붙는다.
+            cand = None
+            tried = 0
+            for td in el.find_all(["td", "th"]):
+                ctext = _norm(td.get_text(" "))
+                if len(ctext) < 8:
+                    continue
+                tried += 1
+                if tried > 8:
+                    break
+                for j in range(ptr, min(ptr + 500, len(text_items))):
+                    jt, jp = text_items[j]
+                    if jt and len(jt) >= 6 and (jt in ctext or ctext in jt):
+                        cand = (j, jp)
+                        break
+                if cand:
+                    break
+            if cand is not None:
+                ptr = cand[0] + 1
+                last_page = cand[1]
+                el["data-page"] = str(cand[1])
+            elif last_page is not None:
+                el["data-page"] = str(last_page)
+            continue
+        text = _norm(el.get_text(" "))
+        if not text:
+            continue
+        found = None
+        for j in range(ptr, min(ptr + WINDOW, len(text_items))):
+            jt, jp = text_items[j]
+            if jt and (jt == text or jt in text or text in jt):
+                found = (j, jp)
+                break
+        if found:
+            ptr = found[0] + 1
+            last_page = found[1]
+            el["data-page"] = str(found[1])
+        elif last_page is not None:
+            el["data-page"] = str(last_page)
+    return str(soup)
+
+
 def convert_pdf(pdf_path: str | Path, workdir: str | Path) -> dict[str, Path]:
     """PDF → {html, markdown, txt, json} 파일 경로 dict. OpenDataLoader 로컬 변환."""
     _ensure_java()
@@ -173,6 +328,15 @@ def convert_pdf(pdf_path: str | Path, workdir: str | Path) -> dict[str, Path]:
     json_p = _find(".json")
     out: dict[str, Path] = {}
     if html_p:
+        if json_p:
+            # 페이지 번호를 HTML에 역주입 — v_rule 추출(Req.page)과 "원문뷰어" 양쪽이
+            # 같은 파일을 읽으므로 한 번의 주입으로 둘 다 페이지 정보를 얻는다.
+            try:
+                injected = _inject_page_data(
+                    html_p.read_text(encoding="utf-8", errors="replace"), json_p)
+                html_p.write_text(injected, encoding="utf-8")
+            except Exception:
+                pass
         out["html"] = html_p
         txt = _html_to_txt(html_p.read_text(encoding="utf-8", errors="replace"))
         txt_p = work / f"{src.stem}.txt"

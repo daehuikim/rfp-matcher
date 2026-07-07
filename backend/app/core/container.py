@@ -56,8 +56,8 @@ class Container:
         apply_llm_provider(self, provider)
 
     def set_engine(self, doc_id: str, engine: str | None) -> None:
-        """doc별 추출엔진 지정 — 'v_rule' 이면 룰 엔진. 동시 업로드 경쟁 방지(doc 키)."""
-        if engine in ("v_rule", "v2"):
+        """doc별 추출엔진 지정 — 'v_rule'/'rfpmatch' 면 룰 엔진. 동시 업로드 경쟁 방지(doc 키)."""
+        if engine in ("v_rule", "v2", "rfpmatch"):
             self.engine_by_doc[doc_id] = engine
 
     def engine_for(self, doc_id: str) -> str | None:

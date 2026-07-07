@@ -31,12 +31,13 @@ def split_table_headings(blocks: list[Block]) -> list[Block]:
             # 표에서 뽑혀 나가 build_units 의 표-격리 로직을 건너뛰고 콜래터럴 드롭 위험에 노출됨.
             if ne and len(ne) <= 3 and len(joined) <= 45 and lvl is not None and lvl <= 3:
                 if buf:
-                    out.append(Block(kind="table", grid=buf)); buf = []
-                out.append(Block(kind="text", text=joined))
+                    out.append(Block(kind="table", grid=buf,
+                                     table_index=b.table_index, page=b.page)); buf = []
+                out.append(Block(kind="text", text=joined, page=b.page))
             else:
                 buf.append(row)
         if buf:
-            out.append(Block(kind="table", grid=buf))
+            out.append(Block(kind="table", grid=buf, table_index=b.table_index, page=b.page))
     return out
 
 
@@ -45,8 +46,8 @@ def _key(b: Block) -> tuple[str, str]:
     return (parts[0] if parts else "", strip_marker(b.text)[:12])
 
 
-def preprocess(html: str) -> tuple[list[Block], dict]:
-    raw = iter_blocks(html)   # p/li/h/table 문서순 + 빈/직전중복 1차 제거
+def preprocess(html: str, img_dir=None, base_dir=None) -> tuple[list[Block], dict]:
+    raw = iter_blocks(html, img_dir=img_dir, base_dir=base_dir)   # p/li/h/table 문서순 + 빈/직전중복 1차 제거
     raw = split_table_headings(raw)   # 표 안 헤딩행 → 텍스트(카드 마커 살리기)
     out: list[Block] = []
     trace = {"raw_blocks": len(raw), "tables": 0, "texts": 0,

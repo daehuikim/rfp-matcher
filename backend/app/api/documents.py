@@ -422,11 +422,38 @@ def _artifact_bucket(container, doc) -> Path | None:
     return container.settings.artifact_cache_dir / h[:16]
 
 
+def _view_pdf_path(container, doc) -> Path | None:
+    """추출 단계(app.services.view_pdf)가 만든 파생 뷰어 PDF — 비-PDF 도 페이지 점프.
+
+    파생 PDF 는 페이지 오라클(source_page 부여)의 좌표계이기도 해서, 이걸 서빙해야
+    행별 페이지 번호와 뷰어 페이지가 항상 일치한다."""
+    bucket = _artifact_bucket(container, doc)
+    if bucket:
+        p = bucket / "preview.pdf"
+        if p.is_file():
+            return p
+    p = container.settings.storage_root / doc.id / "v_rule" / "preview.pdf"
+    if p.is_file():
+        return p
+    return None
+
+
 def _converted_html_path(container, doc) -> Path | None:
     """추출 단계가 만든 converted.html (HWPX 등 PDF 변환 불가 시 폴백)."""
     bucket = _artifact_bucket(container, doc)
     if bucket:
         p = bucket / "converted.html"
+        if p.is_file():
+            return p
+    # v_rule 엔진은 artifact_cache_dir/converted.html 컨벤션을 안 쓰고
+    # storage_root/{doc.id}/v_rule/{원본stem}.html 에 저장한다(adapter.py의 conv["html"]).
+    # 이 경로를 못 찾으면 HWP/DOCX 원문뷰어가 "미리보기를 생성할 수 없습니다"로 항상 실패한다.
+    try:
+        stem = Path(doc.src_path).stem
+    except (TypeError, ValueError):
+        stem = None
+    if stem:
+        p = container.settings.storage_root / doc.id / "v_rule" / f"{stem}.html"
         if p.is_file():
             return p
     return None
@@ -543,12 +570,15 @@ def _has_preview(container, doc) -> bool:
 def _preview_kind(container, doc) -> str:
     """뷰어가 받을 미리보기 형태 — 변환 시도 없이 결정.
 
-    - "pdf"  : PDF 원본(페이지 점프) 또는 PDF 변환 예정
+    - "pdf"  : PDF 원본, 파생 뷰어 PDF(비-PDF 도 페이지 점프), 또는 PDF 변환 예정
     - "html" : 추출 단계 converted.html (표 인덱스 앵커로 위치 이동 가능)
     - "none" : 미리보기 불가
-    비-PDF는 위치 앵커(source_table_index)가 살아있는 HTML을 우선한다.
+    비-PDF 도 파생 PDF 가 있으면 PDF 를 우선한다 — 페이지 오라클이 그 PDF 좌표계로
+    행별 source_page 를 부여하므로 페이지 점프 정합성이 HTML 앵커보다 낫다.
     """
     if str(doc.mime) == "application/pdf" and _source_path(doc) is not None:
+        return "pdf"
+    if _view_pdf_path(container, doc) is not None:
         return "pdf"
     if _converted_html_path(container, doc) is not None:
         return "html"
@@ -641,8 +671,9 @@ async def get_document_preview(doc_id: str, container: ContainerDep) -> Response
 
     우선순위:
     ① PDF 원본 → 그대로 (source_page 로 페이지 점프)
-    ② 비-PDF → 추출 단계 converted.html (source_table_index 앵커로 위치 이동)
-    ③ HTML 없으면 → LibreOffice PDF 변환 (표시 전용)
+    ② 비-PDF → 추출 단계 파생 뷰어 PDF (오라클 좌표계 = 페이지 점프 정합)
+    ③ 파생 PDF 없으면 → converted.html (source_table_index 앵커로 위치 이동)
+    ④ HTML 도 없으면 → LibreOffice PDF 변환 (표시 전용)
     """
     if doc_id not in container.repo.documents:
         raise HTTPException(404, f"document 없음: {doc_id}")
@@ -659,7 +690,17 @@ async def get_document_preview(doc_id: str, container: ContainerDep) -> Response
                 headers={"Cache-Control": "private, max-age=3600"},
             )
 
-    # ② 비-PDF는 위치 앵커가 살아있는 converted.html 우선 (가독성 스타일 주입)
+    # ② 파생 뷰어 PDF (비-PDF 도 페이지 단위 표시 + source_page 점프)
+    vpdf = _view_pdf_path(container, doc)
+    if vpdf is not None:
+        return FileResponse(
+            vpdf,
+            media_type="application/pdf",
+            content_disposition_type="inline",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+    # ③ 파생 PDF 없으면 위치 앵커가 살아있는 converted.html (가독성 스타일 주입)
     html = _converted_html_path(container, doc)
     if html is not None:
         styled = _inject_viewer_style(html.read_text(encoding="utf-8", errors="replace"))
@@ -668,7 +709,7 @@ async def get_document_preview(doc_id: str, container: ContainerDep) -> Response
             headers={"Cache-Control": "private, max-age=3600"},
         )
 
-    # ③ HTML 없으면 LibreOffice PDF 변환 (표시 전용, 앵커 없음)
+    # ④ HTML 없으면 LibreOffice PDF 변환 (표시 전용, 앵커 없음)
     pdf = await _ensure_preview_pdf(container, doc)
     if pdf is not None:
         return FileResponse(

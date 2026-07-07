@@ -14,7 +14,7 @@ from app.phase1.writers.export_columns import (
     resolve_export_columns,
 )
 from app.phase1.writers.sheet_writer import RequirementSheetWriter
-from app.services.native_export import write_native_excel
+from app.services.native_export import resolve_asset_path, write_native_excel
 
 router = APIRouter(prefix="/documents", tags=["exports"])
 
@@ -25,7 +25,33 @@ _FIXED_COLS = ["요구사항 ID", "요구사항명", "계위", "상세내용",
 _JUDG_MARK = {"YES": "O", "PARTIAL": "△", "NO": "X", "UNSET": ""}
 
 
-def _fixed_excel(reqs, recs, judges, out_path) -> None:
+def _expand_fixed_image_rows(group: list) -> list:
+    """detail_images 가진 요건 뒤에 이미지 전용 행을 별도로 끼워넣는다(텍스트·이미지 비겹침).
+
+    v2 excel_writer._expand_image_rows 와 동일한 컨벤션(표를 이미지로 렌더링해 셀에
+    넣은 v_rule 표이미지 마커용) — 여기선 Requirement(pydantic)라 model_copy 로 복제.
+    detail 이 "[표]" 플레이스홀더뿐(원문 마커 제거 후 남은 텍스트가 없던 경우, adapter.py
+    참고)이면 그 자체를 별도 텍스트 행으로 내지 않고 첫 이미지 행의 캡션으로 붙인다 —
+    안 그러면 "[표]"만 적힌 빈 행이 이미지 행과 분리되어 따로 남는다(실측 버그). 반환하는
+    (row, imgs) 튜플의 row.detail 은 그 행에 실제로 찍을 텍스트로 이미 확정돼 있다."""
+    out = []
+    for r in group:
+        imgs = r.detail_images
+        if not imgs:
+            out.append((r, []))
+            continue
+        detail = (r.detail or "").strip()
+        is_caption_only = detail == "[표]" or not detail
+        if not is_caption_only:
+            out.append((r, []))          # 진짜 텍스트가 있으면 그건 그대로 한 행(이미지 없이)
+        caption = detail if is_caption_only else "[표]"
+        for i, p in enumerate(imgs):
+            ir = r.model_copy(update={"detail": caption if i == 0 else "", "detail_images": [p]})
+            out.append((ir, [p]))
+    return out
+
+
+def _fixed_excel(reqs, recs, judges, out_path, settings=None, doc_id: str = "", doc=None) -> None:
     """repo 요건 → 고정칼럼 조견표(탭=category). FE 편집이 즉시 반영(단일 소스=repo)."""
     import re as _re
     from collections import OrderedDict
@@ -50,8 +76,11 @@ def _fixed_excel(reqs, recs, judges, out_path) -> None:
             c = ws.cell(1, ci, h); c.font = hdr; c.fill = hfill
         for ci, w in enumerate([16, 26, 20, 68, 20, 18, 8, 40, 24, 10, 24], 1):
             ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = w
-        for ri, r in enumerate(group, 2):
+        rows = _expand_fixed_image_rows(group)
+        for ri, (r, imgs) in enumerate(rows, 2):
             rec = recs.get(r.id); jud = judges.get(r.id)
+            # r.detail 은 _expand_fixed_image_rows 가 이미 이 행에 찍을 텍스트로 확정해뒀다
+            # (이미지 행의 첫 행엔 "[표]" 캡션, 나머지 이미지 행은 빈칸).
             vals = [r.code, r.name, (r.definition or ""), r.detail,
                     (rec.related_solution if rec else ""),
                     (", ".join(rec.missing_tech) if rec and rec.missing_tech else ""),
@@ -64,10 +93,30 @@ def _fixed_excel(reqs, recs, judges, out_path) -> None:
                 c = ws.cell(ri, ci, v); c.alignment = wrap; c.border = border
                 if ci >= 5:
                     c.fill = ai_fill
+            if imgs and settings is not None:
+                _embed_fixed_row_image(ws, ri, imgs[0], settings, doc_id, doc)
     if not by_tab:
         wb.create_sheet("요구사항")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
+
+
+def _embed_fixed_row_image(ws, ri: int, rel_path: str, settings, doc_id: str, doc) -> None:
+    """상세내용(4열) 셀에 표이미지 삽입 — 표를 인식해 HTML→PNG 렌더링한 것을 원문 대신 삽입."""
+    path = resolve_asset_path(settings, doc_id, doc, rel_path)
+    if path is None:
+        return
+    try:
+        from openpyxl.drawing.image import Image as XLImage
+        img = XLImage(str(path))
+    except Exception:
+        return
+    scale = min(1.0, 640 / max(img.width, 1), 480 / max(img.height, 1))
+    img.width = max(120, int(img.width * scale))
+    img.height = max(80, int(img.height * scale))
+    img.anchor = f"D{ri}"
+    ws.add_image(img)
+    ws.row_dimensions[ri].height = max(ws.row_dimensions[ri].height or 15, img.height * 0.8)
 
 
 @router.get("/{doc_id}/export-fixed")
@@ -79,8 +128,8 @@ async def export_fixed(doc_id: str, container: ContainerDep):
     if not reqs:
         raise HTTPException(409, "추출된 요구사항 없음")
     out = container.settings.storage_root / doc_id / "exports" / "requirements_fixed.xlsx"
-    _fixed_excel(reqs, recs, judges, out)
     doc = container.repo.documents.get(doc_id)
+    _fixed_excel(reqs, recs, judges, out, settings=container.settings, doc_id=doc_id, doc=doc)
     fn = (getattr(doc, "display_name", None) or doc_id) + "_조견표.xlsx"
     return FileResponse(path=out, filename=fn,
                         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GroupedVirtuoso, type GroupedVirtuosoHandle } from "react-virtuoso";
+import { GroupedVirtuoso } from "react-virtuoso";
 import {
   RequirementView,
   DocumentMeta,
@@ -38,7 +38,6 @@ export default function EditTableClient({ docId }: { docId: string }) {
   const [delim, setDelim] = useState("●");   // 분해 기준 기호(기본값)
   const [rowDelim, setRowDelim] = useState<Record<string, string>>({});  // #2 행(셀)별 분해기호 오버라이드
   const [hoverCard, setHoverCard] = useState<number | null>(null);       // #3 카드헤더 호버시 삭제 X
-  const vref = useRef<GroupedVirtuosoHandle>(null);                      // #1/#5 빠른 카드 이동
 
   // 출처(페이지) 클릭 → 우측 PDF/원문 뷰어로 점프. 뷰어는 표 레이아웃을 잠식하지 않는
   // 오버레이 드로어(사이드바)라 기본은 닫힘 — "출처" 클릭 시에만 슬라이드로 열린다.
@@ -62,11 +61,16 @@ export default function EditTableClient({ docId }: { docId: string }) {
   function jumpTo(r: RequirementView["requirement"]) {
     const p = r.source_page != null ? Number(r.source_page) : null;
     setViewerPage(p && !Number.isNaN(p) ? p : null);
-    setViewerTableIdx(r.source_table_index ?? null);
+    // 음수(-1 등)는 "위치 없음" 센티널로 쓰인 이력이 있어 방어적으로 걸러낸다 —
+    // 실제 배열 인덱스처럼 보이지만 JS는 음수 인덱스를 wrap하지 않아 조용히 실패한다.
+    const ti = r.source_table_index;
+    setViewerTableIdx(ti != null && ti >= 0 ? ti : null);
     setViewerAnchor(r.detail || r.name || null);
     setViewerOpen(true);
     setJumpNonce((n) => n + 1);
   }
+  const hasSourceLoc = (r: RequirementView["requirement"]) =>
+    r.source_page != null || (r.source_table_index != null && r.source_table_index >= 0);
   const editorId = useMemo(
     () => (typeof window === "undefined" ? "" : (localStorage.getItem("rfp-editor") ||
       (() => { const id = "u" + Math.random().toString(36).slice(2, 8); localStorage.setItem("rfp-editor", id); return id; })())),
@@ -138,15 +142,50 @@ export default function EditTableClient({ docId }: { docId: string }) {
     return () => src.close();
   }, [docId, editorId, load]);
 
-  // 카드 = rows(백엔드가 이미 페이지순으로 준 순서) 안에서 카테고리가 연속으로 이어지는
-  // 구간. 이름으로 전체를 묶어버리면(Map) 같은 이름이 문서 뒤쪽에 멀리 떨어져 다시
-  // 나올 때 그 행들이 앞쪽 카드로 끌려와 붙어 페이지 순서가 뒤섞인다 — 사람이 검토할 때
-  // 원문과 대조하려면 항상 페이지순이어야 하므로, 연속 구간별로 카드를 따로 만든다
-  // (같은 이름의 카드가 여러 번 나올 수 있음 — 필요하면 "카드 병합" 버튼으로 합치면 됨).
+  // 탭(카테고리) 단위로 모아 보여준다 — Excel(export-fixed 의 _fixed_excel)과 동일한
+  // allCards = 탭바용(항상 전체 탭 목록+총 행수), 문서순 rows 를 훑되 "연속 구간"이 아니라
+  // "카테고리별로 몇 개씩 있나"만 본다(탭이 문서 여러 곳에 흩어져 있어도 여기선 상관없음).
+  const allCards = useMemo<Card[]>(() => {
+    const byCat = new Map<string, Card>();
+    const order: string[] = [];
+    for (const v of rows) {
+      const cat = v.requirement.category || "요구사항";
+      let c = byCat.get(cat);
+      if (!c) {
+        const pfx = (v.requirement.code || "").replace(/-\d+\s*$/, "");
+        c = { category: cat, prefix: pfx, name: v.requirement.name || "", reqIds: [], count: 0 };
+        byCat.set(cat, c);
+        order.push(cat);
+      }
+      c.reqIds.push(v.requirement.id);
+      c.count++;
+    }
+    return order.map((cat) => byCat.get(cat)!);
+  }, [rows]);
+
+  const [activeTab, setActiveTab] = useState<string | null>(null);   // null = "전체" 의사-탭
+  // activeTab 이 사라진 탭을 가리키면(행 편집으로 카테고리가 바뀌는 등) 전체보기로 복귀.
+  useEffect(() => {
+    if (activeTab != null && !allCards.some((c) => c.category === activeTab)) setActiveTab(null);
+  }, [activeTab, allCards]);
+
+  // "전체" 는 rows 를 그대로(문서/페이지 순서 보존) — 탭을 고르면 그 카테고리만 필터(순서는
+  // 그대로 유지되므로 원문과의 페이지 대조가 깨지지 않는다). 예전엔 "전체"도 탭별로 미리
+  // 재정렬(버킷팅)해서 보여줬는데, 그러면 "전체" 볼 때 서로 다른 탭이 번갈아 나오면서
+  // 페이지 번호가 문서 순서와 무관하게 뒤죽박죽으로 보였다(실측 피드백) — 버킷팅은
+  // 탭바의 총 개수 집계에만 쓰고, 실제로 그리는 목록은 항상 원래 순서를 지킨다.
+  const sortedRows = useMemo(
+    () => (activeTab == null ? rows
+      : rows.filter((v) => (v.requirement.category || "요구사항") === activeTab)),
+    [rows, activeTab],
+  );
+  // cards = sortedRows 안에서 카테고리가 "연속"으로 이어지는 구간(GroupedVirtuoso 용).
+  // "전체"에서는 같은 탭이 문서 여러 곳에 흩어지면 카드가 여러 번 나올 수 있다(정상 —
+  // 페이지 순서를 지키려면 어쩔 수 없다). 탭 하나만 볼 때는 필터링된 결과라 보통 카드 1개.
   const cards = useMemo<Card[]>(() => {
     const list: Card[] = [];
     let cur: Card | null = null;
-    for (const v of rows) {
+    for (const v of sortedRows) {
       const cat = v.requirement.category || "요구사항";
       const pfx = (v.requirement.code || "").replace(/-\d+\s*$/, "");
       if (!cur || cur.category !== cat) {
@@ -157,10 +196,10 @@ export default function EditTableClient({ docId }: { docId: string }) {
       cur.count++;
     }
     return list;
-  }, [rows]);
+  }, [sortedRows]);
 
-  const sortedRows = rows;   // 이미 페이지순 — 카드가 그 순서를 그대로 따라가므로 재정렬 불필요.
   const groupCounts = useMemo(() => cards.map((c) => c.count), [cards]);
+  const distinctTabCount = allCards.length;
 
   async function saveCell(reqId: string, field: "code" | "name" | "definition" | "detail", value: string) {
     // #4 요구사항명 편집은 카드 전체에 전파. 카테고리 이름이 아니라 reqId 소속으로 카드를
@@ -230,13 +269,6 @@ export default function EditTableClient({ docId }: { docId: string }) {
     const up = () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
     window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
   }
-  function scrollToCard(gi: number) {
-    // 가상화 리스트라 DOM 스크롤은 화면 밖 카드에 안 먹힘 → Virtuoso 인덱스 점프(즉시).
-    let idx = 0;
-    for (let i = 0; i < gi; i++) idx += groupCounts[i];
-    vref.current?.scrollToIndex({ index: idx, align: "start" });
-  }
-
   const gridCols = `${w.code}px ${w.name}px ${w.level}px 1fr ${w.source}px ${w.ai}px ${w.action}px`;
   const hdrCell: React.CSSProperties = { padding: "5px 6px", fontSize: 12, fontWeight: 700, color: "#fff", position: "relative", borderRight: "1px solid #555" };
   const handle: React.CSSProperties = { position: "absolute", right: 0, top: 0, width: 6, height: "100%", cursor: "col-resize" };
@@ -254,7 +286,9 @@ export default function EditTableClient({ docId }: { docId: string }) {
     <div style={{ height: "100%", minHeight: 0, display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 18, fontWeight: 700 }}>조견표 편집</h1>
-        <span style={{ fontSize: 12, color: "#888" }}>doc {docId.slice(0, 8)} · {rows.length}행 · 카드 {cards.length}</span>
+        <span style={{ fontSize: 12, color: "#888" }} title="탭 = 요구사항 분류(엑셀 시트 단위)">
+          doc {docId.slice(0, 8)} · {rows.length}행 · 탭 {distinctTabCount}
+        </span>
         <label style={{ fontSize: 12, color: "#555" }} title="각 행에서 개별 지정 가능(행 옆 작은 칸). 여기는 기본값.">기본 분해기호:
           <input value={delim} onChange={(e) => setDelim(e.target.value)} style={{ width: 44, marginLeft: 4, border: "1px solid #bbb", borderRadius: 3, padding: "1px 4px", textAlign: "center" }} />
         </label>
@@ -272,16 +306,42 @@ export default function EditTableClient({ docId }: { docId: string }) {
         <button onClick={() => void load()} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 13 }}>새로고침</button>
       </div>
 
-      {/* #5 개요 — 카드 목록 + 카드별 행수 (클릭 시 이동) */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxHeight: 62, overflowY: "auto", padding: "2px 0" }}>
-        {cards.map((c, i) => (
-          // key=index — 같은 카테고리명이 페이지순 보존을 위해 비연속으로 여러 카드에
-          // 걸쳐 나올 수 있어(예: '보이는 ARS'가 두 곳에) category 자체는 unique 하지 않다.
-          <button key={c.reqIds[0] ?? i} onClick={() => scrollToCard(i)} title={c.category}
-            style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, border: "1px solid #ccd", background: "#eef1f5", cursor: "pointer", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            📁 {c.category} <b>{c.count}</b>
-          </button>
-        ))}
+      {/* #5 탭바 — 엑셀 시트탭처럼: 누른 탭 하나만 화면에 보이고(필터), 활성탭은 아래
+          표와 이어붙은 것처럼 흰 배경으로 튀어나와 보인다. "전체"는 문서순 전체보기. */}
+      <div style={{ display: "flex", gap: 2, overflowX: "auto", overflowY: "hidden", flexShrink: 0,
+        borderBottom: "2px solid #c8102e", scrollbarWidth: "thin" }}>
+        <button onClick={() => setActiveTab(null)} title="문서순으로 전체 보기"
+          style={{
+            fontSize: 12, padding: "6px 14px", whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0,
+            borderTop: "1px solid #c8102e", borderLeft: "1px solid #c8102e", borderRight: "1px solid #c8102e",
+            borderBottom: "none", borderRadius: "6px 6px 0 0",
+            background: activeTab == null ? "#c8102e" : "#eee",
+            color: activeTab == null ? "#fff" : "#888",
+            fontWeight: activeTab == null ? 700 : 400,
+            position: "relative", top: 1,
+          }}>
+          전체 {rows.length}
+        </button>
+        {allCards.map((c, i) => {
+          const active = activeTab === c.category;
+          const edgeColor = active ? "#c8102e" : "#ccd";
+          return (
+            <button key={c.reqIds[0] ?? i} onClick={() => setActiveTab(c.category)} title={c.category}
+              style={{
+                fontSize: 12, padding: "6px 14px", whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0,
+                maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis",
+                borderTop: `1px solid ${edgeColor}`, borderLeft: `1px solid ${edgeColor}`,
+                borderRight: `1px solid ${edgeColor}`, borderBottom: "none",
+                borderRadius: "6px 6px 0 0",
+                background: active ? "#fff" : "#eee",
+                color: active ? "#1a1a1a" : "#888",
+                fontWeight: active ? 700 : 400,
+                position: "relative", top: 1, zIndex: active ? 1 : 0,
+              }}>
+              {c.category} {c.count}
+            </button>
+          );
+        })}
       </div>
 
       {/* 고정 컬럼 헤더 */}
@@ -296,7 +356,6 @@ export default function EditTableClient({ docId }: { docId: string }) {
       </div>
       {loading ? <p>불러오는 중…</p> : (
         <GroupedVirtuoso
-          ref={vref}
           style={{ flex: 1, border: "1px solid #ddd", borderTop: "none" }}
           groupCounts={groupCounts}
           groupContent={(gi) => {
@@ -331,7 +390,7 @@ export default function EditTableClient({ docId }: { docId: string }) {
                 <Cell value={r.definition ?? ""} onSave={(x) => saveCell(r.id, "definition", x)} />
                 <Cell value={r.detail} onSave={(x) => saveCell(r.id, "detail", x)} multiline />
                 <div style={{ padding: "2px 4px", borderRight: "1px solid #eee", display: "flex", alignItems: "flex-start" }}>
-                  {(r.source_page != null || r.source_table_index != null) ? (
+                  {hasSourceLoc(r) ? (
                     <button onClick={() => jumpTo(r)} title="원문에서 보기"
                       style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #c8d0e0", background: "#eef3ff", color: "#2a4d8f", cursor: "pointer" }}>
                       {r.source_page != null ? `p.${r.source_page}` : "원문"}

@@ -106,15 +106,19 @@ def _expand_image_rows(reqs: list[Req]) -> list[Req]:
     return out
 
 
-def _embed_detail_images(ws, ri: int, paths: list[str], *, text_lines: int = 0) -> None:
-    """상세요건 셀 — 이미지 전용 행에 삽입(텍스트와 겹치지 않음)."""
+def _embed_detail_images(ws, ri: int, paths: list[str], *, text_lines: int = 0,
+                         col_idx: int | None = None) -> None:
+    """상세요건 셀 — 이미지 전용 행에 삽입(텍스트와 겹치지 않음).
+
+    col_idx 는 writer마다 상세요건 칼럼 위치가 달라(동적계위 writer는 계위깊이에 따라
+    가변) 명시적으로 받는다 — 없으면 이 writer(v2, 고정칼럼) 자체 위치로 폴백."""
     if not paths:
         return
     try:
         from openpyxl.drawing.image import Image as XLImage
     except ImportError:
         return
-    col = get_column_letter(_DETAIL_COL)
+    col = get_column_letter(col_idx if col_idx is not None else _DETAIL_COL)
     row_h = ws.row_dimensions[ri].height or 15
     y_off = 0
     if text_lines:
